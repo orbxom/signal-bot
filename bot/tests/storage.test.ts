@@ -13,8 +13,11 @@ describe('Storage', () => {
 
   it('should initialize database with tables', () => {
     const storage = new Storage(testDbPath);
-    expect(storage).toBeDefined();
-    storage.close();
+    try {
+      expect(storage).toBeDefined();
+    } finally {
+      storage.close();
+    }
   });
 
   it('should add and retrieve messages', () => {
