@@ -21,3 +21,25 @@ export interface LLMResponse {
   content: string;
   tokensUsed: number;
 }
+
+export interface SignalMessage {
+  envelope: {
+    source?: string;
+    sourceNumber?: string;
+    sourceUuid?: string;
+    timestamp: number;
+    dataMessage?: {
+      timestamp: number;
+      message?: string;
+      groupInfo?: {
+        groupId: string;
+      };
+    };
+  };
+}
+
+export interface SignalSendRequest {
+  recipient?: string;
+  groupId?: string;
+  message: string;
+}
