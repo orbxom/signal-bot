@@ -6,6 +6,16 @@ export class AzureOpenAIClient {
   private deployment: string;
 
   constructor(endpoint: string, key: string, deployment: string) {
+    if (!endpoint || endpoint.trim() === '') {
+      throw new Error('Azure OpenAI endpoint is required and cannot be empty');
+    }
+    if (!key || key.trim() === '') {
+      throw new Error('Azure OpenAI key is required and cannot be empty');
+    }
+    if (!deployment || deployment.trim() === '') {
+      throw new Error('Azure OpenAI deployment name is required and cannot be empty');
+    }
+
     this.client = new OpenAIClient(endpoint, new AzureKeyCredential(key));
     this.deployment = deployment;
   }
@@ -15,6 +25,10 @@ export class AzureOpenAIClient {
   }
 
   async generateResponse(messages: ChatMessage[]): Promise<LLMResponse> {
+    if (!messages || messages.length === 0) {
+      throw new Error('Messages array cannot be empty');
+    }
+
     try {
       const result = await this.client.getChatCompletions(
         this.deployment,
@@ -24,6 +38,10 @@ export class AzureOpenAIClient {
           maxTokens: 500
         }
       );
+
+      if (!result.choices || result.choices.length === 0) {
+        throw new Error('No choices returned from Azure OpenAI');
+      }
 
       const choice = result.choices[0];
       if (!choice?.message?.content) {
@@ -36,7 +54,8 @@ export class AzureOpenAIClient {
       };
     } catch (error) {
       console.error('Azure OpenAI error:', error);
-      throw new Error('Failed to generate response from LLM');
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      throw new Error(`Failed to generate response from LLM: ${errorMessage}`, { cause: error });
     }
   }
 }
