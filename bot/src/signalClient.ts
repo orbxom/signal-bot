@@ -3,6 +3,7 @@ import type { SignalMessage, SignalSendRequest } from './types';
 export class SignalClient {
   private baseUrl: string;
   private account: string;
+  private requestIdCounter = 0;
 
   constructor(baseUrl: string, account: string) {
     if (!baseUrl) {
@@ -46,17 +47,23 @@ export class SignalClient {
         groupId,
         message
       },
-      id: Date.now()
+      id: `${Date.now()}-${++this.requestIdCounter}`
     };
 
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
+
       const response = await fetch(`${this.baseUrl}/api/v1/rpc`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
+        signal: controller.signal
       });
+
+      clearTimeout(timeoutId);
 
       if (!response.ok) {
         throw new Error(`Signal API error: ${response.statusText}`);
@@ -67,7 +74,6 @@ export class SignalClient {
         throw new Error(`Signal RPC error: ${result.error.message}`);
       }
     } catch (error) {
-      console.error('Failed to send Signal message:', error);
       throw error;
     }
   }
