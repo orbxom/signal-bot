@@ -11,3 +11,13 @@ export interface BotConfig {
   key: string;
   value: string;
 }
+
+export interface ChatMessage {
+  role: 'system' | 'user' | 'assistant';
+  content: string;
+}
+
+export interface LLMResponse {
+  content: string;
+  tokensUsed: number;
+}
