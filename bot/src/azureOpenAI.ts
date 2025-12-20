@@ -1,16 +1,12 @@
-import { AzureOpenAI } from 'openai';
+import { OpenAIClient, AzureKeyCredential } from '@azure/openai';
 import type { ChatMessage, LLMResponse } from './types';
 
 export class AzureOpenAIClient {
-  private client: AzureOpenAI;
+  private client: OpenAIClient;
   private deployment: string;
 
   constructor(endpoint: string, key: string, deployment: string) {
-    this.client = new AzureOpenAI({
-      endpoint,
-      apiKey: key,
-      apiVersion: '2024-10-21'
-    });
+    this.client = new OpenAIClient(endpoint, new AzureKeyCredential(key));
     this.deployment = deployment;
   }
 
@@ -20,12 +16,14 @@ export class AzureOpenAIClient {
 
   async generateResponse(messages: ChatMessage[]): Promise<LLMResponse> {
     try {
-      const result = await this.client.chat.completions.create({
-        model: this.deployment,
-        messages: messages.map(m => ({ role: m.role, content: m.content })),
-        temperature: 0.7,
-        max_tokens: 500
-      });
+      const result = await this.client.getChatCompletions(
+        this.deployment,
+        messages.map(m => ({ role: m.role, content: m.content })),
+        {
+          temperature: 0.7,
+          maxTokens: 500
+        }
+      );
 
       const choice = result.choices[0];
       if (!choice?.message?.content) {
@@ -34,7 +32,7 @@ export class AzureOpenAIClient {
 
       return {
         content: choice.message.content,
-        tokensUsed: result.usage?.total_tokens || 0
+        tokensUsed: result.usage?.totalTokens || 0
       };
     } catch (error) {
       console.error('Azure OpenAI error:', error);
