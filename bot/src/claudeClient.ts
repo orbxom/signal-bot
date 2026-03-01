@@ -1,5 +1,13 @@
 import { spawn } from 'node:child_process';
+import path from 'node:path';
 import type { ChatMessage, LLMResponse } from './types';
+
+export interface MessageContext {
+  groupId: string;
+  sender: string;
+  dbPath: string;
+  timezone: string;
+}
 
 interface ClaudeResultLine {
   type: 'result';
@@ -11,7 +19,9 @@ interface ClaudeResultLine {
   };
 }
 
-const ALLOWED_TOOLS = 'WebSearch,WebFetch,Read,Glob,Grep';
+const BASE_TOOLS = 'WebSearch,WebFetch,Read,Glob,Grep';
+const MCP_TOOLS = 'mcp__reminders__set_reminder,mcp__reminders__list_reminders,mcp__reminders__cancel_reminder';
+const ALLOWED_TOOLS = `${BASE_TOOLS},${MCP_TOOLS}`;
 
 function spawnPromise(
   cmd: string,
@@ -67,7 +77,7 @@ export class ClaudeCLIClient {
     this.maxTurns = maxTurns;
   }
 
-  async generateResponse(messages: ChatMessage[]): Promise<LLMResponse> {
+  async generateResponse(messages: ChatMessage[], context?: MessageContext): Promise<LLMResponse> {
     if (!messages || messages.length === 0) {
       throw new Error('Messages array cannot be empty');
     }
@@ -95,6 +105,25 @@ export class ClaudeCLIClient {
       '--allowedTools',
       ALLOWED_TOOLS,
     ];
+
+    if (context) {
+      const mcpServerPath = path.resolve(__dirname, 'reminderMcpServer.js');
+      const mcpConfig = JSON.stringify({
+        mcpServers: {
+          reminders: {
+            command: 'node',
+            args: [mcpServerPath],
+            env: {
+              DB_PATH: context.dbPath,
+              MCP_GROUP_ID: context.groupId,
+              MCP_SENDER: context.sender,
+              TZ: context.timezone,
+            },
+          },
+        },
+      });
+      args.push('--mcp-config', mcpConfig, '--strict-mcp-config');
+    }
 
     if (systemPrompt) {
       args.push('--system-prompt', systemPrompt);

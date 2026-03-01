@@ -12,6 +12,8 @@ export class MessageHandler {
   private llmClient?: ClaudeCLIClient;
   private signalClient?: SignalClient;
   private contextWindowSize: number;
+  private timezone: string;
+  private dbPath: string;
   private processedMessages: Set<string> = new Set();
 
   constructor(
@@ -23,6 +25,8 @@ export class MessageHandler {
       llmClient?: ClaudeCLIClient;
       signalClient?: SignalClient;
       contextWindowSize?: number;
+      timezone?: string;
+      dbPath?: string;
     },
   ) {
     this.mentionTriggers = mentionTriggers;
@@ -33,6 +37,8 @@ export class MessageHandler {
     this.llmClient = options?.llmClient;
     this.signalClient = options?.signalClient;
     this.contextWindowSize = options?.contextWindowSize || 20;
+    this.timezone = options?.timezone || 'Australia/Sydney';
+    this.dbPath = options?.dbPath || './data/bot.db';
   }
 
   isMentioned(content: string): boolean {
@@ -57,8 +63,39 @@ export class MessageHandler {
     return query.replace(/\s+/g, ' ').trim();
   }
 
-  buildContext(history: Message[], currentQuery: string): ChatMessage[] {
-    const contextMessages: ChatMessage[] = [{ role: 'system', content: this.systemPrompt }];
+  buildContext(history: Message[], currentQuery: string, groupId?: string, sender?: string): ChatMessage[] {
+    let systemContent = this.systemPrompt;
+
+    if (groupId && sender) {
+      const now = new Date();
+      // Build a proper ISO 8601 string with timezone offset
+      const parts = new Intl.DateTimeFormat('en-CA', {
+        timeZone: this.timezone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false,
+        timeZoneName: 'shortOffset',
+      }).formatToParts(now);
+      const get = (type: string) => parts.find(p => p.type === type)?.value || '';
+      const offset = get('timeZoneName').replace('GMT', '') || '+00:00';
+      const isoString = `${get('year')}-${get('month')}-${get('day')}T${get('hour')}:${get('minute')}:${get('second')}${offset}`;
+      const unixMs = now.getTime();
+
+      const timeContext = [
+        `Current time: ${isoString} (Unix ms: ${unixMs})`,
+        `Timezone: ${this.timezone}`,
+        `Group ID: ${groupId}`,
+        `Current requester: ${sender}`,
+      ].join('\n');
+
+      systemContent = `${timeContext}\n\n${systemContent}`;
+    }
+
+    const contextMessages: ChatMessage[] = [{ role: 'system', content: systemContent }];
 
     for (const msg of history) {
       if (msg.isBot) {
@@ -130,10 +167,15 @@ export class MessageHandler {
       const query = this.extractQuery(content);
 
       // Build context
-      const messages = this.buildContext(history, query);
+      const messages = this.buildContext(history, query, groupId, sender);
 
       // Get LLM response
-      const response = await this.llmClient.generateResponse(messages);
+      const response = await this.llmClient.generateResponse(messages, {
+        groupId,
+        sender,
+        dbPath: this.dbPath,
+        timezone: this.timezone,
+      });
 
       // Send response
       await this.signalClient.sendMessage(groupId, response.content);

@@ -1,6 +1,7 @@
 import { ClaudeCLIClient } from './claudeClient';
 import { Config } from './config';
 import { MessageHandler } from './messageHandler';
+import { ReminderScheduler } from './reminderScheduler';
 import { SignalClient } from './signalClient';
 import { Storage } from './storage';
 
@@ -19,6 +20,9 @@ async function main() {
   const signalClient = new SignalClient(config.signalCliUrl, config.botPhoneNumber);
   console.log('Signal client initialized');
 
+  const reminderScheduler = new ReminderScheduler(storage, signalClient);
+  console.log('Reminder scheduler initialized');
+
   const messageHandler = new MessageHandler(config.mentionTriggers, {
     botPhoneNumber: config.botPhoneNumber,
     systemPrompt: config.systemPrompt,
@@ -26,6 +30,8 @@ async function main() {
     llmClient,
     signalClient,
     contextWindowSize: config.contextWindowSize,
+    timezone: config.timezone,
+    dbPath: config.dbPath,
   });
   console.log(`Message handler initialized (triggers: ${config.mentionTriggers.join(', ')})`);
 
@@ -44,6 +50,9 @@ async function main() {
 
   // Start polling loop
   console.log('Starting message polling...');
+  const REMINDER_CHECK_INTERVAL = 15;
+  let tickCount = 0;
+
   while (true) {
     try {
       const messages = await signalClient.receiveMessages();
@@ -54,6 +63,17 @@ async function main() {
         if (data) {
           console.log(`[${data.groupId}] ${data.sender}: ${data.content.substring(0, 50)}...`);
           await messageHandler.handleMessage(data.groupId, data.sender, data.content, data.timestamp);
+        }
+      }
+
+      // Check for due reminders periodically
+      tickCount++;
+      if (tickCount >= REMINDER_CHECK_INTERVAL) {
+        tickCount = 0;
+        try {
+          await reminderScheduler.processDueReminders();
+        } catch (error) {
+          console.error('Error processing reminders:', error);
         }
       }
     } catch (error) {

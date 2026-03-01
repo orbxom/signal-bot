@@ -338,6 +338,11 @@ describe('MessageHandler', () => {
           expect.objectContaining({ role: 'user', content: 'Alice: Previous message' }),
           expect.objectContaining({ role: 'user', content: 'what is 2+2?' }),
         ]),
+        expect.objectContaining({
+          groupId: 'g1',
+          sender: 'Bob',
+          timezone: 'Australia/Sydney',
+        }),
       );
     });
 

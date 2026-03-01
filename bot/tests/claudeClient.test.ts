@@ -248,6 +248,45 @@ describe('ClaudeCLIClient', () => {
       expect(args[maxTurnsIdx]).toBe('3');
     });
 
+    it('should include MCP config when context is provided', async () => {
+      mockSpawnSuccess(makeResultOutput('Reminder set!'));
+
+      const client = new ClaudeCLIClient();
+      const messages: ChatMessage[] = [{ role: 'user', content: 'Remind me' }];
+      const context = {
+        groupId: 'test-group',
+        sender: '+61400000000',
+        dbPath: '/tmp/test.db',
+        timezone: 'Australia/Sydney',
+      };
+
+      await client.generateResponse(messages, context);
+
+      const args = mockSpawn.mock.calls[0][1];
+      expect(args).toContain('--mcp-config');
+      expect(args).toContain('--strict-mcp-config');
+
+      const mcpConfigIdx = args.indexOf('--mcp-config') + 1;
+      const mcpConfig = JSON.parse(args[mcpConfigIdx]);
+      expect(mcpConfig.mcpServers.reminders).toBeDefined();
+      expect(mcpConfig.mcpServers.reminders.command).toBe('node');
+      expect(mcpConfig.mcpServers.reminders.env.MCP_GROUP_ID).toBe('test-group');
+      expect(mcpConfig.mcpServers.reminders.env.MCP_SENDER).toBe('+61400000000');
+      expect(mcpConfig.mcpServers.reminders.env.DB_PATH).toBe('/tmp/test.db');
+      expect(mcpConfig.mcpServers.reminders.env.TZ).toBe('Australia/Sydney');
+    });
+
+    it('should not include MCP config when context is not provided', async () => {
+      mockSpawnSuccess(makeResultOutput('Hello!'));
+
+      const client = new ClaudeCLIClient();
+      await client.generateResponse([{ role: 'user', content: 'Hi' }]);
+
+      const args = mockSpawn.mock.calls[0][1];
+      expect(args).not.toContain('--mcp-config');
+      expect(args).not.toContain('--strict-mcp-config');
+    });
+
     it('should parse JSON array output format', async () => {
       const output = JSON.stringify([
         { type: 'system', subtype: 'init', session_id: 'test' },
