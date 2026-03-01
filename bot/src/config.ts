@@ -12,7 +12,8 @@ export interface ConfigType {
   systemPrompt: string;
 }
 
-const DEFAULT_SYSTEM_PROMPT = 'You are a helpful family assistant in a Signal group chat. Be friendly, concise, and helpful. Keep responses under a few sentences unless asked for detail.';
+const DEFAULT_SYSTEM_PROMPT =
+  'You are a helpful family assistant in a Signal group chat. Be friendly, concise, and helpful. Keep responses under a few sentences unless asked for detail.';
 
 export class Config {
   static load(): ConfigType {
@@ -26,13 +27,13 @@ export class Config {
 
     // Parse and validate context window size
     const contextWindowSize = parseInt(process.env.CONTEXT_WINDOW_SIZE || '20', 10);
-    if (isNaN(contextWindowSize) || contextWindowSize <= 0) {
+    if (Number.isNaN(contextWindowSize) || contextWindowSize <= 0) {
       throw new Error('CONTEXT_WINDOW_SIZE must be a positive number');
     }
 
     // Parse and validate max turns
     const maxTurns = parseInt(process.env.CLAUDE_MAX_TURNS || '1', 10);
-    if (isNaN(maxTurns) || maxTurns <= 0) {
+    if (Number.isNaN(maxTurns) || maxTurns <= 0) {
       throw new Error('CLAUDE_MAX_TURNS must be a positive number');
     }
 

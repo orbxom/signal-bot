@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { EventEmitter } from 'events';
+import { EventEmitter } from 'node:events';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChatMessage } from '../src/types';
 
 const { mockSpawn } = vi.hoisted(() => {
@@ -114,15 +114,19 @@ describe('ClaudeCLIClient', () => {
       expect(mockSpawn).toHaveBeenCalledWith(
         'claude',
         expect.arrayContaining([
-          '-p', 'Hi',
-          '--output-format', 'json',
-          '--max-turns', '1',
+          '-p',
+          'Hi',
+          '--output-format',
+          'json',
+          '--max-turns',
+          '1',
           '--no-session-persistence',
-          '--system-prompt', 'Be helpful',
+          '--system-prompt',
+          'Be helpful',
         ]),
         expect.objectContaining({
           env: expect.objectContaining({ CLAUDECODE: '' }),
-        })
+        }),
       );
     });
 
@@ -130,9 +134,7 @@ describe('ClaudeCLIClient', () => {
       mockSpawnSuccess(makeResultOutput('Hello!'));
 
       const client = new ClaudeCLIClient();
-      const messages: ChatMessage[] = [
-        { role: 'user', content: 'Hi' },
-      ];
+      const messages: ChatMessage[] = [{ role: 'user', content: 'Hi' }];
 
       await client.generateResponse(messages);
 
@@ -207,32 +209,32 @@ describe('ClaudeCLIClient', () => {
       mockSpawnSuccess(JSON.stringify({ type: 'system', subtype: 'init' }));
 
       const client = new ClaudeCLIClient();
-      await expect(client.generateResponse([{ role: 'user', content: 'Hi' }]))
-        .rejects.toThrow('No result found in Claude CLI output');
+      await expect(client.generateResponse([{ role: 'user', content: 'Hi' }])).rejects.toThrow(
+        'No result found in Claude CLI output',
+      );
     });
 
     it('should throw when Claude CLI is not found', async () => {
       mockSpawnError('spawn claude ENOENT');
 
       const client = new ClaudeCLIClient();
-      await expect(client.generateResponse([{ role: 'user', content: 'Hi' }]))
-        .rejects.toThrow('Claude CLI not found');
+      await expect(client.generateResponse([{ role: 'user', content: 'Hi' }])).rejects.toThrow('Claude CLI not found');
     });
 
     it('should throw on non-zero exit with stderr', async () => {
       mockSpawnExitCode(1, 'something went wrong');
 
       const client = new ClaudeCLIClient();
-      await expect(client.generateResponse([{ role: 'user', content: 'Hi' }]))
-        .rejects.toThrow('something went wrong');
+      await expect(client.generateResponse([{ role: 'user', content: 'Hi' }])).rejects.toThrow('something went wrong');
     });
 
     it('should wrap unknown errors', async () => {
       mockSpawnError('Something unexpected');
 
       const client = new ClaudeCLIClient();
-      await expect(client.generateResponse([{ role: 'user', content: 'Hi' }]))
-        .rejects.toThrow('Failed to generate response from Claude CLI: Something unexpected');
+      await expect(client.generateResponse([{ role: 'user', content: 'Hi' }])).rejects.toThrow(
+        'Failed to generate response from Claude CLI: Something unexpected',
+      );
     });
 
     it('should use custom maxTurns', async () => {

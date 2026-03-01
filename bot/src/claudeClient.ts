@@ -1,4 +1,4 @@
-import { spawn } from 'child_process';
+import { spawn } from 'node:child_process';
 import type { ChatMessage, LLMResponse } from './types';
 
 interface ClaudeResultLine {
@@ -13,7 +13,11 @@ interface ClaudeResultLine {
 
 const ALLOWED_TOOLS = 'WebSearch,WebFetch,Read,Glob,Grep';
 
-function spawnPromise(cmd: string, args: string[], options: { timeout?: number; env?: NodeJS.ProcessEnv }): Promise<{ stdout: string }> {
+function spawnPromise(
+  cmd: string,
+  args: string[],
+  options: { timeout?: number; env?: NodeJS.ProcessEnv },
+): Promise<{ stdout: string }> {
   return new Promise((resolve, reject) => {
     const child = spawn(cmd, args, {
       env: options.env,
@@ -23,15 +27,21 @@ function spawnPromise(cmd: string, args: string[], options: { timeout?: number; 
 
     const stdoutChunks: Buffer[] = [];
     let stderr = '';
-    child.stdout.on('data', (chunk: Buffer) => { stdoutChunks.push(chunk); });
-    child.stderr.on('data', (data: Buffer) => { stderr += data.toString(); });
+    child.stdout.on('data', (chunk: Buffer) => {
+      stdoutChunks.push(chunk);
+    });
+    child.stderr.on('data', (data: Buffer) => {
+      stderr += data.toString();
+    });
 
-    const timer = options.timeout ? setTimeout(() => {
-      child.kill();
-      reject(new Error('Claude CLI timed out'));
-    }, options.timeout) : null;
+    const timer = options.timeout
+      ? setTimeout(() => {
+          child.kill();
+          reject(new Error('Claude CLI timed out'));
+        }, options.timeout)
+      : null;
 
-    child.on('close', (code) => {
+    child.on('close', code => {
       if (timer) clearTimeout(timer);
       const stdout = Buffer.concat(stdoutChunks).toString();
       if (code !== 0) {
@@ -40,7 +50,7 @@ function spawnPromise(cmd: string, args: string[], options: { timeout?: number; 
         resolve({ stdout });
       }
     });
-    child.on('error', (err) => {
+    child.on('error', err => {
       if (timer) clearTimeout(timer);
       reject(err);
     });
@@ -75,11 +85,15 @@ export class ClaudeCLIClient {
       .join('\n\n');
 
     const args = [
-      '-p', prompt,
-      '--output-format', 'json',
-      '--max-turns', String(this.maxTurns),
+      '-p',
+      prompt,
+      '--output-format',
+      'json',
+      '--max-turns',
+      String(this.maxTurns),
       '--no-session-persistence',
-      '--allowedTools', ALLOWED_TOOLS,
+      '--allowedTools',
+      ALLOWED_TOOLS,
     ];
 
     if (systemPrompt) {
@@ -100,7 +114,11 @@ export class ClaudeCLIClient {
         entries = JSON.parse(trimmed);
       } else {
         for (const line of trimmed.split('\n')) {
-          try { entries.push(JSON.parse(line)); } catch { /* skip */ }
+          try {
+            entries.push(JSON.parse(line));
+          } catch {
+            /* skip */
+          }
         }
       }
 
@@ -113,7 +131,10 @@ export class ClaudeCLIClient {
       }
 
       if (!resultLine) {
-        console.error('[Claude] No result line in output. Entry types:', entries.map(e => e.type));
+        console.error(
+          '[Claude] No result line in output. Entry types:',
+          entries.map(e => e.type),
+        );
         throw new Error('No result found in Claude CLI output');
       }
 
@@ -121,7 +142,9 @@ export class ClaudeCLIClient {
       let content = '';
 
       if (resultLine.is_error) {
-        console.warn(`[Claude] Result has is_error=true, subtype=${(resultLine as unknown as Record<string, unknown>).subtype}. Falling back to assistant text.`);
+        console.warn(
+          `[Claude] Result has is_error=true, subtype=${(resultLine as unknown as Record<string, unknown>).subtype}. Falling back to assistant text.`,
+        );
       } else {
         content = typeof resultLine.result === 'string' ? resultLine.result.trim() : '';
       }
@@ -129,7 +152,10 @@ export class ClaudeCLIClient {
       if (!content) {
         // Extract text from the last assistant message
         const textBlocks = lastAssistant?.message?.content?.filter(b => b.type === 'text') || [];
-        content = textBlocks.map(b => b.text || '').join('').trim();
+        content = textBlocks
+          .map(b => b.text || '')
+          .join('')
+          .trim();
         if (content) {
           console.log(`[Claude] Used fallback: extracted ${content.length} chars from assistant message`);
         }
@@ -142,13 +168,12 @@ export class ClaudeCLIClient {
 
       return {
         content,
-        tokensUsed: (resultLine.usage?.output_tokens || 0),
+        tokensUsed: resultLine.usage?.output_tokens || 0,
       };
     } catch (error) {
       if (error instanceof Error) {
         // Re-throw our own errors
-        if (error.message.startsWith('No result found') ||
-            error.message.startsWith('No response content')) {
+        if (error.message.startsWith('No result found') || error.message.startsWith('No response content')) {
           throw error;
         }
         if (error.message.includes('ETIMEDOUT') || error.message.includes('killed')) {

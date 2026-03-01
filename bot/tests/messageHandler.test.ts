@@ -1,9 +1,9 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { MessageHandler } from '../src/messageHandler';
-import type { Message } from '../src/types';
-import type { Storage } from '../src/storage';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ClaudeCLIClient } from '../src/claudeClient';
+import { MessageHandler } from '../src/messageHandler';
 import type { SignalClient } from '../src/signalClient';
+import type { Storage } from '../src/storage';
+import type { Message } from '../src/types';
 
 describe('MessageHandler', () => {
   it('should detect bot mentions', () => {
@@ -17,12 +17,9 @@ describe('MessageHandler', () => {
   it('should extract query from mentioned message', () => {
     const handler = new MessageHandler(['@bot', 'bot:']);
 
-    expect(handler.extractQuery('@bot what is the weather?'))
-      .toBe('what is the weather?');
-    expect(handler.extractQuery('bot: tell me a joke'))
-      .toBe('tell me a joke');
-    expect(handler.extractQuery('hey @bot how are you'))
-      .toBe('hey how are you');
+    expect(handler.extractQuery('@bot what is the weather?')).toBe('what is the weather?');
+    expect(handler.extractQuery('bot: tell me a joke')).toBe('tell me a joke');
+    expect(handler.extractQuery('hey @bot how are you')).toBe('hey how are you');
   });
 
   it('should build conversation context from history', () => {
@@ -31,7 +28,7 @@ describe('MessageHandler', () => {
     const messages: Message[] = [
       { id: 1, groupId: 'g1', sender: 'Alice', content: 'Hello', timestamp: 1000, isBot: false },
       { id: 2, groupId: 'g1', sender: 'bot', content: 'Hi Alice!', timestamp: 2000, isBot: true },
-      { id: 3, groupId: 'g1', sender: 'Bob', content: 'How are you?', timestamp: 3000, isBot: false }
+      { id: 3, groupId: 'g1', sender: 'Bob', content: 'How are you?', timestamp: 3000, isBot: false },
     ];
 
     const chatMessages = handler.buildContext(messages, 'What time is it?');
@@ -100,7 +97,7 @@ describe('MessageHandler', () => {
 
     it('should handle special characters in content', () => {
       const handler = new MessageHandler(['@bot']);
-      expect(handler.isMentioned('@bot! What\'s up?')).toBe(true);
+      expect(handler.isMentioned("@bot! What's up?")).toBe(true);
       // Mentions must be at the start of the message
       expect(handler.isMentioned('Hey @bot, help me.')).toBe(false);
     });
@@ -119,7 +116,7 @@ describe('MessageHandler', () => {
 
     it('should preserve punctuation and special characters', () => {
       const handler = new MessageHandler(['@bot']);
-      expect(handler.extractQuery('@bot what\'s the weather?')).toBe('what\'s the weather?');
+      expect(handler.extractQuery("@bot what's the weather?")).toBe("what's the weather?");
     });
 
     it('should normalize whitespace', () => {
@@ -157,7 +154,7 @@ describe('MessageHandler', () => {
       const messages: Message[] = [
         { id: 1, groupId: 'g1', sender: 'Alice', content: 'First', timestamp: 1000, isBot: false },
         { id: 2, groupId: 'g1', sender: 'Bob', content: 'Second', timestamp: 2000, isBot: false },
-        { id: 3, groupId: 'g1', sender: 'Charlie', content: 'Third', timestamp: 3000, isBot: false }
+        { id: 3, groupId: 'g1', sender: 'Charlie', content: 'Third', timestamp: 3000, isBot: false },
       ];
 
       const chatMessages = handler.buildContext(messages, 'Query');
@@ -171,7 +168,7 @@ describe('MessageHandler', () => {
       const handler = new MessageHandler(['@bot']);
       const messages: Message[] = [
         { id: 1, groupId: 'g1', sender: 'Alice', content: 'Hello', timestamp: 1000, isBot: false },
-        { id: 2, groupId: 'g1', sender: 'bot', content: 'Hi!', timestamp: 2000, isBot: true }
+        { id: 2, groupId: 'g1', sender: 'bot', content: 'Hi!', timestamp: 2000, isBot: true },
       ];
 
       const chatMessages = handler.buildContext(messages, 'How are you?');
@@ -185,7 +182,7 @@ describe('MessageHandler', () => {
     it('should always include system prompt first', () => {
       const handler = new MessageHandler(['@bot'], { systemPrompt: 'You are a helpful assistant.' });
       const messages: Message[] = [
-        { id: 1, groupId: 'g1', sender: 'Alice', content: 'Hello', timestamp: 1000, isBot: false }
+        { id: 1, groupId: 'g1', sender: 'Alice', content: 'Hello', timestamp: 1000, isBot: false },
       ];
 
       const chatMessages = handler.buildContext(messages, 'Query');
@@ -204,7 +201,7 @@ describe('MessageHandler', () => {
     it('should always append current query last', () => {
       const handler = new MessageHandler(['@bot']);
       const messages: Message[] = [
-        { id: 1, groupId: 'g1', sender: 'Alice', content: 'Hello', timestamp: 1000, isBot: false }
+        { id: 1, groupId: 'g1', sender: 'Alice', content: 'Hello', timestamp: 1000, isBot: false },
       ];
 
       const chatMessages = handler.buildContext(messages, 'What is 2+2?');
@@ -226,27 +223,27 @@ describe('MessageHandler', () => {
       mockStorage = {
         addMessage: vi.fn(),
         getRecentMessages: vi.fn().mockReturnValue([]),
-        trimMessages: vi.fn()
+        trimMessages: vi.fn(),
       } as any;
 
       mockLLM = {
         generateResponse: vi.fn().mockResolvedValue({
           content: 'Test response',
-          tokensUsed: 25
-        })
+          tokensUsed: 25,
+        }),
       } as any;
 
       mockSignal = {
-        sendMessage: vi.fn().mockResolvedValue(undefined)
+        sendMessage: vi.fn().mockResolvedValue(undefined),
       } as any;
     });
 
     it('should throw error when handler not fully initialized', async () => {
       const handler = new MessageHandler(['@bot']);
 
-      await expect(
-        handler.handleMessage('g1', 'Alice', '@bot hello', 1000)
-      ).rejects.toThrow('Handler not fully initialized');
+      await expect(handler.handleMessage('g1', 'Alice', '@bot hello', 1000)).rejects.toThrow(
+        'Handler not fully initialized',
+      );
     });
 
     it('should skip messages from the bot itself', async () => {
@@ -291,7 +288,7 @@ describe('MessageHandler', () => {
         sender: 'Alice',
         content: 'Just saying hello',
         timestamp: 1000,
-        isBot: false
+        isBot: false,
       });
     });
 
@@ -323,7 +320,7 @@ describe('MessageHandler', () => {
 
     it('should extract query and build context correctly', async () => {
       const mockHistory: Message[] = [
-        { id: 1, groupId: 'g1', sender: 'Alice', content: 'Previous message', timestamp: 500, isBot: false }
+        { id: 1, groupId: 'g1', sender: 'Alice', content: 'Previous message', timestamp: 500, isBot: false },
       ];
       mockStorage.getRecentMessages = vi.fn().mockReturnValue(mockHistory);
 
@@ -339,8 +336,8 @@ describe('MessageHandler', () => {
         expect.arrayContaining([
           expect.objectContaining({ role: 'system' }),
           expect.objectContaining({ role: 'user', content: 'Alice: Previous message' }),
-          expect.objectContaining({ role: 'user', content: 'what is 2+2?' })
-        ])
+          expect.objectContaining({ role: 'user', content: 'what is 2+2?' }),
+        ]),
       );
     });
 
@@ -359,8 +356,8 @@ describe('MessageHandler', () => {
           groupId: 'g1',
           content: 'Test response',
           timestamp: 2000,
-          isBot: true
-        })
+          isBot: true,
+        }),
       );
     });
 
@@ -392,7 +389,7 @@ describe('MessageHandler', () => {
       expect(consoleErrorSpy).toHaveBeenCalled();
       expect(mockSignal.sendMessage).toHaveBeenCalledWith(
         'g1',
-        'Sorry, I encountered an error processing your request.'
+        'Sorry, I encountered an error processing your request.',
       );
 
       consoleErrorSpy.mockRestore();
@@ -440,15 +437,9 @@ describe('MessageHandler', () => {
 
       await handler.handleMessage('g1', 'Alice', '@bot hello', 1000);
 
-      expect(consoleLogSpy).toHaveBeenCalledWith(
-        expect.stringContaining('[g1]')
-      );
-      expect(consoleLogSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Alice')
-      );
-      expect(consoleLogSpy).toHaveBeenCalledWith(
-        expect.stringContaining('25 tokens')
-      );
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('[g1]'));
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('Alice'));
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('25 tokens'));
 
       consoleLogSpy.mockRestore();
     });

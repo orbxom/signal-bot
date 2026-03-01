@@ -1,7 +1,7 @@
-import type { Message, ChatMessage } from './types';
-import type { Storage } from './storage';
 import type { ClaudeCLIClient } from './claudeClient';
 import type { SignalClient } from './signalClient';
+import type { Storage } from './storage';
+import type { ChatMessage, Message } from './types';
 
 export class MessageHandler {
   private mentionTriggers: string[];
@@ -23,7 +23,7 @@ export class MessageHandler {
       llmClient?: ClaudeCLIClient;
       signalClient?: SignalClient;
       contextWindowSize?: number;
-    }
+    },
   ) {
     this.mentionTriggers = mentionTriggers;
     this.lowerTriggers = mentionTriggers.map(t => t.toLowerCase());
@@ -37,9 +37,7 @@ export class MessageHandler {
 
   isMentioned(content: string): boolean {
     const lowerContent = content.toLowerCase();
-    return this.lowerTriggers.some(trigger =>
-      lowerContent.startsWith(trigger)
-    );
+    return this.lowerTriggers.some(trigger => lowerContent.startsWith(trigger));
   }
 
   extractQuery(content: string): string {
@@ -60,38 +58,31 @@ export class MessageHandler {
   }
 
   buildContext(history: Message[], currentQuery: string): ChatMessage[] {
-    const contextMessages: ChatMessage[] = [
-      { role: 'system', content: this.systemPrompt },
-    ];
+    const contextMessages: ChatMessage[] = [{ role: 'system', content: this.systemPrompt }];
 
     for (const msg of history) {
       if (msg.isBot) {
         contextMessages.push({
           role: 'assistant',
-          content: msg.content
+          content: msg.content,
         });
       } else {
         contextMessages.push({
           role: 'user',
-          content: `${msg.sender}: ${msg.content}`
+          content: `${msg.sender}: ${msg.content}`,
         });
       }
     }
 
     contextMessages.push({
       role: 'user',
-      content: currentQuery
+      content: currentQuery,
     });
 
     return contextMessages;
   }
 
-  async handleMessage(
-    groupId: string,
-    sender: string,
-    content: string,
-    timestamp: number
-  ): Promise<void> {
+  async handleMessage(groupId: string, sender: string, content: string, timestamp: number): Promise<void> {
     if (!this.storage || !this.llmClient || !this.signalClient) {
       throw new Error('Handler not fully initialized');
     }
@@ -127,7 +118,7 @@ export class MessageHandler {
       sender,
       content,
       timestamp,
-      isBot: false
+      isBot: false,
     });
 
     if (!mentioned) {
@@ -153,7 +144,7 @@ export class MessageHandler {
         sender: this.botPhoneNumber || 'bot',
         content: response.content,
         timestamp: Date.now(),
-        isBot: true
+        isBot: true,
       });
 
       // Trim old messages

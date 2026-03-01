@@ -1,8 +1,8 @@
-import { Config } from './config';
-import { Storage } from './storage';
 import { ClaudeCLIClient } from './claudeClient';
-import { SignalClient } from './signalClient';
+import { Config } from './config';
 import { MessageHandler } from './messageHandler';
+import { SignalClient } from './signalClient';
+import { Storage } from './storage';
 
 async function main() {
   console.log('Starting Signal Family Bot...');
@@ -16,23 +16,17 @@ async function main() {
   const llmClient = new ClaudeCLIClient(config.claude.maxTurns);
   console.log('Claude CLI client initialized');
 
-  const signalClient = new SignalClient(
-    config.signalCliUrl,
-    config.botPhoneNumber
-  );
+  const signalClient = new SignalClient(config.signalCliUrl, config.botPhoneNumber);
   console.log('Signal client initialized');
 
-  const messageHandler = new MessageHandler(
-    config.mentionTriggers,
-    {
-      botPhoneNumber: config.botPhoneNumber,
-      systemPrompt: config.systemPrompt,
-      storage,
-      llmClient,
-      signalClient,
-      contextWindowSize: config.contextWindowSize,
-    }
-  );
+  const messageHandler = new MessageHandler(config.mentionTriggers, {
+    botPhoneNumber: config.botPhoneNumber,
+    systemPrompt: config.systemPrompt,
+    storage,
+    llmClient,
+    signalClient,
+    contextWindowSize: config.contextWindowSize,
+  });
   console.log(`Message handler initialized (triggers: ${config.mentionTriggers.join(', ')})`);
 
   // Graceful shutdown
@@ -59,12 +53,7 @@ async function main() {
 
         if (data) {
           console.log(`[${data.groupId}] ${data.sender}: ${data.content.substring(0, 50)}...`);
-          await messageHandler.handleMessage(
-            data.groupId,
-            data.sender,
-            data.content,
-            data.timestamp
-          );
+          await messageHandler.handleMessage(data.groupId, data.sender, data.content, data.timestamp);
         }
       }
     } catch (error) {

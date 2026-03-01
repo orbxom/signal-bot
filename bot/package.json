@@ -8,7 +8,13 @@
     "dev": "tsx watch src/index.ts",
     "start": "node dist/index.js",
     "test": "vitest",
-    "test:integration": "vitest run tests/integration.test.ts"
+    "test:integration": "vitest run tests/integration.test.ts",
+    "lint": "biome lint ./src ./tests",
+    "lint:fix": "biome lint --write ./src ./tests",
+    "format": "biome format --write ./src ./tests",
+    "format:check": "biome format ./src ./tests",
+    "check": "biome check ./src ./tests",
+    "check:fix": "biome check --write ./src ./tests"
   },
   "keywords": [
     "signal",
@@ -23,6 +29,7 @@
     "dotenv": "^16.4.0"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.4.4",
     "@types/better-sqlite3": "^7.6.0",
     "@types/node": "^20.0.0",
     "tsx": "^4.7.0",

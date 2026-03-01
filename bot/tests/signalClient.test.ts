@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SignalClient } from '../src/signalClient';
 import type { SignalMessage } from '../src/types';
 
@@ -20,18 +20,15 @@ describe('SignalClient', () => {
     });
 
     it('should throw error when base URL is empty', () => {
-      expect(() => new SignalClient('', '+1234567890'))
-        .toThrow('Base URL is required');
+      expect(() => new SignalClient('', '+1234567890')).toThrow('Base URL is required');
     });
 
     it('should throw error when account is empty', () => {
-      expect(() => new SignalClient('http://localhost:8080', ''))
-        .toThrow('Account is required');
+      expect(() => new SignalClient('http://localhost:8080', '')).toThrow('Account is required');
     });
 
     it('should throw error when base URL is invalid', () => {
-      expect(() => new SignalClient('not-a-valid-url', '+1234567890'))
-        .toThrow('Invalid base URL format');
+      expect(() => new SignalClient('not-a-valid-url', '+1234567890')).toThrow('Invalid base URL format');
     });
   });
 
@@ -47,18 +44,18 @@ describe('SignalClient', () => {
             timestamp: 1234567890,
             message: 'Test message',
             groupInfo: {
-              groupId: 'abc123'
-            }
-          }
-        }
+              groupId: 'abc123',
+            },
+          },
+        },
       };
 
       const extracted = client.extractMessageData(signalMsg);
       expect(extracted).not.toBeNull();
-      expect(extracted!.sender).toBe('+9876543210');
-      expect(extracted!.content).toBe('Test message');
-      expect(extracted!.groupId).toBe('abc123');
-      expect(extracted!.timestamp).toBe(1234567890);
+      expect(extracted?.sender).toBe('+9876543210');
+      expect(extracted?.content).toBe('Test message');
+      expect(extracted?.groupId).toBe('abc123');
+      expect(extracted?.timestamp).toBe(1234567890);
     });
 
     it('should use source when sourceNumber is not available', () => {
@@ -72,15 +69,15 @@ describe('SignalClient', () => {
             timestamp: 1234567890,
             message: 'Test message',
             groupInfo: {
-              groupId: 'abc123'
-            }
-          }
-        }
+              groupId: 'abc123',
+            },
+          },
+        },
       };
 
       const extracted = client.extractMessageData(signalMsg);
       expect(extracted).not.toBeNull();
-      expect(extracted!.sender).toBe('+1111111111');
+      expect(extracted?.sender).toBe('+1111111111');
     });
 
     it('should use "unknown" when no sender info is available', () => {
@@ -93,15 +90,15 @@ describe('SignalClient', () => {
             timestamp: 1234567890,
             message: 'Test message',
             groupInfo: {
-              groupId: 'abc123'
-            }
-          }
-        }
+              groupId: 'abc123',
+            },
+          },
+        },
       };
 
       const extracted = client.extractMessageData(signalMsg);
       expect(extracted).not.toBeNull();
-      expect(extracted!.sender).toBe('unknown');
+      expect(extracted?.sender).toBe('unknown');
     });
 
     it('should return null when dataMessage is missing', () => {
@@ -110,8 +107,8 @@ describe('SignalClient', () => {
       const signalMsg: SignalMessage = {
         envelope: {
           sourceNumber: '+9876543210',
-          timestamp: 1234567890
-        }
+          timestamp: 1234567890,
+        },
       };
 
       const extracted = client.extractMessageData(signalMsg);
@@ -128,10 +125,10 @@ describe('SignalClient', () => {
           dataMessage: {
             timestamp: 1234567890,
             groupInfo: {
-              groupId: 'abc123'
-            }
-          }
-        }
+              groupId: 'abc123',
+            },
+          },
+        },
       };
 
       const extracted = client.extractMessageData(signalMsg);
@@ -147,9 +144,9 @@ describe('SignalClient', () => {
           timestamp: 1234567890,
           dataMessage: {
             timestamp: 1234567890,
-            message: 'Test message'
-          }
-        }
+            message: 'Test message',
+          },
+        },
       };
 
       const extracted = client.extractMessageData(signalMsg);
@@ -167,10 +164,10 @@ describe('SignalClient', () => {
             timestamp: 1234567890,
             message: '',
             groupInfo: {
-              groupId: 'abc123'
-            }
-          }
-        }
+              groupId: 'abc123',
+            },
+          },
+        },
       };
 
       const extracted = client.extractMessageData(signalMsg);
@@ -192,21 +189,23 @@ describe('SignalClient', () => {
 
     it('should return parsed messages on success', async () => {
       const client = new SignalClient('http://localhost:8080', '+1234567890');
-      const mockMessages: SignalMessage[] = [{
-        envelope: {
-          sourceNumber: '+9876543210',
-          timestamp: 1234567890,
-          dataMessage: {
+      const mockMessages: SignalMessage[] = [
+        {
+          envelope: {
+            sourceNumber: '+9876543210',
             timestamp: 1234567890,
-            message: 'Hello',
-            groupInfo: { groupId: 'abc123' }
-          }
-        }
-      }];
+            dataMessage: {
+              timestamp: 1234567890,
+              message: 'Hello',
+              groupInfo: { groupId: 'abc123' },
+            },
+          },
+        },
+      ];
 
       fetchMock.mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ jsonrpc: '2.0', result: mockMessages, id: 1 })
+        json: async () => ({ jsonrpc: '2.0', result: mockMessages, id: 1 }),
       });
 
       const result = await client.receiveMessages();
@@ -218,7 +217,7 @@ describe('SignalClient', () => {
 
       fetchMock.mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ jsonrpc: '2.0', result: null, id: 1 })
+        json: async () => ({ jsonrpc: '2.0', result: null, id: 1 }),
       });
 
       const result = await client.receiveMessages();
@@ -238,11 +237,10 @@ describe('SignalClient', () => {
 
       fetchMock.mockResolvedValueOnce({
         ok: false,
-        statusText: 'Internal Server Error'
+        statusText: 'Internal Server Error',
       });
 
-      await expect(client.receiveMessages())
-        .rejects.toThrow('Signal API error: Internal Server Error');
+      await expect(client.receiveMessages()).rejects.toThrow('Signal API error: Internal Server Error');
     });
 
     it('should throw on RPC error in response', async () => {
@@ -253,12 +251,11 @@ describe('SignalClient', () => {
         json: async () => ({
           jsonrpc: '2.0',
           error: { code: -1, message: 'Account not found' },
-          id: 1
-        })
+          id: 1,
+        }),
       });
 
-      await expect(client.receiveMessages())
-        .rejects.toThrow('Signal RPC error: Account not found');
+      await expect(client.receiveMessages()).rejects.toThrow('Signal RPC error: Account not found');
     });
 
     it('should send correct JSON-RPC payload', async () => {
@@ -266,7 +263,7 @@ describe('SignalClient', () => {
 
       fetchMock.mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ jsonrpc: '2.0', result: [], id: 1 })
+        json: async () => ({ jsonrpc: '2.0', result: [], id: 1 }),
       });
 
       await client.receiveMessages();
@@ -294,22 +291,19 @@ describe('SignalClient', () => {
     it('should throw error when group ID is empty', async () => {
       const client = new SignalClient('http://localhost:8080', '+1234567890');
 
-      await expect(client.sendMessage('', 'Hello'))
-        .rejects.toThrow('Group ID is required');
+      await expect(client.sendMessage('', 'Hello')).rejects.toThrow('Group ID is required');
     });
 
     it('should throw error when message is null', async () => {
       const client = new SignalClient('http://localhost:8080', '+1234567890');
 
-      await expect(client.sendMessage('group123', null as any))
-        .rejects.toThrow('Message is required');
+      await expect(client.sendMessage('group123', null as any)).rejects.toThrow('Message is required');
     });
 
     it('should throw error when message is undefined', async () => {
       const client = new SignalClient('http://localhost:8080', '+1234567890');
 
-      await expect(client.sendMessage('group123', undefined as any))
-        .rejects.toThrow('Message is required');
+      await expect(client.sendMessage('group123', undefined as any)).rejects.toThrow('Message is required');
     });
 
     it('should send message successfully', async () => {
@@ -317,7 +311,7 @@ describe('SignalClient', () => {
 
       fetchMock.mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ jsonrpc: '2.0', result: {}, id: 1 })
+        json: async () => ({ jsonrpc: '2.0', result: {}, id: 1 }),
       });
 
       await expect(client.sendMessage('group123', 'Hello')).resolves.toBeUndefined();
@@ -327,9 +321,9 @@ describe('SignalClient', () => {
         expect.objectContaining({
           method: 'POST',
           headers: {
-            'Content-Type': 'application/json'
-          }
-        })
+            'Content-Type': 'application/json',
+          },
+        }),
       );
 
       const callArgs = fetchMock.mock.calls[0][1];
@@ -346,11 +340,10 @@ describe('SignalClient', () => {
 
       fetchMock.mockResolvedValueOnce({
         ok: false,
-        statusText: 'Internal Server Error'
+        statusText: 'Internal Server Error',
       });
 
-      await expect(client.sendMessage('group123', 'Hello'))
-        .rejects.toThrow('Signal API error: Internal Server Error');
+      await expect(client.sendMessage('group123', 'Hello')).rejects.toThrow('Signal API error: Internal Server Error');
     });
 
     it('should throw error when RPC returns error', async () => {
@@ -362,14 +355,13 @@ describe('SignalClient', () => {
           jsonrpc: '2.0',
           error: {
             code: -1,
-            message: 'Invalid group ID'
+            message: 'Invalid group ID',
           },
-          id: 1
-        })
+          id: 1,
+        }),
       });
 
-      await expect(client.sendMessage('group123', 'Hello'))
-        .rejects.toThrow('Signal RPC error: Invalid group ID');
+      await expect(client.sendMessage('group123', 'Hello')).rejects.toThrow('Signal RPC error: Invalid group ID');
     });
 
     it('should handle network errors', async () => {
@@ -377,8 +369,7 @@ describe('SignalClient', () => {
 
       fetchMock.mockRejectedValueOnce(new Error('Network error'));
 
-      await expect(client.sendMessage('group123', 'Hello'))
-        .rejects.toThrow('Network error');
+      await expect(client.sendMessage('group123', 'Hello')).rejects.toThrow('Network error');
     });
 
     it('should handle JSON parse errors', async () => {
@@ -388,11 +379,10 @@ describe('SignalClient', () => {
         ok: true,
         json: async () => {
           throw new Error('Invalid JSON');
-        }
+        },
       });
 
-      await expect(client.sendMessage('group123', 'Hello'))
-        .rejects.toThrow('Invalid JSON');
+      await expect(client.sendMessage('group123', 'Hello')).rejects.toThrow('Invalid JSON');
     });
   });
 
@@ -440,8 +430,9 @@ describe('SignalClient', () => {
 
       fetchMock.mockRejectedValue(new Error('Connection refused'));
 
-      await expect(client.waitForReady(2, 1))
-        .rejects.toThrow('signal-cli not reachable at http://localhost:8080 after 2 attempts');
+      await expect(client.waitForReady(2, 1)).rejects.toThrow(
+        'signal-cli not reachable at http://localhost:8080 after 2 attempts',
+      );
 
       consoleLogSpy.mockRestore();
     });

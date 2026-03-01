@@ -1,8 +1,8 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, describe, expect, it } from 'vitest';
 import { Storage } from '../src/storage';
-import { mkdtempSync, rmSync } from 'fs';
-import { join } from 'path';
-import { tmpdir } from 'os';
 
 describe('Storage', () => {
   let testDir: string;
@@ -37,7 +37,7 @@ describe('Storage', () => {
       sender: 'Alice',
       content: 'Hello',
       timestamp: Date.now(),
-      isBot: false
+      isBot: false,
     });
 
     const messages = storage.getRecentMessages('group1', 10);
@@ -58,7 +58,7 @@ describe('Storage', () => {
         sender: 'User',
         content: `Message ${i}`,
         timestamp: Date.now() + i,
-        isBot: false
+        isBot: false,
       });
     }
 
@@ -75,13 +75,15 @@ describe('Storage', () => {
       const storage = new Storage(createTestDb());
       storage.close();
 
-      expect(() => storage.addMessage({
-        groupId: 'g1',
-        sender: 'Alice',
-        content: 'Hello',
-        timestamp: Date.now(),
-        isBot: false
-      })).toThrow('Database is closed');
+      expect(() =>
+        storage.addMessage({
+          groupId: 'g1',
+          sender: 'Alice',
+          content: 'Hello',
+          timestamp: Date.now(),
+          isBot: false,
+        }),
+      ).toThrow('Database is closed');
     });
 
     it('should throw when calling getRecentMessages after close', () => {

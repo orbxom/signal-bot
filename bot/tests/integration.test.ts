@@ -1,9 +1,9 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { Storage } from '../src/storage';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { MessageHandler } from '../src/messageHandler';
-import { mkdtempSync, rmSync } from 'fs';
-import { join } from 'path';
-import { tmpdir } from 'os';
+import { Storage } from '../src/storage';
 
 describe('Integration Tests', () => {
   let testDir: string;
@@ -28,7 +28,7 @@ describe('Integration Tests', () => {
         sender: 'Alice',
         content: 'Hello everyone',
         timestamp: Date.now() - 3000,
-        isBot: false
+        isBot: false,
       });
 
       storage.addMessage({
@@ -36,7 +36,7 @@ describe('Integration Tests', () => {
         sender: 'Bob',
         content: '@bot what is 2+2?',
         timestamp: Date.now() - 2000,
-        isBot: false
+        isBot: false,
       });
 
       const messages = storage.getRecentMessages(groupId, 10);
@@ -76,7 +76,7 @@ describe('Integration Tests', () => {
         sender: 'bot',
         content: '2+2 equals 4!',
         timestamp: Date.now() - 1000,
-        isBot: true
+        isBot: true,
       });
 
       const handler = new MessageHandler(['@bot']);
@@ -99,7 +99,7 @@ describe('Integration Tests', () => {
           sender: `User${i}`,
           content: `Message ${i}`,
           timestamp: Date.now() + i,
-          isBot: i % 3 === 0
+          isBot: i % 3 === 0,
         });
       }
 
@@ -118,7 +118,7 @@ describe('Integration Tests', () => {
           sender: 'User',
           content: `Message ${i}`,
           timestamp: Date.now() + i,
-          isBot: false
+          isBot: false,
         });
       }
 
@@ -140,7 +140,7 @@ describe('Integration Tests', () => {
         sender: 'Alice',
         content: 'Hello from group 1',
         timestamp: Date.now(),
-        isBot: false
+        isBot: false,
       });
 
       storage.addMessage({
@@ -148,7 +148,7 @@ describe('Integration Tests', () => {
         sender: 'Bob',
         content: 'Hello from group 2',
         timestamp: Date.now(),
-        isBot: false
+        isBot: false,
       });
 
       const group1Messages = storage.getRecentMessages(group1, 10);

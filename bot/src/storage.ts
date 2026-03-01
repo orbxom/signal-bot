@@ -1,5 +1,5 @@
 import Database from 'better-sqlite3';
-import { Message } from './types';
+import type { Message } from './types';
 
 function wrapSqliteError(error: unknown, operation: string): never {
   if (error instanceof Error) {
@@ -91,13 +91,7 @@ export class Storage {
     }
 
     try {
-      this.stmts.insert.run(
-        message.groupId,
-        message.sender,
-        message.content,
-        message.timestamp,
-        message.isBot ? 1 : 0
-      );
+      this.stmts.insert.run(message.groupId, message.sender, message.content, message.timestamp, message.isBot ? 1 : 0);
     } catch (error) {
       wrapSqliteError(error, 'add message');
     }
@@ -127,7 +121,7 @@ export class Storage {
         sender: row.sender,
         content: row.content,
         timestamp: row.timestamp,
-        isBot: row.isBot === 1
+        isBot: row.isBot === 1,
       }));
     } catch (error) {
       wrapSqliteError(error, 'retrieve messages');

@@ -37,7 +37,7 @@ export class SignalClient {
       signal: AbortSignal.timeout(timeoutMs),
     });
     if (!response.ok) throw new Error(`Signal API error: ${response.statusText}`);
-    const result = await response.json() as { error?: { message: string }; result?: T };
+    const result = (await response.json()) as { error?: { message: string }; result?: T };
     if (result.error) throw new Error(`Signal RPC error: ${result.error.message}`);
     return result.result as T;
   }
