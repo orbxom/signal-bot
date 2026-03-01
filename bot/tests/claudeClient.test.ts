@@ -1,13 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { EventEmitter } from 'events';
 import type { ChatMessage } from '../src/types';
 
-const { mockExecFile } = vi.hoisted(() => {
-  const mockExecFile = vi.fn();
-  return { mockExecFile };
+const { mockSpawn } = vi.hoisted(() => {
+  const mockSpawn = vi.fn();
+  return { mockSpawn };
 });
 
 vi.mock('child_process', () => ({
-  execFile: mockExecFile,
+  spawn: mockSpawn,
 }));
 
 import { ClaudeCLIClient } from '../src/claudeClient';
@@ -24,15 +25,45 @@ function makeResultOutput(result: string, isError = false, usage?: { output_toke
   return `${initLine}\n${resultLine}`;
 }
 
-function mockExecFileSuccess(stdout: string) {
-  mockExecFile.mockImplementation((_cmd: string, _args: string[], _opts: object, cb: Function) => {
-    cb(null, stdout, '');
+function createMockChild() {
+  const child = Object.assign(new EventEmitter(), {
+    stdin: { end: vi.fn() },
+    stdout: new EventEmitter(),
+    stderr: new EventEmitter(),
+    kill: vi.fn(),
+  });
+  return child;
+}
+
+function mockSpawnSuccess(stdout: string) {
+  mockSpawn.mockImplementation(() => {
+    const child = createMockChild();
+    process.nextTick(() => {
+      child.stdout.emit('data', Buffer.from(stdout));
+      child.emit('close', 0);
+    });
+    return child;
   });
 }
 
-function mockExecFileError(error: Error) {
-  mockExecFile.mockImplementation((_cmd: string, _args: string[], _opts: object, cb: Function) => {
-    cb(error, '', '');
+function mockSpawnError(errorMessage: string) {
+  mockSpawn.mockImplementation(() => {
+    const child = createMockChild();
+    process.nextTick(() => {
+      child.emit('error', new Error(errorMessage));
+    });
+    return child;
+  });
+}
+
+function mockSpawnExitCode(code: number, stderr: string) {
+  mockSpawn.mockImplementation(() => {
+    const child = createMockChild();
+    process.nextTick(() => {
+      if (stderr) child.stderr.emit('data', Buffer.from(stderr));
+      child.emit('close', code);
+    });
+    return child;
   });
 }
 
@@ -70,7 +101,7 @@ describe('ClaudeCLIClient', () => {
     });
 
     it('should call claude with correct args', async () => {
-      mockExecFileSuccess(makeResultOutput('Hello!', false, { output_tokens: 10 }));
+      mockSpawnSuccess(makeResultOutput('Hello!', false, { output_tokens: 10 }));
 
       const client = new ClaudeCLIClient();
       const messages: ChatMessage[] = [
@@ -80,7 +111,7 @@ describe('ClaudeCLIClient', () => {
 
       await client.generateResponse(messages);
 
-      expect(mockExecFile).toHaveBeenCalledWith(
+      expect(mockSpawn).toHaveBeenCalledWith(
         'claude',
         expect.arrayContaining([
           '-p', 'Hi',
@@ -90,15 +121,13 @@ describe('ClaudeCLIClient', () => {
           '--system-prompt', 'Be helpful',
         ]),
         expect.objectContaining({
-          timeout: 120000,
           env: expect.objectContaining({ CLAUDECODE: '' }),
-        }),
-        expect.any(Function)
+        })
       );
     });
 
     it('should omit --system-prompt when no system message', async () => {
-      mockExecFileSuccess(makeResultOutput('Hello!'));
+      mockSpawnSuccess(makeResultOutput('Hello!'));
 
       const client = new ClaudeCLIClient();
       const messages: ChatMessage[] = [
@@ -107,12 +136,12 @@ describe('ClaudeCLIClient', () => {
 
       await client.generateResponse(messages);
 
-      const args = mockExecFile.mock.calls[0][1];
+      const args = mockSpawn.mock.calls[0][1];
       expect(args).not.toContain('--system-prompt');
     });
 
     it('should build prompt from conversation history', async () => {
-      mockExecFileSuccess(makeResultOutput('Sure!'));
+      mockSpawnSuccess(makeResultOutput('Sure!'));
 
       const client = new ClaudeCLIClient();
       const messages: ChatMessage[] = [
@@ -124,7 +153,7 @@ describe('ClaudeCLIClient', () => {
 
       await client.generateResponse(messages);
 
-      const args = mockExecFile.mock.calls[0][1];
+      const args = mockSpawn.mock.calls[0][1];
       const promptIdx = args.indexOf('-p') + 1;
       const prompt = args[promptIdx];
       expect(prompt).toContain('Alice: Hello');
@@ -133,7 +162,7 @@ describe('ClaudeCLIClient', () => {
     });
 
     it('should parse JSON output and return content', async () => {
-      mockExecFileSuccess(makeResultOutput('Hello from Claude!', false, { output_tokens: 15 }));
+      mockSpawnSuccess(makeResultOutput('Hello from Claude!', false, { output_tokens: 15 }));
 
       const client = new ClaudeCLIClient();
       const result = await client.generateResponse([{ role: 'user', content: 'Hi' }]);
@@ -143,7 +172,7 @@ describe('ClaudeCLIClient', () => {
     });
 
     it('should default tokensUsed to 0 when usage is missing', async () => {
-      mockExecFileSuccess(makeResultOutput('Hello!'));
+      mockSpawnSuccess(makeResultOutput('Hello!'));
 
       const client = new ClaudeCLIClient();
       const result = await client.generateResponse([{ role: 'user', content: 'Hi' }]);
@@ -151,16 +180,31 @@ describe('ClaudeCLIClient', () => {
       expect(result.tokensUsed).toBe(0);
     });
 
-    it('should throw when Claude CLI returns an error result', async () => {
-      mockExecFileSuccess(makeResultOutput('Rate limited', true));
+    it('should fall back to assistant text when result has is_error', async () => {
+      // When result has is_error=true, it falls back to assistant message text
+      const output = [
+        JSON.stringify({ type: 'system', subtype: 'init', session_id: 'test' }),
+        JSON.stringify({
+          type: 'assistant',
+          message: { content: [{ type: 'text', text: 'Fallback text' }] },
+        }),
+        JSON.stringify({
+          type: 'result',
+          is_error: true,
+          result: 'Rate limited',
+          subtype: 'error',
+        }),
+      ].join('\n');
+      mockSpawnSuccess(output);
 
       const client = new ClaudeCLIClient();
-      await expect(client.generateResponse([{ role: 'user', content: 'Hi' }]))
-        .rejects.toThrow('Claude CLI returned error: Rate limited');
+      const result = await client.generateResponse([{ role: 'user', content: 'Hi' }]);
+
+      expect(result.content).toBe('Fallback text');
     });
 
     it('should throw when no result line in output', async () => {
-      mockExecFileSuccess(JSON.stringify({ type: 'system', subtype: 'init' }));
+      mockSpawnSuccess(JSON.stringify({ type: 'system', subtype: 'init' }));
 
       const client = new ClaudeCLIClient();
       await expect(client.generateResponse([{ role: 'user', content: 'Hi' }]))
@@ -168,23 +212,23 @@ describe('ClaudeCLIClient', () => {
     });
 
     it('should throw when Claude CLI is not found', async () => {
-      mockExecFileError(new Error('spawn claude ENOENT'));
+      mockSpawnError('spawn claude ENOENT');
 
       const client = new ClaudeCLIClient();
       await expect(client.generateResponse([{ role: 'user', content: 'Hi' }]))
         .rejects.toThrow('Claude CLI not found');
     });
 
-    it('should throw on timeout', async () => {
-      mockExecFileError(new Error('process killed'));
+    it('should throw on non-zero exit with stderr', async () => {
+      mockSpawnExitCode(1, 'something went wrong');
 
       const client = new ClaudeCLIClient();
       await expect(client.generateResponse([{ role: 'user', content: 'Hi' }]))
-        .rejects.toThrow('Claude CLI timed out');
+        .rejects.toThrow('something went wrong');
     });
 
     it('should wrap unknown errors', async () => {
-      mockExecFileError(new Error('Something unexpected'));
+      mockSpawnError('Something unexpected');
 
       const client = new ClaudeCLIClient();
       await expect(client.generateResponse([{ role: 'user', content: 'Hi' }]))
@@ -192,14 +236,27 @@ describe('ClaudeCLIClient', () => {
     });
 
     it('should use custom maxTurns', async () => {
-      mockExecFileSuccess(makeResultOutput('Done!'));
+      mockSpawnSuccess(makeResultOutput('Done!'));
 
       const client = new ClaudeCLIClient(3);
       await client.generateResponse([{ role: 'user', content: 'Hi' }]);
 
-      const args = mockExecFile.mock.calls[0][1];
+      const args = mockSpawn.mock.calls[0][1];
       const maxTurnsIdx = args.indexOf('--max-turns') + 1;
       expect(args[maxTurnsIdx]).toBe('3');
+    });
+
+    it('should parse JSON array output format', async () => {
+      const output = JSON.stringify([
+        { type: 'system', subtype: 'init', session_id: 'test' },
+        { type: 'result', is_error: false, result: 'Array format!', usage: { output_tokens: 5 } },
+      ]);
+      mockSpawnSuccess(output);
+
+      const client = new ClaudeCLIClient();
+      const result = await client.generateResponse([{ role: 'user', content: 'Hi' }]);
+
+      expect(result.content).toBe('Array format!');
     });
   });
 });

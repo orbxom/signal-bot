@@ -1,36 +1,60 @@
 import Database from 'better-sqlite3';
 import { Message } from './types';
 
-interface MessageRow {
-  id: number;
-  groupId: string;
-  sender: string;
-  content: string;
-  timestamp: number;
-  isBot: number;
+function wrapSqliteError(error: unknown, operation: string): never {
+  if (error instanceof Error) {
+    if (error.message.includes('SQLITE_BUSY') || error.message.includes('SQLITE_LOCKED')) {
+      throw new Error('Database is locked by another process');
+    } else if (error.message.includes('ENOSPC')) {
+      throw new Error(`Disk full: Cannot ${operation}`);
+    } else if (error.message.includes('SQLITE_CORRUPT')) {
+      throw new Error(`Database corrupted`);
+    }
+    throw new Error(`Failed to ${operation}: ${error.message}`);
+  }
+  throw error;
 }
 
 export class Storage {
   private db: Database.Database;
   private closed = false;
+  private stmts: {
+    insert: Database.Statement;
+    selectRecent: Database.Statement;
+    trim: Database.Statement;
+  };
 
   constructor(dbPath: string) {
     try {
       this.db = new Database(dbPath);
       this.initTables();
+      this.stmts = {
+        insert: this.db.prepare(`
+          INSERT INTO messages (groupId, sender, content, timestamp, isBot)
+          VALUES (?, ?, ?, ?, ?)
+        `),
+        selectRecent: this.db.prepare(`
+          SELECT * FROM messages
+          WHERE groupId = ?
+          ORDER BY timestamp DESC
+          LIMIT ?
+        `),
+        trim: this.db.prepare(`
+          DELETE FROM messages
+          WHERE groupId = ?
+          AND id NOT IN (
+            SELECT id FROM messages
+            WHERE groupId = ?
+            ORDER BY timestamp DESC
+            LIMIT ?
+          )
+        `),
+      };
     } catch (error) {
-      if (error instanceof Error) {
-        if (error.message.includes('EACCES')) {
-          throw new Error(`Permission denied: Cannot access database at ${dbPath}`);
-        } else if (error.message.includes('ENOSPC')) {
-          throw new Error('Disk full: Cannot create database');
-        } else if (error.message.includes('SQLITE_CORRUPT')) {
-          throw new Error(`Database corrupted at ${dbPath}`);
-        } else {
-          throw new Error(`Failed to initialize database: ${error.message}`);
-        }
+      if (error instanceof Error && error.message.includes('EACCES')) {
+        throw new Error(`Permission denied: Cannot access database at ${dbPath}`);
       }
-      throw error;
+      wrapSqliteError(error, 'initialize database');
     }
   }
 
@@ -50,14 +74,7 @@ export class Storage {
         ON messages(groupId, timestamp DESC);
       `);
     } catch (error) {
-      if (error instanceof Error) {
-        if (error.message.includes('SQLITE_BUSY') || error.message.includes('SQLITE_LOCKED')) {
-          throw new Error('Database is locked by another process');
-        } else {
-          throw new Error(`Failed to create tables: ${error.message}`);
-        }
-      }
-      throw error;
+      wrapSqliteError(error, 'create tables');
     }
   }
 
@@ -74,11 +91,7 @@ export class Storage {
     }
 
     try {
-      const stmt = this.db.prepare(`
-        INSERT INTO messages (groupId, sender, content, timestamp, isBot)
-        VALUES (?, ?, ?, ?, ?)
-      `);
-      stmt.run(
+      this.stmts.insert.run(
         message.groupId,
         message.sender,
         message.content,
@@ -86,16 +99,7 @@ export class Storage {
         message.isBot ? 1 : 0
       );
     } catch (error) {
-      if (error instanceof Error) {
-        if (error.message.includes('SQLITE_BUSY') || error.message.includes('SQLITE_LOCKED')) {
-          throw new Error('Database is locked by another process');
-        } else if (error.message.includes('ENOSPC')) {
-          throw new Error('Disk full: Cannot write message');
-        } else {
-          throw new Error(`Failed to add message: ${error.message}`);
-        }
-      }
-      throw error;
+      wrapSqliteError(error, 'add message');
     }
   }
 
@@ -109,13 +113,14 @@ export class Storage {
     }
 
     try {
-      const stmt = this.db.prepare(`
-        SELECT * FROM messages
-        WHERE groupId = ?
-        ORDER BY timestamp DESC
-        LIMIT ?
-      `);
-      const rows = stmt.all(groupId, limit) as MessageRow[];
+      const rows = this.stmts.selectRecent.all(groupId, limit) as Array<{
+        id: number;
+        groupId: string;
+        sender: string;
+        content: string;
+        timestamp: number;
+        isBot: number;
+      }>;
       return rows.reverse().map(row => ({
         id: row.id,
         groupId: row.groupId,
@@ -125,14 +130,7 @@ export class Storage {
         isBot: row.isBot === 1
       }));
     } catch (error) {
-      if (error instanceof Error) {
-        if (error.message.includes('SQLITE_BUSY') || error.message.includes('SQLITE_LOCKED')) {
-          throw new Error('Database is locked by another process');
-        } else {
-          throw new Error(`Failed to retrieve messages: ${error.message}`);
-        }
-      }
-      throw error;
+      wrapSqliteError(error, 'retrieve messages');
     }
   }
 
@@ -146,27 +144,9 @@ export class Storage {
     }
 
     try {
-      this.db.prepare(`
-        DELETE FROM messages
-        WHERE groupId = ?
-        AND id NOT IN (
-          SELECT id FROM messages
-          WHERE groupId = ?
-          ORDER BY timestamp DESC
-          LIMIT ?
-        )
-      `).run(groupId, groupId, keepCount);
+      this.stmts.trim.run(groupId, groupId, keepCount);
     } catch (error) {
-      if (error instanceof Error) {
-        if (error.message.includes('SQLITE_BUSY') || error.message.includes('SQLITE_LOCKED')) {
-          throw new Error('Database is locked by another process');
-        } else if (error.message.includes('ENOSPC')) {
-          throw new Error('Disk full: Cannot trim messages');
-        } else {
-          throw new Error(`Failed to trim messages: ${error.message}`);
-        }
-      }
-      throw error;
+      wrapSqliteError(error, 'trim messages');
     }
   }
 

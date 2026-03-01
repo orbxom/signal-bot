@@ -79,7 +79,6 @@ export class ClaudeCLIClient {
       '--output-format', 'json',
       '--max-turns', String(this.maxTurns),
       '--no-session-persistence',
-      '--tools', ALLOWED_TOOLS,
       '--allowedTools', ALLOWED_TOOLS,
     ];
 
@@ -109,8 +108,8 @@ export class ClaudeCLIClient {
       let resultLine: ClaudeResultLine | undefined;
       let lastAssistant: { message?: { content?: Array<{ type: string; text?: string }> } } | undefined;
       for (const e of entries) {
-        if (e.type === 'result') resultLine = e as ClaudeResultLine;
-        if (e.type === 'assistant') lastAssistant = e as typeof lastAssistant;
+        if (e.type === 'result') resultLine = e as unknown as ClaudeResultLine;
+        if (e.type === 'assistant') lastAssistant = e as unknown as typeof lastAssistant;
       }
 
       if (!resultLine) {
@@ -122,7 +121,7 @@ export class ClaudeCLIClient {
       let content = '';
 
       if (resultLine.is_error) {
-        console.warn(`[Claude] Result has is_error=true, subtype=${(resultLine as Record<string, unknown>).subtype}. Falling back to assistant text.`);
+        console.warn(`[Claude] Result has is_error=true, subtype=${(resultLine as unknown as Record<string, unknown>).subtype}. Falling back to assistant text.`);
       } else {
         content = typeof resultLine.result === 'string' ? resultLine.result.trim() : '';
       }

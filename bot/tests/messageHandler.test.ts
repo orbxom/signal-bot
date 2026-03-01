@@ -101,7 +101,8 @@ describe('MessageHandler', () => {
     it('should handle special characters in content', () => {
       const handler = new MessageHandler(['@bot']);
       expect(handler.isMentioned('@bot! What\'s up?')).toBe(true);
-      expect(handler.isMentioned('Hey @bot, help me.')).toBe(true);
+      // Mentions must be at the start of the message
+      expect(handler.isMentioned('Hey @bot, help me.')).toBe(false);
     });
   });
 

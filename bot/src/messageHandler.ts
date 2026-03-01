@@ -5,6 +5,7 @@ import type { SignalClient } from './signalClient';
 
 export class MessageHandler {
   private mentionTriggers: string[];
+  private lowerTriggers: string[];
   private botPhoneNumber: string;
   private systemPrompt: string;
   private storage?: Storage;
@@ -25,6 +26,7 @@ export class MessageHandler {
     }
   ) {
     this.mentionTriggers = mentionTriggers;
+    this.lowerTriggers = mentionTriggers.map(t => t.toLowerCase());
     this.botPhoneNumber = options?.botPhoneNumber || '';
     this.systemPrompt = options?.systemPrompt || '';
     this.storage = options?.storage;
@@ -35,16 +37,17 @@ export class MessageHandler {
 
   isMentioned(content: string): boolean {
     const lowerContent = content.toLowerCase();
-    return this.mentionTriggers.some(trigger =>
-      lowerContent.startsWith(trigger.toLowerCase())
+    return this.lowerTriggers.some(trigger =>
+      lowerContent.startsWith(trigger)
     );
   }
 
   extractQuery(content: string): string {
     let query = content;
-    for (const trigger of this.mentionTriggers) {
+    for (let i = 0; i < this.mentionTriggers.length; i++) {
+      const trigger = this.mentionTriggers[i];
       // Case-insensitive removal without regex to avoid injection
-      const lowerTrigger = trigger.toLowerCase();
+      const lowerTrigger = this.lowerTriggers[i];
       let lowerQuery = query.toLowerCase();
       let idx = lowerQuery.indexOf(lowerTrigger);
       while (idx !== -1) {
@@ -109,6 +112,15 @@ export class MessageHandler {
       this.processedMessages = new Set(entries.slice(-500));
     }
 
+    // Check for mention before storing so history fetch doesn't include current message
+    const mentioned = this.isMentioned(content);
+
+    // Get conversation history before storing current message (avoids duplication in context)
+    let history: Message[] = [];
+    if (mentioned) {
+      history = this.storage.getRecentMessages(groupId, this.contextWindowSize - 1);
+    }
+
     // Store incoming message
     this.storage.addMessage({
       groupId,
@@ -118,17 +130,13 @@ export class MessageHandler {
       isBot: false
     });
 
-    // Check for mention
-    if (!this.isMentioned(content)) {
+    if (!mentioned) {
       return;
     }
 
     try {
       // Extract query
       const query = this.extractQuery(content);
-
-      // Get conversation history
-      const history = this.storage.getRecentMessages(groupId, this.contextWindowSize - 1);
 
       // Build context
       const messages = this.buildContext(history, query);
