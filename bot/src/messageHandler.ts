@@ -1,52 +1,65 @@
 import type { Message, ChatMessage } from './types';
 import type { Storage } from './storage';
-import type { AzureOpenAIClient } from './azureOpenAI';
+import type { ClaudeCLIClient } from './claudeClient';
 import type { SignalClient } from './signalClient';
 
 export class MessageHandler {
   private mentionTriggers: string[];
+  private botPhoneNumber: string;
+  private systemPrompt: string;
   private storage?: Storage;
-  private llmClient?: AzureOpenAIClient;
+  private llmClient?: ClaudeCLIClient;
   private signalClient?: SignalClient;
   private contextWindowSize: number;
+  private processedMessages: Set<string> = new Set();
 
   constructor(
     mentionTriggers: string[],
-    storage?: Storage,
-    llmClient?: AzureOpenAIClient,
-    signalClient?: SignalClient,
-    contextWindowSize: number = 20
+    options?: {
+      botPhoneNumber?: string;
+      systemPrompt?: string;
+      storage?: Storage;
+      llmClient?: ClaudeCLIClient;
+      signalClient?: SignalClient;
+      contextWindowSize?: number;
+    }
   ) {
     this.mentionTriggers = mentionTriggers;
-    this.storage = storage;
-    this.llmClient = llmClient;
-    this.signalClient = signalClient;
-    this.contextWindowSize = contextWindowSize;
+    this.botPhoneNumber = options?.botPhoneNumber || '';
+    this.systemPrompt = options?.systemPrompt || '';
+    this.storage = options?.storage;
+    this.llmClient = options?.llmClient;
+    this.signalClient = options?.signalClient;
+    this.contextWindowSize = options?.contextWindowSize || 20;
   }
 
   isMentioned(content: string): boolean {
     const lowerContent = content.toLowerCase();
     return this.mentionTriggers.some(trigger =>
-      lowerContent.includes(trigger.toLowerCase())
+      lowerContent.startsWith(trigger.toLowerCase())
     );
   }
 
   extractQuery(content: string): string {
     let query = content;
     for (const trigger of this.mentionTriggers) {
-      query = query.replace(new RegExp(trigger, 'gi'), '');
+      // Case-insensitive removal without regex to avoid injection
+      const lowerTrigger = trigger.toLowerCase();
+      let lowerQuery = query.toLowerCase();
+      let idx = lowerQuery.indexOf(lowerTrigger);
+      while (idx !== -1) {
+        query = query.slice(0, idx) + query.slice(idx + trigger.length);
+        lowerQuery = query.toLowerCase();
+        idx = lowerQuery.indexOf(lowerTrigger, idx);
+      }
     }
-    // Replace multiple spaces with a single space and trim
     return query.replace(/\s+/g, ' ').trim();
   }
 
   buildContext(history: Message[], currentQuery: string): ChatMessage[] {
-    const systemPrompt: ChatMessage = {
-      role: 'system',
-      content: 'You are a helpful family assistant in a Signal group chat. Be friendly, concise, and helpful.'
-    };
-
-    const contextMessages: ChatMessage[] = [systemPrompt];
+    const contextMessages: ChatMessage[] = [
+      { role: 'system', content: this.systemPrompt },
+    ];
 
     for (const msg of history) {
       if (msg.isBot) {
@@ -78,6 +91,22 @@ export class MessageHandler {
   ): Promise<void> {
     if (!this.storage || !this.llmClient || !this.signalClient) {
       throw new Error('Handler not fully initialized');
+    }
+
+    // Skip messages from the bot itself
+    if (this.botPhoneNumber && sender === this.botPhoneNumber) {
+      return;
+    }
+
+    // Skip duplicate messages
+    const msgKey = `${groupId}:${sender}:${timestamp}`;
+    if (this.processedMessages.has(msgKey)) {
+      return;
+    }
+    this.processedMessages.add(msgKey);
+    if (this.processedMessages.size > 1000) {
+      const entries = [...this.processedMessages];
+      this.processedMessages = new Set(entries.slice(-500));
     }
 
     // Store incoming message
@@ -113,7 +142,7 @@ export class MessageHandler {
       // Store bot response
       this.storage.addMessage({
         groupId,
-        sender: 'bot',
+        sender: this.botPhoneNumber || 'bot',
         content: response.content,
         timestamp: Date.now(),
         isBot: true
@@ -126,9 +155,13 @@ export class MessageHandler {
     } catch (error) {
       console.error('Error handling message:', error);
 
-      // Send error message to group
-      const errorMsg = 'Sorry, I encountered an error processing your request.';
-      await this.signalClient.sendMessage(groupId, errorMsg);
+      // Try to send error message to group
+      try {
+        const errorMsg = 'Sorry, I encountered an error processing your request.';
+        await this.signalClient.sendMessage(groupId, errorMsg);
+      } catch (sendError) {
+        console.error('Failed to send error message:', sendError);
+      }
     }
   }
 }

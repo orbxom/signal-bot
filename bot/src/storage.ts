@@ -1,5 +1,5 @@
 import Database from 'better-sqlite3';
-import { Message, BotConfig } from './types';
+import { Message } from './types';
 
 interface MessageRow {
   id: number;
@@ -12,6 +12,7 @@ interface MessageRow {
 
 export class Storage {
   private db: Database.Database;
+  private closed = false;
 
   constructor(dbPath: string) {
     try {
@@ -47,11 +48,6 @@ export class Storage {
 
         CREATE INDEX IF NOT EXISTS idx_group_timestamp
         ON messages(groupId, timestamp DESC);
-
-        CREATE TABLE IF NOT EXISTS config (
-          key TEXT PRIMARY KEY,
-          value TEXT NOT NULL
-        );
       `);
     } catch (error) {
       if (error instanceof Error) {
@@ -65,7 +61,14 @@ export class Storage {
     }
   }
 
+  private ensureOpen(): void {
+    if (this.closed) {
+      throw new Error('Database is closed');
+    }
+  }
+
   addMessage(message: Omit<Message, 'id'>): void {
+    this.ensureOpen();
     if (!message.groupId || message.groupId.trim() === '') {
       throw new Error('Invalid groupId: cannot be empty');
     }
@@ -97,6 +100,7 @@ export class Storage {
   }
 
   getRecentMessages(groupId: string, limit: number): Message[] {
+    this.ensureOpen();
     if (!groupId || groupId.trim() === '') {
       throw new Error('Invalid groupId: cannot be empty');
     }
@@ -133,6 +137,7 @@ export class Storage {
   }
 
   trimMessages(groupId: string, keepCount: number): void {
+    this.ensureOpen();
     if (!groupId || groupId.trim() === '') {
       throw new Error('Invalid groupId: cannot be empty');
     }
@@ -166,6 +171,9 @@ export class Storage {
   }
 
   close(): void {
-    this.db.close();
+    if (!this.closed) {
+      this.db.close();
+      this.closed = true;
+    }
   }
 }

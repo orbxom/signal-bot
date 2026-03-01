@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { MessageHandler } from '../src/messageHandler';
 import type { Message } from '../src/types';
 import type { Storage } from '../src/storage';
-import type { AzureOpenAIClient } from '../src/azureOpenAI';
+import type { ClaudeCLIClient } from '../src/claudeClient';
 import type { SignalClient } from '../src/signalClient';
 
 describe('MessageHandler', () => {
@@ -47,25 +47,21 @@ describe('MessageHandler', () => {
     expect(chatMessages[4].content).toContain('What time is it?');
   });
 
-  describe('Constructor validation', () => {
+  describe('Constructor', () => {
     it('should create handler with minimal configuration', () => {
       const handler = new MessageHandler(['@bot']);
       expect(handler).toBeDefined();
     });
 
-    it('should create handler with all dependencies', () => {
-      const mockStorage = {} as Storage;
-      const mockLLM = {} as AzureOpenAIClient;
-      const mockSignal = {} as SignalClient;
-
-      const handler = new MessageHandler(
-        ['@bot'],
-        mockStorage,
-        mockLLM,
-        mockSignal,
-        10
-      );
-
+    it('should create handler with all options', () => {
+      const handler = new MessageHandler(['@bot'], {
+        storage: {} as Storage,
+        llmClient: {} as ClaudeCLIClient,
+        signalClient: {} as SignalClient,
+        contextWindowSize: 10,
+        botPhoneNumber: '+1234567890',
+        systemPrompt: 'Custom prompt',
+      });
       expect(handler).toBeDefined();
     });
 
@@ -75,7 +71,7 @@ describe('MessageHandler', () => {
     });
 
     it('should accept custom context window size', () => {
-      const handler = new MessageHandler(['@bot'], undefined, undefined, undefined, 50);
+      const handler = new MessageHandler(['@bot'], { contextWindowSize: 50 });
       expect(handler).toBeDefined();
     });
   });
@@ -134,6 +130,14 @@ describe('MessageHandler', () => {
       const handler = new MessageHandler(['@bot', 'bot:']);
       expect(handler.extractQuery('@bot bot: hello')).toBe('hello');
     });
+
+    it('should handle triggers with regex metacharacters safely', () => {
+      const handler = new MessageHandler(['$bot', 'bot+', '[bot]']);
+
+      expect(handler.extractQuery('$bot hello')).toBe('hello');
+      expect(handler.extractQuery('bot+ what is up')).toBe('what is up');
+      expect(handler.extractQuery('[bot] help me')).toBe('help me');
+    });
   });
 
   describe('buildContext', () => {
@@ -178,7 +182,7 @@ describe('MessageHandler', () => {
     });
 
     it('should always include system prompt first', () => {
-      const handler = new MessageHandler(['@bot']);
+      const handler = new MessageHandler(['@bot'], { systemPrompt: 'You are a helpful assistant.' });
       const messages: Message[] = [
         { id: 1, groupId: 'g1', sender: 'Alice', content: 'Hello', timestamp: 1000, isBot: false }
       ];
@@ -186,7 +190,14 @@ describe('MessageHandler', () => {
       const chatMessages = handler.buildContext(messages, 'Query');
 
       expect(chatMessages[0].role).toBe('system');
-      expect(chatMessages[0].content).toContain('helpful family assistant');
+      expect(chatMessages[0].content).toBe('You are a helpful assistant.');
+    });
+
+    it('should use custom system prompt', () => {
+      const handler = new MessageHandler(['@bot'], { systemPrompt: 'You are a pirate.' });
+      const chatMessages = handler.buildContext([], 'Query');
+
+      expect(chatMessages[0].content).toBe('You are a pirate.');
     });
 
     it('should always append current query last', () => {
@@ -205,7 +216,7 @@ describe('MessageHandler', () => {
 
   describe('handleMessage', () => {
     let mockStorage: Storage;
-    let mockLLM: AzureOpenAIClient;
+    let mockLLM: ClaudeCLIClient;
     let mockSignal: SignalClient;
 
     beforeEach(() => {
@@ -237,8 +248,40 @@ describe('MessageHandler', () => {
       ).rejects.toThrow('Handler not fully initialized');
     });
 
+    it('should skip messages from the bot itself', async () => {
+      const handler = new MessageHandler(['@bot'], {
+        storage: mockStorage,
+        llmClient: mockLLM,
+        signalClient: mockSignal,
+        botPhoneNumber: '+1234567890',
+      });
+
+      await handler.handleMessage('g1', '+1234567890', '@bot hello', 1000);
+
+      expect(mockStorage.addMessage).not.toHaveBeenCalled();
+      expect(mockLLM.generateResponse).not.toHaveBeenCalled();
+      expect(mockSignal.sendMessage).not.toHaveBeenCalled();
+    });
+
+    it('should process messages from other senders normally', async () => {
+      const handler = new MessageHandler(['@bot'], {
+        storage: mockStorage,
+        llmClient: mockLLM,
+        signalClient: mockSignal,
+        botPhoneNumber: '+1234567890',
+      });
+
+      await handler.handleMessage('g1', '+9876543210', '@bot hello', 1000);
+
+      expect(mockLLM.generateResponse).toHaveBeenCalled();
+    });
+
     it('should store incoming message', async () => {
-      const handler = new MessageHandler(['@bot'], mockStorage, mockLLM, mockSignal);
+      const handler = new MessageHandler(['@bot'], {
+        storage: mockStorage,
+        llmClient: mockLLM,
+        signalClient: mockSignal,
+      });
 
       await handler.handleMessage('g1', 'Alice', 'Just saying hello', 1000);
 
@@ -252,7 +295,11 @@ describe('MessageHandler', () => {
     });
 
     it('should not respond when not mentioned', async () => {
-      const handler = new MessageHandler(['@bot'], mockStorage, mockLLM, mockSignal);
+      const handler = new MessageHandler(['@bot'], {
+        storage: mockStorage,
+        llmClient: mockLLM,
+        signalClient: mockSignal,
+      });
 
       await handler.handleMessage('g1', 'Alice', 'Just saying hello', 1000);
 
@@ -261,7 +308,11 @@ describe('MessageHandler', () => {
     });
 
     it('should respond when mentioned', async () => {
-      const handler = new MessageHandler(['@bot'], mockStorage, mockLLM, mockSignal);
+      const handler = new MessageHandler(['@bot'], {
+        storage: mockStorage,
+        llmClient: mockLLM,
+        signalClient: mockSignal,
+      });
 
       await handler.handleMessage('g1', 'Alice', '@bot hello', 1000);
 
@@ -275,7 +326,11 @@ describe('MessageHandler', () => {
       ];
       mockStorage.getRecentMessages = vi.fn().mockReturnValue(mockHistory);
 
-      const handler = new MessageHandler(['@bot'], mockStorage, mockLLM, mockSignal);
+      const handler = new MessageHandler(['@bot'], {
+        storage: mockStorage,
+        llmClient: mockLLM,
+        signalClient: mockSignal,
+      });
 
       await handler.handleMessage('g1', 'Bob', '@bot what is 2+2?', 1000);
 
@@ -289,22 +344,32 @@ describe('MessageHandler', () => {
     });
 
     it('should store bot response after sending', async () => {
-      const handler = new MessageHandler(['@bot'], mockStorage, mockLLM, mockSignal);
+      const handler = new MessageHandler(['@bot'], {
+        storage: mockStorage,
+        llmClient: mockLLM,
+        signalClient: mockSignal,
+      });
       vi.spyOn(Date, 'now').mockReturnValue(2000);
 
       await handler.handleMessage('g1', 'Alice', '@bot hello', 1000);
 
-      expect(mockStorage.addMessage).toHaveBeenCalledWith({
-        groupId: 'g1',
-        sender: 'bot',
-        content: 'Test response',
-        timestamp: 2000,
-        isBot: true
-      });
+      expect(mockStorage.addMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          groupId: 'g1',
+          content: 'Test response',
+          timestamp: 2000,
+          isBot: true
+        })
+      );
     });
 
     it('should trim messages after responding', async () => {
-      const handler = new MessageHandler(['@bot'], mockStorage, mockLLM, mockSignal, 20);
+      const handler = new MessageHandler(['@bot'], {
+        storage: mockStorage,
+        llmClient: mockLLM,
+        signalClient: mockSignal,
+        contextWindowSize: 20,
+      });
 
       await handler.handleMessage('g1', 'Alice', '@bot hello', 1000);
 
@@ -315,7 +380,11 @@ describe('MessageHandler', () => {
       mockLLM.generateResponse = vi.fn().mockRejectedValue(new Error('LLM API error'));
       const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-      const handler = new MessageHandler(['@bot'], mockStorage, mockLLM, mockSignal);
+      const handler = new MessageHandler(['@bot'], {
+        storage: mockStorage,
+        llmClient: mockLLM,
+        signalClient: mockSignal,
+      });
 
       await handler.handleMessage('g1', 'Alice', '@bot hello', 1000);
 
@@ -332,7 +401,11 @@ describe('MessageHandler', () => {
       mockSignal.sendMessage = vi.fn().mockRejectedValue(new Error('Signal API error'));
       const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-      const handler = new MessageHandler(['@bot'], mockStorage, mockLLM, mockSignal);
+      const handler = new MessageHandler(['@bot'], {
+        storage: mockStorage,
+        llmClient: mockLLM,
+        signalClient: mockSignal,
+      });
 
       await handler.handleMessage('g1', 'Alice', '@bot hello', 1000);
 
@@ -342,7 +415,12 @@ describe('MessageHandler', () => {
     });
 
     it('should use correct context window size', async () => {
-      const handler = new MessageHandler(['@bot'], mockStorage, mockLLM, mockSignal, 10);
+      const handler = new MessageHandler(['@bot'], {
+        storage: mockStorage,
+        llmClient: mockLLM,
+        signalClient: mockSignal,
+        contextWindowSize: 10,
+      });
 
       await handler.handleMessage('g1', 'Alice', '@bot hello', 1000);
 
@@ -353,7 +431,11 @@ describe('MessageHandler', () => {
     it('should log response with token usage', async () => {
       const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
-      const handler = new MessageHandler(['@bot'], mockStorage, mockLLM, mockSignal);
+      const handler = new MessageHandler(['@bot'], {
+        storage: mockStorage,
+        llmClient: mockLLM,
+        signalClient: mockSignal,
+      });
 
       await handler.handleMessage('g1', 'Alice', '@bot hello', 1000);
 
@@ -368,6 +450,33 @@ describe('MessageHandler', () => {
       );
 
       consoleLogSpy.mockRestore();
+    });
+
+    it('should ignore duplicate messages with same groupId/sender/timestamp', async () => {
+      const handler = new MessageHandler(['@bot'], {
+        storage: mockStorage,
+        llmClient: mockLLM,
+        signalClient: mockSignal,
+      });
+
+      await handler.handleMessage('g1', 'Alice', '@bot hello', 1000);
+      await handler.handleMessage('g1', 'Alice', '@bot hello', 1000);
+
+      // LLM should only be called once
+      expect(mockLLM.generateResponse).toHaveBeenCalledTimes(1);
+    });
+
+    it('should process different messages normally', async () => {
+      const handler = new MessageHandler(['@bot'], {
+        storage: mockStorage,
+        llmClient: mockLLM,
+        signalClient: mockSignal,
+      });
+
+      await handler.handleMessage('g1', 'Alice', '@bot hello', 1000);
+      await handler.handleMessage('g1', 'Alice', '@bot hello', 2000);
+
+      expect(mockLLM.generateResponse).toHaveBeenCalledTimes(2);
     });
   });
 });

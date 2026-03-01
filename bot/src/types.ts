@@ -7,11 +7,6 @@ export interface Message {
   isBot: boolean;
 }
 
-export interface BotConfig {
-  key: string;
-  value: string;
-}
-
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant';
   content: string;
@@ -36,10 +31,4 @@ export interface SignalMessage {
       };
     };
   };
-}
-
-export interface SignalSendRequest {
-  recipient?: string;
-  groupId?: string;
-  message: string;
 }

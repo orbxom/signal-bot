@@ -35,40 +35,6 @@ describe('SignalClient', () => {
     });
   });
 
-  describe('buildSendRequest', () => {
-    it('should construct send message request', () => {
-      const client = new SignalClient('http://localhost:8080', '+1234567890');
-
-      const request = client.buildSendRequest('group123', 'Hello world');
-      expect(request.groupId).toBe('group123');
-      expect(request.message).toBe('Hello world');
-    });
-
-    it('should handle empty message', () => {
-      const client = new SignalClient('http://localhost:8080', '+1234567890');
-
-      const request = client.buildSendRequest('group123', '');
-      expect(request.groupId).toBe('group123');
-      expect(request.message).toBe('');
-    });
-
-    it('should handle special characters in message', () => {
-      const client = new SignalClient('http://localhost:8080', '+1234567890');
-
-      const specialMessage = 'Hello! @user #tag $100 & more 🎉';
-      const request = client.buildSendRequest('group123', specialMessage);
-      expect(request.message).toBe(specialMessage);
-    });
-
-    it('should handle multiline messages', () => {
-      const client = new SignalClient('http://localhost:8080', '+1234567890');
-
-      const multilineMessage = 'Line 1\nLine 2\nLine 3';
-      const request = client.buildSendRequest('group123', multilineMessage);
-      expect(request.message).toBe(multilineMessage);
-    });
-  });
-
   describe('extractMessageData', () => {
     it('should extract message data from Signal envelope', () => {
       const client = new SignalClient('http://localhost:8080', '+1234567890');
@@ -212,6 +178,107 @@ describe('SignalClient', () => {
     });
   });
 
+  describe('receiveMessages', () => {
+    let fetchMock: ReturnType<typeof vi.fn>;
+
+    beforeEach(() => {
+      fetchMock = vi.fn();
+      global.fetch = fetchMock;
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it('should return parsed messages on success', async () => {
+      const client = new SignalClient('http://localhost:8080', '+1234567890');
+      const mockMessages: SignalMessage[] = [{
+        envelope: {
+          sourceNumber: '+9876543210',
+          timestamp: 1234567890,
+          dataMessage: {
+            timestamp: 1234567890,
+            message: 'Hello',
+            groupInfo: { groupId: 'abc123' }
+          }
+        }
+      }];
+
+      fetchMock.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ jsonrpc: '2.0', result: mockMessages, id: 1 })
+      });
+
+      const result = await client.receiveMessages();
+      expect(result).toEqual(mockMessages);
+    });
+
+    it('should return empty array when result is null', async () => {
+      const client = new SignalClient('http://localhost:8080', '+1234567890');
+
+      fetchMock.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ jsonrpc: '2.0', result: null, id: 1 })
+      });
+
+      const result = await client.receiveMessages();
+      expect(result).toEqual([]);
+    });
+
+    it('should throw on network error', async () => {
+      const client = new SignalClient('http://localhost:8080', '+1234567890');
+
+      fetchMock.mockRejectedValueOnce(new Error('Network error'));
+
+      await expect(client.receiveMessages()).rejects.toThrow('Network error');
+    });
+
+    it('should throw on non-ok HTTP response', async () => {
+      const client = new SignalClient('http://localhost:8080', '+1234567890');
+
+      fetchMock.mockResolvedValueOnce({
+        ok: false,
+        statusText: 'Internal Server Error'
+      });
+
+      await expect(client.receiveMessages())
+        .rejects.toThrow('Signal API error: Internal Server Error');
+    });
+
+    it('should throw on RPC error in response', async () => {
+      const client = new SignalClient('http://localhost:8080', '+1234567890');
+
+      fetchMock.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          jsonrpc: '2.0',
+          error: { code: -1, message: 'Account not found' },
+          id: 1
+        })
+      });
+
+      await expect(client.receiveMessages())
+        .rejects.toThrow('Signal RPC error: Account not found');
+    });
+
+    it('should send correct JSON-RPC payload', async () => {
+      const client = new SignalClient('http://localhost:8080', '+1234567890');
+
+      fetchMock.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ jsonrpc: '2.0', result: [], id: 1 })
+      });
+
+      await client.receiveMessages();
+
+      const callArgs = fetchMock.mock.calls[0][1];
+      const body = JSON.parse(callArgs.body);
+      expect(body.jsonrpc).toBe('2.0');
+      expect(body.method).toBe('receive');
+      expect(body.params.account).toBe('+1234567890');
+    });
+  });
+
   describe('sendMessage', () => {
     let fetchMock: ReturnType<typeof vi.fn>;
 
@@ -326,6 +393,57 @@ describe('SignalClient', () => {
 
       await expect(client.sendMessage('group123', 'Hello'))
         .rejects.toThrow('Invalid JSON');
+    });
+  });
+
+  describe('waitForReady', () => {
+    let fetchMock: ReturnType<typeof vi.fn>;
+
+    beforeEach(() => {
+      fetchMock = vi.fn();
+      global.fetch = fetchMock;
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it('should succeed on first attempt', async () => {
+      const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      const client = new SignalClient('http://localhost:8080', '+1234567890');
+
+      fetchMock.mockResolvedValueOnce({ ok: true, json: async () => ({ result: [] }) });
+
+      await client.waitForReady(3, 1);
+
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('attempt 1'));
+      consoleLogSpy.mockRestore();
+    });
+
+    it('should succeed after retries', async () => {
+      const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      const client = new SignalClient('http://localhost:8080', '+1234567890');
+
+      fetchMock
+        .mockRejectedValueOnce(new Error('Connection refused'))
+        .mockResolvedValueOnce({ ok: true, json: async () => ({ result: [] }) });
+
+      await client.waitForReady(3, 1);
+
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('attempt 2'));
+      consoleLogSpy.mockRestore();
+    });
+
+    it('should throw after max retries exhausted', async () => {
+      const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      const client = new SignalClient('http://localhost:8080', '+1234567890');
+
+      fetchMock.mockRejectedValue(new Error('Connection refused'));
+
+      await expect(client.waitForReady(2, 1))
+        .rejects.toThrow('signal-cli not reachable at http://localhost:8080 after 2 attempts');
+
+      consoleLogSpy.mockRestore();
     });
   });
 });

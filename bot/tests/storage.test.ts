@@ -1,18 +1,27 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import { Storage } from '../src/storage';
-import * as fs from 'fs';
+import { mkdtempSync, rmSync } from 'fs';
+import { join } from 'path';
+import { tmpdir } from 'os';
 
 describe('Storage', () => {
-  const testDbPath = './test.db';
+  let testDir: string;
+  let testDbPath: string;
+
+  const createTestDb = () => {
+    testDir = mkdtempSync(join(tmpdir(), 'signal-bot-test-'));
+    testDbPath = join(testDir, 'test.db');
+    return testDbPath;
+  };
 
   afterEach(() => {
-    if (fs.existsSync(testDbPath)) {
-      fs.unlinkSync(testDbPath);
+    if (testDir) {
+      rmSync(testDir, { recursive: true, force: true });
     }
   });
 
   it('should initialize database with tables', () => {
-    const storage = new Storage(testDbPath);
+    const storage = new Storage(createTestDb());
     try {
       expect(storage).toBeDefined();
     } finally {
@@ -21,7 +30,7 @@ describe('Storage', () => {
   });
 
   it('should add and retrieve messages', () => {
-    const storage = new Storage(testDbPath);
+    const storage = new Storage(createTestDb());
 
     storage.addMessage({
       groupId: 'group1',
@@ -40,10 +49,9 @@ describe('Storage', () => {
   });
 
   it('should trim old messages beyond window size', () => {
-    const storage = new Storage(testDbPath);
+    const storage = new Storage(createTestDb());
     const groupId = 'group1';
 
-    // Add 25 messages
     for (let i = 0; i < 25; i++) {
       storage.addMessage({
         groupId,
@@ -60,5 +68,40 @@ describe('Storage', () => {
     expect(messages[0].content).toBe('Message 5');
 
     storage.close();
+  });
+
+  describe('close guard', () => {
+    it('should throw when calling addMessage after close', () => {
+      const storage = new Storage(createTestDb());
+      storage.close();
+
+      expect(() => storage.addMessage({
+        groupId: 'g1',
+        sender: 'Alice',
+        content: 'Hello',
+        timestamp: Date.now(),
+        isBot: false
+      })).toThrow('Database is closed');
+    });
+
+    it('should throw when calling getRecentMessages after close', () => {
+      const storage = new Storage(createTestDb());
+      storage.close();
+
+      expect(() => storage.getRecentMessages('g1', 10)).toThrow('Database is closed');
+    });
+
+    it('should throw when calling trimMessages after close', () => {
+      const storage = new Storage(createTestDb());
+      storage.close();
+
+      expect(() => storage.trimMessages('g1', 20)).toThrow('Database is closed');
+    });
+
+    it('should not throw when calling close twice', () => {
+      const storage = new Storage(createTestDb());
+      storage.close();
+      expect(() => storage.close()).not.toThrow();
+    });
   });
 });

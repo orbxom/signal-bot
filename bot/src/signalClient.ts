@@ -1,4 +1,4 @@
-import type { SignalMessage, SignalSendRequest } from './types';
+import type { SignalMessage } from './types';
 
 export class SignalClient {
   private baseUrl: string;
@@ -24,11 +24,22 @@ export class SignalClient {
     this.account = account;
   }
 
-  buildSendRequest(groupId: string, message: string): SignalSendRequest {
-    return {
-      groupId,
-      message
-    };
+  private async rpc<T>(method: string, params: Record<string, unknown>, timeoutMs = 30000): Promise<T> {
+    const response = await fetch(`${this.baseUrl}/api/v1/rpc`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        method,
+        params: { account: this.account, ...params },
+        id: `${Date.now()}-${++this.requestIdCounter}`,
+      }),
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    if (!response.ok) throw new Error(`Signal API error: ${response.statusText}`);
+    const result = await response.json() as { error?: { message: string }; result?: T };
+    if (result.error) throw new Error(`Signal RPC error: ${result.error.message}`);
+    return result.result as T;
   }
 
   async sendMessage(groupId: string, message: string): Promise<void> {
@@ -38,44 +49,31 @@ export class SignalClient {
     if (message === undefined || message === null) {
       throw new Error('Message is required');
     }
+    await this.rpc('send', { groupId, message });
+  }
 
-    const payload = {
-      jsonrpc: '2.0',
-      method: 'send',
-      params: {
-        account: this.account,
-        groupId,
-        message
-      },
-      id: `${Date.now()}-${++this.requestIdCounter}`
-    };
+  async receiveMessages(): Promise<SignalMessage[]> {
+    return (await this.rpc<SignalMessage[]>('receive', {})) ?? [];
+  }
 
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000);
-
-      const response = await fetch(`${this.baseUrl}/api/v1/rpc`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(payload),
-        signal: controller.signal
-      });
-
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        throw new Error(`Signal API error: ${response.statusText}`);
+  async waitForReady(maxRetries: number = 10, baseDelay: number = 2000): Promise<void> {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        await this.rpc('listGroups', {}, 5000);
+        console.log(`signal-cli is ready (attempt ${attempt})`);
+        return;
+      } catch {
+        // Expected during startup
       }
 
-      const result = await response.json();
-      if (result.error) {
-        throw new Error(`Signal RPC error: ${result.error.message}`);
+      if (attempt < maxRetries) {
+        const delay = baseDelay * attempt;
+        console.log(`Waiting for signal-cli... (attempt ${attempt}/${maxRetries}, retry in ${delay}ms)`);
+        await new Promise(resolve => setTimeout(resolve, delay));
       }
-    } catch (error) {
-      throw error;
     }
+
+    throw new Error(`signal-cli not reachable at ${this.baseUrl} after ${maxRetries} attempts`);
   }
 
   extractMessageData(signalMsg: SignalMessage): {
@@ -95,7 +93,7 @@ export class SignalClient {
       sender: envelope.sourceNumber || envelope.source || 'unknown',
       content: dataMessage.message,
       groupId: dataMessage.groupInfo.groupId,
-      timestamp: envelope.timestamp
+      timestamp: envelope.timestamp,
     };
   }
 }
