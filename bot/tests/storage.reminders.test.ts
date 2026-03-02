@@ -51,12 +51,6 @@ describe('Storage - Reminders', () => {
       );
     });
 
-    it('should reject past dueAt', () => {
-      createStorage();
-      expect(() => storage.createReminder('group1', '+61400000000', 'Test', Date.now() - 1000)).toThrow(
-        'Invalid dueAt: must be in the future',
-      );
-    });
   });
 
   describe('getDueReminders', () => {

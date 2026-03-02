@@ -32,6 +32,8 @@ async function main() {
     contextWindowSize: config.contextWindowSize,
     timezone: config.timezone,
     dbPath: config.dbPath,
+    githubRepo: config.githubRepo,
+    sourceRoot: config.sourceRoot,
   });
   console.log(`Message handler initialized (triggers: ${config.mentionTriggers.join(', ')})`);
 
@@ -50,8 +52,8 @@ async function main() {
 
   // Start polling loop
   console.log('Starting message polling...');
-  const REMINDER_CHECK_INTERVAL = 15;
-  let tickCount = 0;
+  const REMINDER_CHECK_MS = 30_000;
+  let lastReminderCheck = 0;
 
   while (true) {
     try {
@@ -67,9 +69,9 @@ async function main() {
       }
 
       // Check for due reminders periodically
-      tickCount++;
-      if (tickCount >= REMINDER_CHECK_INTERVAL) {
-        tickCount = 0;
+      const now = Date.now();
+      if (now - lastReminderCheck >= REMINDER_CHECK_MS) {
+        lastReminderCheck = now;
         try {
           await reminderScheduler.processDueReminders();
         } catch (error) {

@@ -258,6 +258,7 @@ describe('ClaudeCLIClient', () => {
         sender: '+61400000000',
         dbPath: '/tmp/test.db',
         timezone: 'Australia/Sydney',
+        githubRepo: 'owner/repo',
       };
 
       await client.generateResponse(messages, context);
@@ -269,11 +270,16 @@ describe('ClaudeCLIClient', () => {
       const mcpConfigIdx = args.indexOf('--mcp-config') + 1;
       const mcpConfig = JSON.parse(args[mcpConfigIdx]);
       expect(mcpConfig.mcpServers.reminders).toBeDefined();
-      expect(mcpConfig.mcpServers.reminders.command).toBe('node');
+      expect(['node', 'npx']).toContain(mcpConfig.mcpServers.reminders.command);
       expect(mcpConfig.mcpServers.reminders.env.MCP_GROUP_ID).toBe('test-group');
       expect(mcpConfig.mcpServers.reminders.env.MCP_SENDER).toBe('+61400000000');
       expect(mcpConfig.mcpServers.reminders.env.DB_PATH).toBe('/tmp/test.db');
       expect(mcpConfig.mcpServers.reminders.env.TZ).toBe('Australia/Sydney');
+
+      expect(mcpConfig.mcpServers.github).toBeDefined();
+      expect(['node', 'npx']).toContain(mcpConfig.mcpServers.github.command);
+      expect(mcpConfig.mcpServers.github.env.GITHUB_REPO).toBe('owner/repo');
+      expect(mcpConfig.mcpServers.github.env.MCP_SENDER).toBe('+61400000000');
     });
 
     it('should not include MCP config when context is not provided', async () => {
@@ -285,6 +291,47 @@ describe('ClaudeCLIClient', () => {
       const args = mockSpawn.mock.calls[0][1];
       expect(args).not.toContain('--mcp-config');
       expect(args).not.toContain('--strict-mcp-config');
+    });
+
+    it('should include dossier tools in allowed tools', async () => {
+      mockSpawnSuccess(makeResultOutput('Done!'));
+
+      const client = new ClaudeCLIClient();
+      await client.generateResponse([{ role: 'user', content: 'Hi' }]);
+
+      const args = mockSpawn.mock.calls[0][1];
+      const allowedToolsIdx = args.indexOf('--allowedTools') + 1;
+      const allowedTools = args[allowedToolsIdx];
+
+      expect(allowedTools).toContain('mcp__dossiers__update_dossier');
+      expect(allowedTools).toContain('mcp__dossiers__get_dossier');
+      expect(allowedTools).toContain('mcp__dossiers__list_dossiers');
+    });
+
+    it('should include dossier MCP server in config when context is provided', async () => {
+      mockSpawnSuccess(makeResultOutput('Updated!'));
+
+      const client = new ClaudeCLIClient();
+      const messages: ChatMessage[] = [{ role: 'user', content: 'Remember this' }];
+      const context = {
+        groupId: 'test-group',
+        sender: '+61400000000',
+        dbPath: '/tmp/test.db',
+        timezone: 'Australia/Sydney',
+        githubRepo: 'owner/repo',
+      };
+
+      await client.generateResponse(messages, context);
+
+      const args = mockSpawn.mock.calls[0][1];
+      const mcpConfigIdx = args.indexOf('--mcp-config') + 1;
+      const mcpConfig = JSON.parse(args[mcpConfigIdx]);
+
+      expect(mcpConfig.mcpServers.dossiers).toBeDefined();
+      expect(['node', 'npx']).toContain(mcpConfig.mcpServers.dossiers.command);
+      expect(mcpConfig.mcpServers.dossiers.env.DB_PATH).toBe('/tmp/test.db');
+      expect(mcpConfig.mcpServers.dossiers.env.MCP_GROUP_ID).toBe('test-group');
+      expect(mcpConfig.mcpServers.dossiers.env.MCP_SENDER).toBe('+61400000000');
     });
 
     it('should parse JSON array output format', async () => {

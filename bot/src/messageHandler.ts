@@ -1,7 +1,25 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import type { ClaudeCLIClient } from './claudeClient';
 import type { SignalClient } from './signalClient';
 import type { Storage } from './storage';
 import type { ChatMessage, Message } from './types';
+
+let cachedSkillContent: string | null = null;
+
+function loadSkillContent(): string {
+  if (cachedSkillContent !== null) return cachedSkillContent;
+  try {
+    // Try compiled JS location first, then source TS location
+    const distPath = path.resolve(__dirname, 'skills', 'dossier-maintenance.md');
+    const srcPath = path.resolve(__dirname, '..', 'src', 'skills', 'dossier-maintenance.md');
+    const skillPath = fs.existsSync(distPath) ? distPath : srcPath;
+    cachedSkillContent = fs.readFileSync(skillPath, 'utf-8');
+  } catch {
+    cachedSkillContent = '';
+  }
+  return cachedSkillContent;
+}
 
 export class MessageHandler {
   private mentionTriggers: string[];
@@ -14,6 +32,8 @@ export class MessageHandler {
   private contextWindowSize: number;
   private timezone: string;
   private dbPath: string;
+  private githubRepo: string;
+  private sourceRoot: string;
   private processedMessages: Set<string> = new Set();
 
   constructor(
@@ -27,6 +47,8 @@ export class MessageHandler {
       contextWindowSize?: number;
       timezone?: string;
       dbPath?: string;
+      githubRepo?: string;
+      sourceRoot?: string;
     },
   ) {
     this.mentionTriggers = mentionTriggers;
@@ -39,6 +61,8 @@ export class MessageHandler {
     this.contextWindowSize = options?.contextWindowSize || 20;
     this.timezone = options?.timezone || 'Australia/Sydney';
     this.dbPath = options?.dbPath || './data/bot.db';
+    this.githubRepo = options?.githubRepo || '';
+    this.sourceRoot = options?.sourceRoot || '';
   }
 
   isMentioned(content: string): boolean {
@@ -63,7 +87,13 @@ export class MessageHandler {
     return query.replace(/\s+/g, ' ').trim();
   }
 
-  buildContext(history: Message[], currentQuery: string, groupId?: string, sender?: string): ChatMessage[] {
+  buildContext(
+    history: Message[],
+    currentQuery: string,
+    groupId?: string,
+    sender?: string,
+    dossierContext?: string,
+  ): ChatMessage[] {
     let systemContent = this.systemPrompt;
 
     if (groupId && sender) {
@@ -90,9 +120,14 @@ export class MessageHandler {
         `Timezone: ${this.timezone}`,
         `Group ID: ${groupId}`,
         `Current requester: ${sender}`,
+        `You have access to your own source code via the sourcecode tools (list_files, read_file, search_code). When asked how you work, what you can do, or technical questions about your implementation, use these tools to read the actual code before answering.`,
       ].join('\n');
 
-      systemContent = `${timeContext}\n\n${systemContent}`;
+      if (dossierContext) {
+        systemContent = `${timeContext}\n\n${dossierContext}\n\n${this.systemPrompt}`;
+      } else {
+        systemContent = `${timeContext}\n\n${systemContent}`;
+      }
     }
 
     const contextMessages: ChatMessage[] = [{ role: 'system', content: systemContent }];
@@ -166,8 +201,26 @@ export class MessageHandler {
       // Extract query
       const query = this.extractQuery(content);
 
+      // Load dossiers for context injection
+      let dossierContext = '';
+      const dossiers = this.storage.getDossiersByGroup(groupId);
+      if (dossiers.length > 0) {
+        const entries = dossiers.map(d => {
+          const parts = [`- ${d.displayName} (${d.personId})`];
+          if (d.notes) parts.push(`  ${d.notes}`);
+          return parts.join('\n');
+        });
+        dossierContext = `## People in this group\n${entries.join('\n')}`;
+      }
+
+      // Load skill instructions
+      const skillContent = loadSkillContent();
+      if (skillContent) {
+        dossierContext = dossierContext ? `${dossierContext}\n\n${skillContent}` : skillContent;
+      }
+
       // Build context
-      const messages = this.buildContext(history, query, groupId, sender);
+      const messages = this.buildContext(history, query, groupId, sender, dossierContext);
 
       // Get LLM response
       const response = await this.llmClient.generateResponse(messages, {
@@ -175,6 +228,8 @@ export class MessageHandler {
         sender,
         dbPath: this.dbPath,
         timezone: this.timezone,
+        githubRepo: this.githubRepo,
+        sourceRoot: this.sourceRoot,
       });
 
       // Send response
