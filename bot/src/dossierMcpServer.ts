@@ -1,7 +1,5 @@
-import * as readline from 'node:readline';
+import { estimateTokens, getErrorMessage, runMcpServer, type ToolResult } from './mcpServerBase';
 import { Storage } from './storage';
-
-const PROTOCOL_VERSION = '2025-03-26';
 
 const dbPath = process.env.DB_PATH || './data/bot.db';
 const groupId = process.env.MCP_GROUP_ID || '';
@@ -48,10 +46,7 @@ const TOOLS = [
   },
 ];
 
-function handleUpdateDossier(args: Record<string, unknown>): {
-  content: Array<{ type: string; text: string }>;
-  isError?: boolean;
-} {
+function handleUpdateDossier(args: Record<string, unknown>): ToolResult {
   const personId = args.personId as string;
   const displayName = args.displayName as string;
   const notes = (args.notes as string) ?? '';
@@ -72,20 +67,16 @@ function handleUpdateDossier(args: Record<string, unknown>): {
       content: [
         {
           type: 'text',
-          text: `Updated dossier for ${displayName} (${personId}). Notes: ~${Math.ceil(notes.length / 4)} tokens used.`,
+          text: `Updated dossier for ${displayName} (${personId}). Notes: ~${estimateTokens(notes)} tokens used.`,
         },
       ],
     };
   } catch (error) {
-    const msg = error instanceof Error ? error.message : 'Unknown error';
-    return { content: [{ type: 'text', text: `Failed to update dossier: ${msg}` }], isError: true };
+    return { content: [{ type: 'text', text: `Failed to update dossier: ${getErrorMessage(error)}` }], isError: true };
   }
 }
 
-function handleGetDossier(args: Record<string, unknown>): {
-  content: Array<{ type: string; text: string }>;
-  isError?: boolean;
-} {
+function handleGetDossier(args: Record<string, unknown>): ToolResult {
   const personId = args.personId as string;
 
   if (!personId || typeof personId !== 'string') {
@@ -100,7 +91,7 @@ function handleGetDossier(args: Record<string, unknown>): {
     return { content: [{ type: 'text', text: `No dossier found for ${personId} in this group.` }] };
   }
 
-  const tokenCount = Math.ceil(dossier.notes.length / 4);
+  const tokenCount = estimateTokens(dossier.notes);
   return {
     content: [
       {
@@ -111,10 +102,7 @@ function handleGetDossier(args: Record<string, unknown>): {
   };
 }
 
-function handleListDossiers(): {
-  content: Array<{ type: string; text: string }>;
-  isError?: boolean;
-} {
+function handleListDossiers(): ToolResult {
   if (!groupId) {
     return { content: [{ type: 'text', text: 'No group context available.' }], isError: true };
   }
@@ -128,10 +116,7 @@ function handleListDossiers(): {
   return { content: [{ type: 'text', text: `Known people in this group:\n${lines.join('\n')}` }] };
 }
 
-function handleToolCall(
-  name: string,
-  args: Record<string, unknown>,
-): { content: Array<{ type: string; text: string }>; isError?: boolean } {
+function handleToolCall(name: string, args: Record<string, unknown>): ToolResult {
   switch (name) {
     case 'update_dossier':
       return handleUpdateDossier(args);
@@ -144,81 +129,15 @@ function handleToolCall(
   }
 }
 
-function handleMessage(msg: { id?: number | string; method: string; params?: Record<string, unknown> }): object | null {
-  const { id, method, params } = msg;
-
-  switch (method) {
-    case 'initialize':
-      return {
-        jsonrpc: '2.0',
-        id,
-        result: {
-          protocolVersion: PROTOCOL_VERSION,
-          capabilities: { tools: {} },
-          serverInfo: { name: 'signal-bot-dossiers', version: '1.0.0' },
-        },
-      };
-
-    case 'notifications/initialized':
-      // Notification — no response
-      return null;
-
-    case 'tools/list':
-      return {
-        jsonrpc: '2.0',
-        id,
-        result: { tools: TOOLS },
-      };
-
-    case 'tools/call': {
-      const toolName = (params?.name as string) || '';
-      const toolArgs = (params?.arguments as Record<string, unknown>) || {};
-      const result = handleToolCall(toolName, toolArgs);
-      return { jsonrpc: '2.0', id, result };
-    }
-
-    default:
-      // Unknown method
-      if (id !== undefined) {
-        return {
-          jsonrpc: '2.0',
-          id,
-          error: { code: -32601, message: `Method not found: ${method}` },
-        };
-      }
-      // Unknown notification — ignore
-      return null;
-  }
-}
-
-function main() {
-  storage = new Storage(dbPath);
-  console.error(`Dossier MCP server started (group: ${groupId || 'none'}, sender: ${sender || 'none'})`);
-
-  const rl = readline.createInterface({ input: process.stdin, terminal: false });
-
-  rl.on('line', (line: string) => {
-    if (!line.trim()) return;
-
-    try {
-      const msg = JSON.parse(line);
-      const response = handleMessage(msg);
-      if (response) {
-        process.stdout.write(`${JSON.stringify(response)}\n`);
-      }
-    } catch (error) {
-      console.error('Error processing message:', error);
-      // Send parse error
-      process.stdout.write(
-        `${JSON.stringify({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Parse error' } })}\n`,
-      );
-    }
-  });
-
-  rl.on('close', () => {
+runMcpServer({
+  name: 'signal-bot-dossiers',
+  tools: TOOLS,
+  handleToolCall,
+  onInit() {
+    storage = new Storage(dbPath);
+    console.error(`Dossier MCP server started (group: ${groupId || 'none'}, sender: ${sender || 'none'})`);
+  },
+  onClose() {
     storage.close();
-    process.exit(0);
-  });
-}
-
-main();
+  },
+});

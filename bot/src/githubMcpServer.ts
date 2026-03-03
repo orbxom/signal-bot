@@ -1,9 +1,8 @@
 import { execFile } from 'node:child_process';
-import * as readline from 'node:readline';
 import { promisify } from 'node:util';
+import { getErrorMessage, runMcpServer, type ToolResult } from './mcpServerBase';
 
 const execFileAsync = promisify(execFile);
-const PROTOCOL_VERSION = '2025-03-26';
 
 const GITHUB_REPO = process.env.GITHUB_REPO || '';
 const MCP_SENDER = process.env.MCP_SENDER || '';
@@ -36,8 +35,6 @@ const TOOLS = [
     },
   },
 ];
-
-type ToolResult = { content: Array<{ type: string; text: string }>; isError?: boolean };
 
 async function handleCreateFeatureRequest(args: Record<string, unknown>): Promise<ToolResult> {
   const title = args.title as string;
@@ -76,7 +73,7 @@ async function handleCreateFeatureRequest(args: Record<string, unknown>): Promis
 
     return { content: [{ type: 'text', text: `Feature request created: ${issueUrl}` }] };
   } catch (error) {
-    const msg = error instanceof Error ? error.message : 'Unknown error';
+    const msg = getErrorMessage(error);
     if (msg.includes('ENOENT')) {
       return { content: [{ type: 'text', text: 'GitHub CLI (gh) is not installed.' }], isError: true };
     }
@@ -93,84 +90,15 @@ async function handleToolCall(name: string, args: Record<string, unknown>): Prom
         return { content: [{ type: 'text', text: `Unknown tool: ${name}` }], isError: true };
     }
   } catch (error) {
-    const msg = error instanceof Error ? error.message : 'Unknown error';
-    return { content: [{ type: 'text', text: `GitHub error: ${msg}` }], isError: true };
+    return { content: [{ type: 'text', text: `GitHub error: ${getErrorMessage(error)}` }], isError: true };
   }
 }
 
-async function handleMessage(msg: {
-  id?: number | string;
-  method: string;
-  params?: Record<string, unknown>;
-}): Promise<object | null> {
-  const { id, method, params } = msg;
-
-  switch (method) {
-    case 'initialize':
-      return {
-        jsonrpc: '2.0',
-        id,
-        result: {
-          protocolVersion: PROTOCOL_VERSION,
-          capabilities: { tools: {} },
-          serverInfo: { name: 'signal-bot-github', version: '1.0.0' },
-        },
-      };
-
-    case 'notifications/initialized':
-      return null;
-
-    case 'tools/list':
-      return {
-        jsonrpc: '2.0',
-        id,
-        result: { tools: TOOLS },
-      };
-
-    case 'tools/call': {
-      const toolName = (params?.name as string) || '';
-      const toolArgs = (params?.arguments as Record<string, unknown>) || {};
-      const result = await handleToolCall(toolName, toolArgs);
-      return { jsonrpc: '2.0', id, result };
-    }
-
-    default:
-      if (id !== undefined) {
-        return {
-          jsonrpc: '2.0',
-          id,
-          error: { code: -32601, message: `Method not found: ${method}` },
-        };
-      }
-      return null;
-  }
-}
-
-function main() {
-  console.error('GitHub MCP server started');
-
-  const rl = readline.createInterface({ input: process.stdin, terminal: false });
-
-  rl.on('line', async (line: string) => {
-    if (!line.trim()) return;
-
-    try {
-      const msg = JSON.parse(line);
-      const response = await handleMessage(msg);
-      if (response) {
-        process.stdout.write(`${JSON.stringify(response)}\n`);
-      }
-    } catch (error) {
-      console.error('Error processing message:', error);
-      process.stdout.write(
-        `${JSON.stringify({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Parse error' } })}\n`,
-      );
-    }
-  });
-
-  rl.on('close', () => {
-    process.exit(0);
-  });
-}
-
-main();
+runMcpServer({
+  name: 'signal-bot-github',
+  tools: TOOLS,
+  handleToolCall,
+  onInit() {
+    console.error('GitHub MCP server started');
+  },
+});

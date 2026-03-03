@@ -1,8 +1,9 @@
-import { type ChildProcess, spawn } from 'node:child_process';
+import type { ChildProcess } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { initializeServer, sendAndReceive, spawnMcpServer as spawnServer } from './helpers/mcpTestHelpers';
 
 describe('Source Code MCP Server', () => {
   let proc: ChildProcess | null = null;
@@ -36,44 +37,8 @@ describe('Source Code MCP Server', () => {
   });
 
   function spawnMcpServer(sourceRoot?: string): ChildProcess {
-    proc = spawn('npx', ['tsx', path.join(__dirname, '../src/sourceCodeMcpServer.ts')], {
-      env: {
-        ...process.env,
-        SOURCE_ROOT: sourceRoot ?? tempDir,
-      },
-      stdio: ['pipe', 'pipe', 'pipe'],
-    });
+    proc = spawnServer('sourceCodeMcpServer.ts', { SOURCE_ROOT: sourceRoot ?? tempDir });
     return proc;
-  }
-
-  async function sendAndReceive(server: ChildProcess, message: object): Promise<Record<string, unknown>> {
-    return new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => reject(new Error('Timeout waiting for MCP response')), 15000);
-      const handler = (data: Buffer) => {
-        const line = data.toString().trim();
-        if (!line) return;
-        try {
-          const response = JSON.parse(line);
-          clearTimeout(timeout);
-          server.stdout!.removeListener('data', handler);
-          resolve(response);
-        } catch {
-          // partial data, wait for more
-        }
-      };
-      server.stdout!.on('data', handler);
-      server.stdin!.write(`${JSON.stringify(message)}\n`);
-    });
-  }
-
-  async function initializeServer(server: ChildProcess): Promise<void> {
-    await sendAndReceive(server, {
-      jsonrpc: '2.0',
-      id: 0,
-      method: 'initialize',
-      params: { protocolVersion: '2025-03-26', capabilities: {}, clientInfo: { name: 'test', version: '1.0' } },
-    });
-    server.stdin!.write(`${JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' })}\n`);
   }
 
   it('should respond to initialize request', async () => {

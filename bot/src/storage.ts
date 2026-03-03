@@ -1,4 +1,5 @@
 import Database from 'better-sqlite3';
+import { estimateTokens } from './mcpServerBase';
 import type { Dossier, Message, Reminder, ReminderStatus } from './types';
 
 export const DOSSIER_TOKEN_LIMIT = 1000;
@@ -98,6 +99,7 @@ export class Storage {
             displayName = excluded.displayName,
             notes = excluded.notes,
             updatedAt = excluded.updatedAt
+          RETURNING *
         `),
         getDossier: this.db.prepare(`
           SELECT * FROM dossiers WHERE groupId = ? AND personId = ?
@@ -344,24 +346,18 @@ export class Storage {
     if (!personId || personId.trim() === '') {
       throw new Error('Invalid personId: cannot be empty');
     }
-    if (Math.ceil(notes.length / 4) > DOSSIER_TOKEN_LIMIT) {
+    if (estimateTokens(notes) > DOSSIER_TOKEN_LIMIT) {
       throw new Error(`Notes exceeds token limit of ${DOSSIER_TOKEN_LIMIT} tokens`);
     }
 
     try {
       const now = Date.now();
-      this.stmts.upsertDossier.run(groupId, personId, displayName, notes, now, now);
-      const dossier = this.getDossier(groupId, personId);
-      if (!dossier) {
-        throw new Error('Failed to upsert dossier: not found after insert');
-      }
-      return dossier;
+      const row = this.stmts.upsertDossier.get(groupId, personId, displayName, notes, now, now) as Dossier;
+      return row;
     } catch (error) {
       if (
         error instanceof Error &&
-        (error.message.startsWith('Invalid ') ||
-          error.message.startsWith('Notes exceeds') ||
-          error.message.startsWith('Failed to upsert'))
+        (error.message.startsWith('Invalid ') || error.message.startsWith('Notes exceeds'))
       ) {
         throw error;
       }

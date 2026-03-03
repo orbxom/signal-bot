@@ -1,7 +1,5 @@
-import * as readline from 'node:readline';
+import { getErrorMessage, runMcpServer, type ToolResult } from './mcpServerBase';
 import { Storage } from './storage';
-
-const PROTOCOL_VERSION = '2025-03-26';
 
 const dbPath = process.env.DB_PATH || './data/bot.db';
 const groupId = process.env.MCP_GROUP_ID || '';
@@ -50,10 +48,7 @@ const TOOLS = [
   },
 ];
 
-function handleSetReminder(args: Record<string, unknown>): {
-  content: Array<{ type: string; text: string }>;
-  isError?: boolean;
-} {
+function handleSetReminder(args: Record<string, unknown>): ToolResult {
   const reminderText = args.reminderText as string;
   const dueAt = args.dueAt as number;
 
@@ -76,12 +71,11 @@ function handleSetReminder(args: Record<string, unknown>): {
     const formatted = dueDate.toLocaleString('en-AU', { timeZone: process.env.TZ || 'Australia/Sydney' });
     return { content: [{ type: 'text', text: `Reminder #${id} set for ${formatted}: "${reminderText}"` }] };
   } catch (error) {
-    const msg = error instanceof Error ? error.message : 'Unknown error';
-    return { content: [{ type: 'text', text: `Failed to set reminder: ${msg}` }], isError: true };
+    return { content: [{ type: 'text', text: `Failed to set reminder: ${getErrorMessage(error)}` }], isError: true };
   }
 }
 
-function handleListReminders(): { content: Array<{ type: string; text: string }> } {
+function handleListReminders(): ToolResult {
   if (!groupId) {
     return { content: [{ type: 'text', text: 'No group context available.' }] };
   }
@@ -99,10 +93,7 @@ function handleListReminders(): { content: Array<{ type: string; text: string }>
   return { content: [{ type: 'text', text: `Pending reminders:\n${lines.join('\n')}` }] };
 }
 
-function handleCancelReminder(args: Record<string, unknown>): {
-  content: Array<{ type: string; text: string }>;
-  isError?: boolean;
-} {
+function handleCancelReminder(args: Record<string, unknown>): ToolResult {
   const reminderId = args.reminderId as number;
 
   if (!reminderId || typeof reminderId !== 'number') {
@@ -126,10 +117,7 @@ function handleCancelReminder(args: Record<string, unknown>): {
   };
 }
 
-function handleToolCall(
-  name: string,
-  args: Record<string, unknown>,
-): { content: Array<{ type: string; text: string }>; isError?: boolean } {
+function handleToolCall(name: string, args: Record<string, unknown>): ToolResult {
   switch (name) {
     case 'set_reminder':
       return handleSetReminder(args);
@@ -142,81 +130,15 @@ function handleToolCall(
   }
 }
 
-function handleMessage(msg: { id?: number | string; method: string; params?: Record<string, unknown> }): object | null {
-  const { id, method, params } = msg;
-
-  switch (method) {
-    case 'initialize':
-      return {
-        jsonrpc: '2.0',
-        id,
-        result: {
-          protocolVersion: PROTOCOL_VERSION,
-          capabilities: { tools: {} },
-          serverInfo: { name: 'signal-bot-reminders', version: '1.0.0' },
-        },
-      };
-
-    case 'notifications/initialized':
-      // Notification — no response
-      return null;
-
-    case 'tools/list':
-      return {
-        jsonrpc: '2.0',
-        id,
-        result: { tools: TOOLS },
-      };
-
-    case 'tools/call': {
-      const toolName = (params?.name as string) || '';
-      const toolArgs = (params?.arguments as Record<string, unknown>) || {};
-      const result = handleToolCall(toolName, toolArgs);
-      return { jsonrpc: '2.0', id, result };
-    }
-
-    default:
-      // Unknown method
-      if (id !== undefined) {
-        return {
-          jsonrpc: '2.0',
-          id,
-          error: { code: -32601, message: `Method not found: ${method}` },
-        };
-      }
-      // Unknown notification — ignore
-      return null;
-  }
-}
-
-function main() {
-  storage = new Storage(dbPath);
-  console.error(`Reminder MCP server started (group: ${groupId || 'none'}, sender: ${sender || 'none'})`);
-
-  const rl = readline.createInterface({ input: process.stdin, terminal: false });
-
-  rl.on('line', (line: string) => {
-    if (!line.trim()) return;
-
-    try {
-      const msg = JSON.parse(line);
-      const response = handleMessage(msg);
-      if (response) {
-        process.stdout.write(`${JSON.stringify(response)}\n`);
-      }
-    } catch (error) {
-      console.error('Error processing message:', error);
-      // Send parse error
-      process.stdout.write(
-        `${JSON.stringify({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Parse error' } })}\n`,
-      );
-    }
-  });
-
-  rl.on('close', () => {
+runMcpServer({
+  name: 'signal-bot-reminders',
+  tools: TOOLS,
+  handleToolCall,
+  onInit() {
+    storage = new Storage(dbPath);
+    console.error(`Reminder MCP server started (group: ${groupId || 'none'}, sender: ${sender || 'none'})`);
+  },
+  onClose() {
     storage.close();
-    process.exit(0);
-  });
-}
-
-main();
+  },
+});

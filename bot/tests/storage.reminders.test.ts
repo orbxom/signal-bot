@@ -50,7 +50,6 @@ describe('Storage - Reminders', () => {
         'Invalid reminderText: cannot be empty',
       );
     });
-
   });
 
   describe('getDueReminders', () => {

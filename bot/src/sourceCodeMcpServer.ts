@@ -1,16 +1,12 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import * as readline from 'node:readline';
-
-const PROTOCOL_VERSION = '2025-03-26';
+import { runMcpServer, type ToolResult } from './mcpServerBase';
 
 const SOURCE_ROOT = process.env.SOURCE_ROOT || '';
 
 const SKIP_DIRS = new Set(['.git', 'node_modules', 'data', 'dist', '.claude']);
 const MAX_FILE_SIZE = 50 * 1024; // 50KB
 const MAX_SEARCH_MATCHES = 50;
-
-type ToolResult = { content: Array<{ type: string; text: string }>; isError?: boolean };
 
 const TOOLS = [
   {
@@ -126,7 +122,11 @@ function handleListFiles(args: Record<string, unknown>): ToolResult {
     return { content: [{ type: 'text', text: 'Invalid path.' }], isError: true };
   }
 
-  if (!fs.existsSync(resolved) || !fs.statSync(resolved).isDirectory()) {
+  try {
+    if (!fs.statSync(resolved).isDirectory()) {
+      return { content: [{ type: 'text', text: `Directory not found: ${relativePath}` }], isError: true };
+    }
+  } catch {
     return { content: [{ type: 'text', text: `Directory not found: ${relativePath}` }], isError: true };
   }
 
@@ -153,11 +153,16 @@ function handleReadFile(args: Record<string, unknown>): ToolResult {
     return { content: [{ type: 'text', text: 'Invalid path.' }], isError: true };
   }
 
-  if (!fs.existsSync(resolved) || !fs.statSync(resolved).isFile()) {
+  let stat: fs.Stats;
+  try {
+    stat = fs.statSync(resolved);
+  } catch {
+    return { content: [{ type: 'text', text: `File not found: ${filePath}` }], isError: true };
+  }
+  if (!stat.isFile()) {
     return { content: [{ type: 'text', text: `File not found: ${filePath}` }], isError: true };
   }
 
-  const stat = fs.statSync(resolved);
   if (stat.size > MAX_FILE_SIZE) {
     const content = fs.readFileSync(resolved, 'utf-8').substring(0, MAX_FILE_SIZE);
     return {
@@ -290,79 +295,15 @@ function handleToolCall(name: string, args: Record<string, unknown>): ToolResult
   }
 }
 
-function handleMessage(msg: { id?: number | string; method: string; params?: Record<string, unknown> }): object | null {
-  const { id, method, params } = msg;
-
-  switch (method) {
-    case 'initialize':
-      return {
-        jsonrpc: '2.0',
-        id,
-        result: {
-          protocolVersion: PROTOCOL_VERSION,
-          capabilities: { tools: {} },
-          serverInfo: { name: 'signal-bot-sourcecode', version: '1.0.0' },
-        },
-      };
-
-    case 'notifications/initialized':
-      return null;
-
-    case 'tools/list':
-      return {
-        jsonrpc: '2.0',
-        id,
-        result: { tools: TOOLS },
-      };
-
-    case 'tools/call': {
-      const toolName = (params?.name as string) || '';
-      const toolArgs = (params?.arguments as Record<string, unknown>) || {};
-      const result = handleToolCall(toolName, toolArgs);
-      return { jsonrpc: '2.0', id, result };
+runMcpServer({
+  name: 'signal-bot-sourcecode',
+  tools: TOOLS,
+  handleToolCall,
+  onInit() {
+    if (!SOURCE_ROOT) {
+      console.error('Warning: SOURCE_ROOT not set, source code tools will not function.');
+    } else {
+      console.error(`Source code MCP server started (root: ${SOURCE_ROOT})`);
     }
-
-    default:
-      if (id !== undefined) {
-        return {
-          jsonrpc: '2.0',
-          id,
-          error: { code: -32601, message: `Method not found: ${method}` },
-        };
-      }
-      return null;
-  }
-}
-
-function main() {
-  if (!SOURCE_ROOT) {
-    console.error('Warning: SOURCE_ROOT not set, source code tools will not function.');
-  } else {
-    console.error(`Source code MCP server started (root: ${SOURCE_ROOT})`);
-  }
-
-  const rl = readline.createInterface({ input: process.stdin, terminal: false });
-
-  rl.on('line', (line: string) => {
-    if (!line.trim()) return;
-
-    try {
-      const msg = JSON.parse(line);
-      const response = handleMessage(msg);
-      if (response) {
-        process.stdout.write(`${JSON.stringify(response)}\n`);
-      }
-    } catch (error) {
-      console.error('Error processing message:', error);
-      process.stdout.write(
-        `${JSON.stringify({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Parse error' } })}\n`,
-      );
-    }
-  });
-
-  rl.on('close', () => {
-    process.exit(0);
-  });
-}
-
-main();
+  },
+});

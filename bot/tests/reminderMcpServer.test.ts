@@ -1,10 +1,11 @@
 // We test the MCP server by importing its handler logic indirectly through the storage layer,
 // and by spawning it as a child process to test the full stdio protocol.
-import { type ChildProcess, spawn } from 'node:child_process';
+import type { ChildProcess } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { initializeServer, sendAndReceive, spawnMcpServer as spawnServer } from './helpers/mcpTestHelpers';
 
 describe('Reminder MCP Server', () => {
   let testDir: string;
@@ -22,48 +23,13 @@ describe('Reminder MCP Server', () => {
   });
 
   function spawnMcpServer(env: Record<string, string> = {}): ChildProcess {
-    return spawn('npx', ['tsx', join(__dirname, '../src/reminderMcpServer.ts')], {
-      env: {
-        ...process.env,
-        DB_PATH: dbPath,
-        MCP_GROUP_ID: 'test-group-1',
-        MCP_SENDER: '+61400000000',
-        TZ: 'Australia/Sydney',
-        ...env,
-      },
-      stdio: ['pipe', 'pipe', 'pipe'],
+    return spawnServer('reminderMcpServer.ts', {
+      DB_PATH: dbPath,
+      MCP_GROUP_ID: 'test-group-1',
+      MCP_SENDER: '+61400000000',
+      TZ: 'Australia/Sydney',
+      ...env,
     });
-  }
-
-  async function sendAndReceive(proc: ChildProcess, message: object): Promise<Record<string, unknown>> {
-    return new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => reject(new Error('Timeout waiting for MCP response')), 10000);
-      const handler = (data: Buffer) => {
-        const line = data.toString().trim();
-        if (!line) return;
-        try {
-          const response = JSON.parse(line);
-          clearTimeout(timeout);
-          proc.stdout.removeListener('data', handler);
-          resolve(response);
-        } catch {
-          // partial data, wait for more
-        }
-      };
-      proc.stdout.on('data', handler);
-      proc.stdin.write(`${JSON.stringify(message)}\n`);
-    });
-  }
-
-  async function initializeServer(proc: ChildProcess): Promise<void> {
-    await sendAndReceive(proc, {
-      jsonrpc: '2.0',
-      id: 0,
-      method: 'initialize',
-      params: { protocolVersion: '2025-03-26', capabilities: {}, clientInfo: { name: 'test', version: '1.0' } },
-    });
-    // Send initialized notification (no response expected)
-    proc.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' })}\n`);
   }
 
   it('should respond to initialize request', async () => {

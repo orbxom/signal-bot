@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import { getErrorMessage } from './mcpServerBase';
 import type { ChatMessage, LLMResponse, MessageContext } from './types';
 
 interface ClaudeResultLine {
@@ -33,14 +34,19 @@ const MCP_TOOLS = [
 const ALLOWED_TOOLS = `${BASE_TOOLS},${MCP_TOOLS}`;
 
 // Resolve MCP server path for dev (tsx) vs production (compiled JS)
+const mcpPathCache = new Map<string, { command: string; args: string[] }>();
 function resolveMcpServerPath(name: string): { command: string; args: string[] } {
+  const cached = mcpPathCache.get(name);
+  if (cached) return cached;
   const jsPath = path.resolve(__dirname, `${name}.js`);
   const tsPath = path.resolve(__dirname, `${name}.ts`);
   const useTs = !fs.existsSync(jsPath) && fs.existsSync(tsPath);
-  return {
+  const result = {
     command: useTs ? 'npx' : 'node',
     args: useTs ? ['tsx', tsPath] : [jsPath],
   };
+  mcpPathCache.set(name, result);
+  return result;
 }
 
 function spawnPromise(
@@ -267,8 +273,7 @@ export class ClaudeCLIClient {
           throw new Error('Claude CLI not found. Install it: npm install -g @anthropic-ai/claude-code');
         }
       }
-      const msg = error instanceof Error ? error.message : 'Unknown error';
-      throw new Error(`Failed to generate response from Claude CLI: ${msg}`);
+      throw new Error(`Failed to generate response from Claude CLI: ${getErrorMessage(error)}`);
     }
   }
 }
