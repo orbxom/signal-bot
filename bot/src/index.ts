@@ -1,6 +1,5 @@
 import { ClaudeCLIClient } from './claudeClient';
 import { Config } from './config';
-import { broadcastToAllGroups } from './lifecycle';
 import { MessageHandler } from './messageHandler';
 import { ReminderScheduler } from './reminderScheduler';
 import { SignalClient } from './signalClient';
@@ -59,17 +58,6 @@ async function main() {
   // Wait for signal-cli to be ready
   console.log('Waiting for signal-cli...');
   await signalClient.waitForReady();
-
-  // Notify groups that the bot is online
-  try {
-    if (config.testChannelOnly) {
-      await signalClient.sendMessage(config.testGroupId, "I'm finished with my nap! (test channel only)");
-    } else {
-      await broadcastToAllGroups(signalClient, storage, config.timezone, "I'm finished with my nap!");
-    }
-  } catch (error) {
-    console.error('Error sending startup notification:', error);
-  }
 
   // Start polling loop
   console.log('Starting message polling...');
