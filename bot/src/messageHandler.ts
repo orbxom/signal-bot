@@ -43,11 +43,14 @@ export class MessageHandler {
   private llmClient?: ClaudeCLIClient;
   private signalClient?: SignalClient;
   private contextWindowSize: number;
+  private contextTokenBudget: number;
+  private messageRetentionCount: number;
   private timezone: string;
   private dbPath: string;
   private githubRepo: string;
   private sourceRoot: string;
   private processedMessages: Set<string> = new Set();
+  private timestampFormatter: Intl.DateTimeFormat;
 
   constructor(
     mentionTriggers: string[],
@@ -58,6 +61,8 @@ export class MessageHandler {
       llmClient?: ClaudeCLIClient;
       signalClient?: SignalClient;
       contextWindowSize?: number;
+      contextTokenBudget?: number;
+      messageRetentionCount?: number;
       timezone?: string;
       dbPath?: string;
       githubRepo?: string;
@@ -71,11 +76,56 @@ export class MessageHandler {
     this.storage = options?.storage;
     this.llmClient = options?.llmClient;
     this.signalClient = options?.signalClient;
-    this.contextWindowSize = options?.contextWindowSize || 20;
+    this.contextWindowSize = options?.contextWindowSize || 200;
+    this.contextTokenBudget = options?.contextTokenBudget || 4000;
+    this.messageRetentionCount = options?.messageRetentionCount || 1000;
     this.timezone = options?.timezone || 'Australia/Sydney';
     this.dbPath = options?.dbPath || './data/bot.db';
     this.githubRepo = options?.githubRepo || '';
     this.sourceRoot = options?.sourceRoot || '';
+    this.timestampFormatter = new Intl.DateTimeFormat('en-CA', {
+      timeZone: this.timezone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    });
+  }
+
+  private formatTimestamp(timestamp: number): string {
+    const date = new Date(timestamp);
+    const parts = this.timestampFormatter.formatToParts(date);
+    const get = (type: string) => parts.find(p => p.type === type)?.value || '';
+    return `${get('year')}-${get('month')}-${get('day')} ${get('hour')}:${get('minute')}`;
+  }
+
+  private formatMessageForContext(msg: Message): string {
+    const ts = this.formatTimestamp(msg.timestamp);
+    if (msg.isBot) {
+      return `[${ts}] ${msg.content}`;
+    }
+    return `[${ts}] ${msg.sender}: ${msg.content}`;
+  }
+
+  private fitToTokenBudget(messages: Message[]): Message[] {
+    let totalTokens = 0;
+    let cutoffIndex = messages.length;
+
+    // Walk from newest to oldest
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const formatted = this.formatMessageForContext(messages[i]);
+      const tokens = Math.ceil(formatted.length / 4);
+      if (totalTokens + tokens > this.contextTokenBudget) {
+        cutoffIndex = i + 1;
+        break;
+      }
+      totalTokens += tokens;
+      cutoffIndex = i;
+    }
+
+    return messages.slice(cutoffIndex);
   }
 
   isMentioned(content: string): boolean {
@@ -146,17 +196,10 @@ export class MessageHandler {
     const contextMessages: ChatMessage[] = [{ role: 'system', content: systemContent }];
 
     for (const msg of history) {
-      if (msg.isBot) {
-        contextMessages.push({
-          role: 'assistant',
-          content: msg.content,
-        });
-      } else {
-        contextMessages.push({
-          role: 'user',
-          content: `${msg.sender}: ${msg.content}`,
-        });
-      }
+      contextMessages.push({
+        role: msg.isBot ? 'assistant' : 'user',
+        content: this.formatMessageForContext(msg),
+      });
     }
 
     contextMessages.push({
@@ -194,7 +237,8 @@ export class MessageHandler {
     // Get conversation history before storing current message (avoids duplication in context)
     let history: Message[] = [];
     if (mentioned) {
-      history = this.storage.getRecentMessages(groupId, this.contextWindowSize - 1);
+      const batch = this.storage.getRecentMessages(groupId, this.contextWindowSize);
+      history = this.fitToTokenBudget(batch);
     }
 
     // Store incoming message
@@ -273,7 +317,7 @@ export class MessageHandler {
       });
 
       // Trim old messages
-      this.storage.trimMessages(groupId, this.contextWindowSize);
+      this.storage.trimMessages(groupId, this.messageRetentionCount);
 
       console.log(`[${groupId}] Responded to ${sender} (${response.tokensUsed} tokens)`);
     } catch (error) {

@@ -25,6 +25,9 @@ export class Storage {
     insert: Database.Statement;
     selectRecent: Database.Statement;
     trim: Database.Statement;
+    searchMessages: Database.Statement;
+    searchMessagesWithSender: Database.Statement;
+    getMessagesByDateRange: Database.Statement;
     insertReminder: Database.Statement;
     selectDueReminders: Database.Statement;
     markReminderSent: Database.Statement;
@@ -64,6 +67,33 @@ export class Storage {
             ORDER BY timestamp DESC
             LIMIT ?
           )
+        `),
+        searchMessages: this.db.prepare(`
+          SELECT * FROM messages
+          WHERE groupId = ?
+            AND content LIKE ? ESCAPE '\\'
+            AND timestamp >= ?
+            AND timestamp <= ?
+          ORDER BY timestamp ASC
+          LIMIT ?
+        `),
+        searchMessagesWithSender: this.db.prepare(`
+          SELECT * FROM messages
+          WHERE groupId = ?
+            AND content LIKE ? ESCAPE '\\'
+            AND sender = ?
+            AND timestamp >= ?
+            AND timestamp <= ?
+          ORDER BY timestamp ASC
+          LIMIT ?
+        `),
+        getMessagesByDateRange: this.db.prepare(`
+          SELECT * FROM messages
+          WHERE groupId = ?
+            AND timestamp >= ?
+            AND timestamp <= ?
+          ORDER BY timestamp ASC
+          LIMIT ?
         `),
         insertReminder: this.db.prepare(`
           INSERT INTO reminders (groupId, requester, reminderText, dueAt, status, retryCount, createdAt)
@@ -250,6 +280,91 @@ export class Storage {
       return rows.map(row => row.groupId);
     } catch (error) {
       wrapSqliteError(error, 'get distinct group IDs');
+    }
+  }
+
+  searchMessages(
+    groupId: string,
+    keyword: string,
+    options?: { sender?: string; startTimestamp?: number; endTimestamp?: number; limit?: number },
+  ): Message[] {
+    this.ensureOpen();
+    if (!groupId || groupId.trim() === '') {
+      throw new Error('Invalid groupId: cannot be empty');
+    }
+    if (!keyword || keyword.trim() === '') {
+      throw new Error('Invalid keyword: cannot be empty');
+    }
+
+    const limit = options?.limit ?? 100;
+    if (limit <= 0) {
+      throw new Error('Invalid limit: must be greater than zero');
+    }
+
+    const startTimestamp = options?.startTimestamp ?? 0;
+    const endTimestamp = options?.endTimestamp ?? Number.MAX_SAFE_INTEGER;
+
+    // Escape SQL LIKE special characters, then wrap in wildcards
+    const escapedKeyword = keyword.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
+    const pattern = `%${escapedKeyword}%`;
+
+    try {
+      const stmt = options?.sender ? this.stmts.searchMessagesWithSender : this.stmts.searchMessages;
+      const params = options?.sender
+        ? [groupId, pattern, options.sender, startTimestamp, endTimestamp, limit]
+        : [groupId, pattern, startTimestamp, endTimestamp, limit];
+
+      const rows = stmt.all(...params) as Array<{
+        id: number;
+        groupId: string;
+        sender: string;
+        content: string;
+        timestamp: number;
+        isBot: number;
+      }>;
+      return rows.map(row => ({
+        id: row.id,
+        groupId: row.groupId,
+        sender: row.sender,
+        content: row.content,
+        timestamp: row.timestamp,
+        isBot: row.isBot === 1,
+      }));
+    } catch (error) {
+      wrapSqliteError(error, 'search messages');
+    }
+  }
+
+  getMessagesByDateRange(groupId: string, startTs: number, endTs: number, limit?: number): Message[] {
+    this.ensureOpen();
+    if (!groupId || groupId.trim() === '') {
+      throw new Error('Invalid groupId: cannot be empty');
+    }
+
+    const effectiveLimit = limit ?? 200;
+    if (effectiveLimit <= 0) {
+      throw new Error('Invalid limit: must be greater than zero');
+    }
+
+    try {
+      const rows = this.stmts.getMessagesByDateRange.all(groupId, startTs, endTs, effectiveLimit) as Array<{
+        id: number;
+        groupId: string;
+        sender: string;
+        content: string;
+        timestamp: number;
+        isBot: number;
+      }>;
+      return rows.map(row => ({
+        id: row.id,
+        groupId: row.groupId,
+        sender: row.sender,
+        content: row.content,
+        timestamp: row.timestamp,
+        isBot: row.isBot === 1,
+      }));
+    } catch (error) {
+      wrapSqliteError(error, 'get messages by date range');
     }
   }
 
