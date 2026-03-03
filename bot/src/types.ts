@@ -15,6 +15,8 @@ export interface ChatMessage {
 export interface LLMResponse {
   content: string;
   tokensUsed: number;
+  sentViaMcp: boolean;
+  mcpMessages: string[];
 }
 
 export type ReminderStatus = 'pending' | 'sent' | 'cancelled' | 'failed';

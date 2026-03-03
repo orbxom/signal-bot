@@ -246,12 +246,27 @@ export class ClaudeCLIClient {
         }
       }
 
-      // Single pass: find result line and last assistant entry
+      // Single pass: find result line, last assistant entry, and MCP send_message calls
       let resultLine: ClaudeResultLine | undefined;
       let lastAssistant: { message?: { content?: Array<{ type: string; text?: string }> } } | undefined;
+      const mcpMessages: string[] = [];
       for (const e of entries) {
         if (e.type === 'result') resultLine = e as unknown as ClaudeResultLine;
         if (e.type === 'assistant') lastAssistant = e as unknown as typeof lastAssistant;
+
+        // Detect send_message MCP tool calls
+        if (e.type === 'assistant') {
+          const msg = e as unknown as {
+            message?: {
+              content?: Array<{ type: string; name?: string; input?: { message?: string } }>;
+            };
+          };
+          for (const block of msg.message?.content || []) {
+            if (block.type === 'tool_use' && block.name === 'mcp__signal__send_message' && block.input?.message) {
+              mcpMessages.push(block.input.message);
+            }
+          }
+        }
       }
 
       if (!resultLine) {
@@ -293,6 +308,8 @@ export class ClaudeCLIClient {
       return {
         content,
         tokensUsed: resultLine.usage?.output_tokens || 0,
+        sentViaMcp: mcpMessages.length > 0,
+        mcpMessages,
       };
     } catch (error) {
       if (error instanceof Error) {

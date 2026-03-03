@@ -465,6 +465,59 @@ describe('ClaudeCLIClient', () => {
       expect(mcpConfig.mcpServers.dossiers.env.MCP_SENDER).toBe('+61400000000');
     });
 
+    it('should detect when messages were sent via MCP signal tool', async () => {
+      const output = [
+        JSON.stringify({ type: 'system', subtype: 'init', session_id: 'test' }),
+        JSON.stringify({
+          type: 'assistant',
+          message: {
+            content: [
+              {
+                type: 'tool_use',
+                name: 'mcp__signal__send_message',
+                input: { message: 'Looking into it...' },
+              },
+            ],
+          },
+        }),
+        JSON.stringify({
+          type: 'assistant',
+          message: {
+            content: [
+              {
+                type: 'tool_use',
+                name: 'mcp__signal__send_message',
+                input: { message: 'Here is the answer!' },
+              },
+            ],
+          },
+        }),
+        JSON.stringify({
+          type: 'result',
+          is_error: false,
+          result: 'Here is the answer!',
+          usage: { output_tokens: 20 },
+        }),
+      ].join('\n');
+      mockSpawnSuccess(output);
+
+      const client = new ClaudeCLIClient();
+      const result = await client.generateResponse([{ role: 'user', content: 'Hi' }]);
+
+      expect(result.sentViaMcp).toBe(true);
+      expect(result.mcpMessages).toEqual(['Looking into it...', 'Here is the answer!']);
+    });
+
+    it('should set sentViaMcp to false when no signal tool calls', async () => {
+      mockSpawnSuccess(makeResultOutput('Simple response'));
+
+      const client = new ClaudeCLIClient();
+      const result = await client.generateResponse([{ role: 'user', content: 'Hi' }]);
+
+      expect(result.sentViaMcp).toBe(false);
+      expect(result.mcpMessages).toEqual([]);
+    });
+
     it('should parse JSON array output format', async () => {
       const output = JSON.stringify([
         { type: 'system', subtype: 'init', session_id: 'test' },
