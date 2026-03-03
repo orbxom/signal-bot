@@ -54,6 +54,7 @@ export class MessageHandler {
   private whisperModelPath: string;
   private processedMessages: Set<string> = new Set();
   private timestampFormatter: Intl.DateTimeFormat;
+  private isoFormatter: Intl.DateTimeFormat;
 
   constructor(
     mentionTriggers: string[],
@@ -101,6 +102,17 @@ export class MessageHandler {
       minute: '2-digit',
       hour12: false,
     });
+    this.isoFormatter = new Intl.DateTimeFormat('en-CA', {
+      timeZone: this.timezone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+      timeZoneName: 'shortOffset',
+    });
   }
 
   private formatTimestamp(timestamp: number): string {
@@ -108,6 +120,12 @@ export class MessageHandler {
     const parts = this.timestampFormatter.formatToParts(date);
     const get = (type: string) => parts.find(p => p.type === type)?.value || '';
     return `${get('year')}-${get('month')}-${get('day')} ${get('hour')}:${get('minute')}`;
+  }
+
+  private formatVoiceAttachmentLines(attachments: SignalAttachment[]): string[] {
+    return attachments
+      .filter(a => a.contentType.startsWith('audio/'))
+      .map(a => `[Voice message attached: ${path.join(this.attachmentsDir, a.id)}]`);
   }
 
   private formatMessageForContext(msg: Message): string {
@@ -118,11 +136,9 @@ export class MessageHandler {
     } else {
       content = `[${ts}] ${msg.sender}: ${msg.content}`;
     }
-    // Surface voice attachments from history so Claude can reference them
-    const voiceAttachments = msg.attachments?.filter(a => a.contentType.startsWith('audio/'));
-    if (voiceAttachments?.length) {
-      const lines = voiceAttachments.map(a => `[Voice message attached: ${path.join(this.attachmentsDir, a.id)}]`);
-      content = content ? `${content}\n${lines.join('\n')}` : lines.join('\n');
+    const voiceLines = msg.attachments ? this.formatVoiceAttachmentLines(msg.attachments) : [];
+    if (voiceLines.length) {
+      content = content ? `${content}\n${voiceLines.join('\n')}` : voiceLines.join('\n');
     }
     return content;
   }
@@ -176,22 +192,12 @@ export class MessageHandler {
     dossierContext?: string,
     personaPrompt?: string,
   ): ChatMessage[] {
-    let systemContent = personaPrompt || this.systemPrompt;
+    const effectivePrompt = personaPrompt || this.systemPrompt;
+    let systemContent: string;
 
     if (groupId && sender) {
       const now = new Date();
-      // Build a proper ISO 8601 string with timezone offset
-      const parts = new Intl.DateTimeFormat('en-CA', {
-        timeZone: this.timezone,
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        hour12: false,
-        timeZoneName: 'shortOffset',
-      }).formatToParts(now);
+      const parts = this.isoFormatter.formatToParts(now);
       const get = (type: string) => parts.find(p => p.type === type)?.value || '';
       const offset = get('timeZoneName').replace('GMT', '') || '+00:00';
       const isoString = `${get('year')}-${get('month')}-${get('day')}T${get('hour')}:${get('minute')}:${get('second')}${offset}`;
@@ -206,12 +212,13 @@ export class MessageHandler {
         `When a voice message is attached (shown as [Voice message attached: <path>] in the conversation), use the transcribe_audio tool to transcribe it, then respond to the transcribed content as if the user had typed it. Voice messages may appear in the current message or in recent conversation history.`,
       ].join('\n');
 
-      const effectivePrompt = personaPrompt || this.systemPrompt;
       if (dossierContext) {
         systemContent = `${timeContext}\n\n${dossierContext}\n\n${PERSONA_SAFETY_PROMPT}\n\n${effectivePrompt}`;
       } else {
         systemContent = `${timeContext}\n\n${PERSONA_SAFETY_PROMPT}\n\n${effectivePrompt}`;
       }
+    } else {
+      systemContent = effectivePrompt;
     }
 
     const contextMessages: ChatMessage[] = [{ role: 'system', content: systemContent }];
@@ -302,18 +309,16 @@ export class MessageHandler {
       // Extract query
       const query = this.extractQuery(content);
 
-      // Filter voice attachments and append info to query
-      const voiceAttachments = attachments.filter(a => a.contentType.startsWith('audio/'));
+      // Append voice attachment info to query
+      const voiceLines = this.formatVoiceAttachmentLines(attachments);
       let queryWithAttachments = query;
-      if (voiceAttachments.length > 0) {
-        const attachmentLines = voiceAttachments.map(
-          a => `[Voice message attached: ${path.join(this.attachmentsDir, a.id)}]`,
-        );
-        queryWithAttachments = query ? `${query}\n\n${attachmentLines.join('\n')}` : attachmentLines.join('\n');
+      if (voiceLines.length > 0) {
+        const voiceBlock = voiceLines.join('\n');
+        queryWithAttachments = query ? `${query}\n\n${voiceBlock}` : voiceBlock;
       }
 
-      // Load dossiers for context injection
-      let dossierContext = '';
+      // Build additional system context (dossiers + skills)
+      const contextParts: string[] = [];
       const dossiers = this.storage.getDossiersByGroup(groupId);
       if (dossiers.length > 0) {
         const entries = dossiers.map(d => {
@@ -321,13 +326,11 @@ export class MessageHandler {
           if (d.notes) parts.push(`  ${d.notes}`);
           return parts.join('\n');
         });
-        dossierContext = `## People in this group\n${entries.join('\n')}`;
+        contextParts.push(`## People in this group\n${entries.join('\n')}`);
       }
-
-      // Load skill instructions
       const skillContent = loadSkillContent();
       if (skillContent) {
-        dossierContext = dossierContext ? `${dossierContext}\n\n${skillContent}` : skillContent;
+        contextParts.push(skillContent);
       }
 
       // Look up active persona for this group
@@ -335,7 +338,8 @@ export class MessageHandler {
       const personaPrompt = activePersona?.description;
 
       // Build context
-      const messages = this.buildContext(history, queryWithAttachments, groupId, sender, dossierContext, personaPrompt);
+      const additionalContext = contextParts.join('\n\n') || undefined;
+      const messages = this.buildContext(history, queryWithAttachments, groupId, sender, additionalContext, personaPrompt);
 
       // Get LLM response
       const response = await this.llmClient.generateResponse(messages, {
@@ -351,12 +355,13 @@ export class MessageHandler {
         whisperModelPath: this.whisperModelPath,
       });
 
+      const botSender = this.botPhoneNumber || 'bot';
       if (response.sentViaMcp) {
         // Claude sent messages directly — store each one
         for (const mcpMsg of response.mcpMessages) {
           this.storage.addMessage({
             groupId,
-            sender: this.botPhoneNumber || 'bot',
+            sender: botSender,
             content: mcpMsg,
             timestamp: Date.now(),
             isBot: true,
@@ -367,7 +372,7 @@ export class MessageHandler {
         await this.signalClient.sendMessage(groupId, response.content);
         this.storage.addMessage({
           groupId,
-          sender: this.botPhoneNumber || 'bot',
+          sender: botSender,
           content: response.content,
           timestamp: Date.now(),
           isBot: true,
