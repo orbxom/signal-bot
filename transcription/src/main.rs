@@ -1,3 +1,5 @@
+mod audio;
+
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::io::{self, BufRead, Write};
