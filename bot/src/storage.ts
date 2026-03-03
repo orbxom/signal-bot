@@ -1,8 +1,13 @@
 import Database from 'better-sqlite3';
 import { estimateTokens } from './mcpServerBase';
-import type { Dossier, Message, Reminder, ReminderStatus } from './types';
+import type { Dossier, Message, Persona, Reminder, ReminderStatus } from './types';
 
 export const DOSSIER_TOKEN_LIMIT = 1000;
+export const PERSONA_DESCRIPTION_TOKEN_LIMIT = 2000;
+
+const DEFAULT_PERSONA_NAME = 'Default Assistant';
+const DEFAULT_PERSONA_DESCRIPTION =
+  'You are a helpful family assistant in a Signal group chat. Be friendly, concise, and helpful. Keep responses under a few sentences unless asked for detail.';
 
 function wrapSqliteError(error: unknown, operation: string): never {
   if (error instanceof Error) {
@@ -40,6 +45,17 @@ export class Storage {
     getDossiersByGroup: Database.Statement;
     deleteDossier: Database.Statement;
     getDistinctGroupIds: Database.Statement;
+    createPersona: Database.Statement;
+    getPersona: Database.Statement;
+    getPersonaByName: Database.Statement;
+    listPersonas: Database.Statement;
+    updatePersona: Database.Statement;
+    deletePersona: Database.Statement;
+    getDefaultPersona: Database.Statement;
+    setActivePersona: Database.Statement;
+    getActivePersona: Database.Statement;
+    clearActivePersona: Database.Statement;
+    clearActivePersonasByPersonaId: Database.Statement;
   };
 
   constructor(dbPath: string) {
@@ -143,6 +159,47 @@ export class Storage {
         getDistinctGroupIds: this.db.prepare(`
           SELECT DISTINCT groupId FROM messages
         `),
+        createPersona: this.db.prepare(`
+          INSERT INTO personas (name, description, tags, isDefault, createdAt, updatedAt)
+          VALUES (?, ?, ?, 0, ?, ?)
+        `),
+        getPersona: this.db.prepare(`
+          SELECT * FROM personas WHERE id = ?
+        `),
+        getPersonaByName: this.db.prepare(`
+          SELECT * FROM personas WHERE name = ? COLLATE NOCASE
+        `),
+        listPersonas: this.db.prepare(`
+          SELECT * FROM personas ORDER BY name ASC
+        `),
+        updatePersona: this.db.prepare(`
+          UPDATE personas SET name = ?, description = ?, tags = ?, updatedAt = ?
+          WHERE id = ?
+        `),
+        deletePersona: this.db.prepare(`
+          DELETE FROM personas WHERE id = ? AND isDefault = 0
+        `),
+        getDefaultPersona: this.db.prepare(`
+          SELECT * FROM personas WHERE isDefault = 1 LIMIT 1
+        `),
+        setActivePersona: this.db.prepare(`
+          INSERT INTO active_personas (groupId, personaId, activatedAt)
+          VALUES (?, ?, ?)
+          ON CONFLICT(groupId) DO UPDATE SET
+            personaId = excluded.personaId,
+            activatedAt = excluded.activatedAt
+        `),
+        getActivePersona: this.db.prepare(`
+          SELECT p.* FROM personas p
+          INNER JOIN active_personas ap ON ap.personaId = p.id
+          WHERE ap.groupId = ?
+        `),
+        clearActivePersona: this.db.prepare(`
+          DELETE FROM active_personas WHERE groupId = ?
+        `),
+        clearActivePersonasByPersonaId: this.db.prepare(`
+          DELETE FROM active_personas WHERE personaId = ?
+        `),
       };
     } catch (error) {
       if (error instanceof Error && error.message.includes('EACCES')) {
@@ -200,7 +257,40 @@ export class Storage {
 
         CREATE INDEX IF NOT EXISTS idx_dossiers_group
         ON dossiers(groupId);
+
+        CREATE TABLE IF NOT EXISTS personas (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL,
+          description TEXT NOT NULL,
+          tags TEXT NOT NULL DEFAULT '',
+          isDefault INTEGER NOT NULL DEFAULT 0,
+          createdAt INTEGER NOT NULL,
+          updatedAt INTEGER NOT NULL
+        );
+
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_personas_name
+        ON personas(name COLLATE NOCASE);
+
+        CREATE TABLE IF NOT EXISTS active_personas (
+          groupId TEXT NOT NULL PRIMARY KEY,
+          personaId INTEGER NOT NULL,
+          activatedAt INTEGER NOT NULL,
+          FOREIGN KEY (personaId) REFERENCES personas(id)
+        );
       `);
+
+      // Seed default persona if none exists
+      const existing = this.db
+        .prepare('SELECT id FROM personas WHERE name = ? COLLATE NOCASE')
+        .get(DEFAULT_PERSONA_NAME);
+      if (!existing) {
+        const now = Date.now();
+        this.db
+          .prepare(
+            'INSERT INTO personas (name, description, tags, isDefault, createdAt, updatedAt) VALUES (?, ?, ?, 1, ?, ?)',
+          )
+          .run(DEFAULT_PERSONA_NAME, DEFAULT_PERSONA_DESCRIPTION, 'default,family,helpful', now, now);
+      }
     } catch (error) {
       wrapSqliteError(error, 'create tables');
     }
@@ -512,6 +602,145 @@ export class Storage {
       return result.changes > 0;
     } catch (error) {
       wrapSqliteError(error, 'delete dossier');
+    }
+  }
+
+  createPersona(name: string, description: string, tags: string): Persona {
+    this.ensureOpen();
+    if (!name || name.trim() === '') {
+      throw new Error('Invalid name: cannot be empty');
+    }
+    if (!description || description.trim() === '') {
+      throw new Error('Invalid description: cannot be empty');
+    }
+    if (estimateTokens(description) > PERSONA_DESCRIPTION_TOKEN_LIMIT) {
+      throw new Error(`Description exceeds token limit of ${PERSONA_DESCRIPTION_TOKEN_LIMIT} tokens`);
+    }
+
+    try {
+      const now = Date.now();
+      const result = this.stmts.createPersona.run(name, description, tags, now, now);
+      return {
+        id: Number(result.lastInsertRowid),
+        name,
+        description,
+        tags,
+        isDefault: 0,
+        createdAt: now,
+        updatedAt: now,
+      };
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('UNIQUE constraint failed')) {
+        throw new Error(`Persona with name "${name}" already exists`);
+      }
+      wrapSqliteError(error, 'create persona');
+    }
+  }
+
+  getPersona(id: number): Persona | null {
+    this.ensureOpen();
+    try {
+      const row = this.stmts.getPersona.get(id) as Persona | undefined;
+      return row ?? null;
+    } catch (error) {
+      wrapSqliteError(error, 'get persona');
+    }
+  }
+
+  getPersonaByName(name: string): Persona | null {
+    this.ensureOpen();
+    try {
+      const row = this.stmts.getPersonaByName.get(name) as Persona | undefined;
+      return row ?? null;
+    } catch (error) {
+      wrapSqliteError(error, 'get persona by name');
+    }
+  }
+
+  listPersonas(): Persona[] {
+    this.ensureOpen();
+    try {
+      return this.stmts.listPersonas.all() as Persona[];
+    } catch (error) {
+      wrapSqliteError(error, 'list personas');
+    }
+  }
+
+  updatePersona(id: number, name: string, description: string, tags: string): boolean {
+    this.ensureOpen();
+    if (!name || name.trim() === '') {
+      throw new Error('Invalid name: cannot be empty');
+    }
+    if (!description || description.trim() === '') {
+      throw new Error('Invalid description: cannot be empty');
+    }
+    if (estimateTokens(description) > PERSONA_DESCRIPTION_TOKEN_LIMIT) {
+      throw new Error(`Description exceeds token limit of ${PERSONA_DESCRIPTION_TOKEN_LIMIT} tokens`);
+    }
+
+    try {
+      const now = Date.now();
+      const result = this.stmts.updatePersona.run(name, description, tags, now, id);
+      return result.changes > 0;
+    } catch (error) {
+      wrapSqliteError(error, 'update persona');
+    }
+  }
+
+  deletePersona(id: number): boolean {
+    this.ensureOpen();
+
+    try {
+      // Clean up any active_personas references first
+      this.stmts.clearActivePersonasByPersonaId.run(id);
+      const result = this.stmts.deletePersona.run(id);
+      return result.changes > 0;
+    } catch (error) {
+      wrapSqliteError(error, 'delete persona');
+    }
+  }
+
+  getDefaultPersona(): Persona | null {
+    this.ensureOpen();
+    try {
+      const row = this.stmts.getDefaultPersona.get() as Persona | undefined;
+      return row ?? null;
+    } catch (error) {
+      wrapSqliteError(error, 'get default persona');
+    }
+  }
+
+  setActivePersona(groupId: string, personaId: number): void {
+    this.ensureOpen();
+    if (!groupId || groupId.trim() === '') {
+      throw new Error('Invalid groupId: cannot be empty');
+    }
+
+    try {
+      this.stmts.setActivePersona.run(groupId, personaId, Date.now());
+    } catch (error) {
+      wrapSqliteError(error, 'set active persona');
+    }
+  }
+
+  getActivePersonaForGroup(groupId: string): Persona | null {
+    this.ensureOpen();
+    try {
+      const row = this.stmts.getActivePersona.get(groupId) as Persona | undefined;
+      if (row) return row;
+      // Fall back to default persona
+      return this.getDefaultPersona();
+    } catch (error) {
+      wrapSqliteError(error, 'get active persona for group');
+    }
+  }
+
+  clearActivePersona(groupId: string): void {
+    this.ensureOpen();
+    try {
+      this.stmts.clearActivePersona.run(groupId);
+    } catch (error) {
+      wrapSqliteError(error, 'clear active persona');
     }
   }
 

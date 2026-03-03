@@ -41,6 +41,22 @@ export interface Dossier {
   updatedAt: number;
 }
 
+export interface Persona {
+  id: number;
+  name: string;
+  description: string;
+  tags: string;
+  isDefault: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface ActivePersona {
+  groupId: string;
+  personaId: number;
+  activatedAt: number;
+}
+
 export interface MessageContext {
   groupId: string;
   sender: string;

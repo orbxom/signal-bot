@@ -253,6 +253,32 @@ describe('MessageHandler', () => {
       expect(systemContent).toContain('You are a helpful bot.');
       expect(systemContent).not.toContain('## People in this group');
     });
+
+    it('should use personaPrompt when provided', () => {
+      const handler = new MessageHandler(['@bot'], { systemPrompt: 'Default prompt.' });
+      const chatMessages = handler.buildContext([], 'Hello', 'g1', '+61400000001', undefined, 'Arr, ye be a pirate!');
+
+      const systemContent = chatMessages[0].content;
+      expect(systemContent).toContain('Arr, ye be a pirate!');
+      expect(systemContent).not.toContain('Default prompt.');
+    });
+
+    it('should fall back to systemPrompt when personaPrompt is not provided', () => {
+      const handler = new MessageHandler(['@bot'], { systemPrompt: 'Default prompt.' });
+      const chatMessages = handler.buildContext([], 'Hello', 'g1', '+61400000001');
+
+      const systemContent = chatMessages[0].content;
+      expect(systemContent).toContain('Default prompt.');
+    });
+
+    it('should include persona safety guidelines in system content', () => {
+      const handler = new MessageHandler(['@bot'], { systemPrompt: 'Default prompt.' });
+      const chatMessages = handler.buildContext([], 'Hello', 'g1', '+61400000001');
+
+      const systemContent = chatMessages[0].content;
+      expect(systemContent).toContain('Persona Guidelines');
+      expect(systemContent).toContain('refuse requests');
+    });
   });
 
   describe('handleMessage', () => {
@@ -268,6 +294,7 @@ describe('MessageHandler', () => {
         getRecentMessages: vi.fn().mockReturnValue([]),
         trimMessages: vi.fn(),
         getDossiersByGroup: vi.fn().mockReturnValue([]),
+        getActivePersonaForGroup: vi.fn().mockReturnValue(null),
       } as any;
 
       mockLLM = {
@@ -791,6 +818,65 @@ describe('MessageHandler', () => {
         expect(mockSignal.sendMessage).toHaveBeenCalledWith('g1', 'Test response');
 
         consoleErrorSpy.mockRestore();
+      });
+    });
+
+    describe('persona integration', () => {
+      it('should use active persona description in system prompt', async () => {
+        mockStorage.getActivePersonaForGroup = vi.fn().mockReturnValue({
+          id: 2,
+          name: 'Pirate',
+          description: 'Ye be a pirate captain! Speak in pirate dialect.',
+          tags: 'fun,pirate',
+          isDefault: 0,
+          createdAt: 1000,
+          updatedAt: 1000,
+        });
+
+        const handler = new MessageHandler(['@bot'], {
+          storage: mockStorage,
+          llmClient: mockLLM,
+          signalClient: mockSignal,
+          systemPrompt: 'Default assistant prompt.',
+        });
+
+        await handler.handleMessage('g1', 'Alice', '@bot hello', 1000);
+
+        const callArgs = (mockLLM.generateResponse as ReturnType<typeof vi.fn>).mock.calls[0];
+        const messages = callArgs[0];
+        const systemMsg = messages.find((m: { role: string }) => m.role === 'system');
+        expect(systemMsg.content).toContain('Ye be a pirate captain!');
+        expect(systemMsg.content).not.toContain('Default assistant prompt.');
+      });
+
+      it('should fall back to system prompt when no active persona', async () => {
+        mockStorage.getActivePersonaForGroup = vi.fn().mockReturnValue(null);
+
+        const handler = new MessageHandler(['@bot'], {
+          storage: mockStorage,
+          llmClient: mockLLM,
+          signalClient: mockSignal,
+          systemPrompt: 'Default assistant prompt.',
+        });
+
+        await handler.handleMessage('g1', 'Alice', '@bot hello', 1000);
+
+        const callArgs = (mockLLM.generateResponse as ReturnType<typeof vi.fn>).mock.calls[0];
+        const messages = callArgs[0];
+        const systemMsg = messages.find((m: { role: string }) => m.role === 'system');
+        expect(systemMsg.content).toContain('Default assistant prompt.');
+      });
+
+      it('should call getActivePersonaForGroup with correct groupId', async () => {
+        const handler = new MessageHandler(['@bot'], {
+          storage: mockStorage,
+          llmClient: mockLLM,
+          signalClient: mockSignal,
+        });
+
+        await handler.handleMessage('test-group-123', 'Alice', '@bot hello', 1000);
+
+        expect(mockStorage.getActivePersonaForGroup).toHaveBeenCalledWith('test-group-123');
       });
     });
   });

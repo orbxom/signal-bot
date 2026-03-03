@@ -32,6 +32,12 @@ const MCP_TOOLS = [
   'mcp__sourcecode__search_code',
   'mcp__history__search_messages',
   'mcp__history__get_messages_by_date',
+  'mcp__personas__create_persona',
+  'mcp__personas__get_persona',
+  'mcp__personas__list_personas',
+  'mcp__personas__update_persona',
+  'mcp__personas__delete_persona',
+  'mcp__personas__switch_persona',
 ].join(',');
 const ALLOWED_TOOLS = `${BASE_TOOLS},${MCP_TOOLS}`;
 
@@ -141,6 +147,7 @@ export class ClaudeCLIClient {
       const dossiers = resolveMcpServerPath('dossierMcpServer');
       const sourcecode = resolveMcpServerPath('sourceCodeMcpServer');
       const history = resolveMcpServerPath('messageHistoryMcpServer');
+      const personas = resolveMcpServerPath('personaMcpServer');
       const mcpConfig = JSON.stringify({
         mcpServers: {
           reminders: {
@@ -191,6 +198,15 @@ export class ClaudeCLIClient {
               DB_PATH: context.dbPath,
               MCP_GROUP_ID: context.groupId,
               TZ: context.timezone,
+            },
+          },
+          personas: {
+            command: personas.command,
+            args: personas.args,
+            env: {
+              DB_PATH: context.dbPath,
+              MCP_GROUP_ID: context.groupId,
+              MCP_SENDER: context.sender,
             },
           },
         },
