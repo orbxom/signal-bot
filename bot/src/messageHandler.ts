@@ -5,19 +5,6 @@ import type { SignalClient } from './signalClient';
 import type { Storage } from './storage';
 import type { ChatMessage, Message } from './types';
 
-export const ACK_MESSAGES = [
-  "Beep boop, I'm on it!",
-  'On it!',
-  'Processing... bzzzt...',
-  'One moment while I consult my circuits...',
-  'Hold tight, thinking...',
-  'Crunching the numbers...',
-  'Warming up the brain cells...',
-  'Roger that, working on it...',
-  'Copy that, stand by...',
-  'Firing up the neural networks...',
-];
-
 let cachedSkillContent: string | null = null;
 
 function loadSkillContent(): string {
@@ -49,6 +36,7 @@ export class MessageHandler {
   private dbPath: string;
   private githubRepo: string;
   private sourceRoot: string;
+  private signalCliUrl: string;
   private processedMessages: Set<string> = new Set();
   private timestampFormatter: Intl.DateTimeFormat;
 
@@ -67,6 +55,7 @@ export class MessageHandler {
       dbPath?: string;
       githubRepo?: string;
       sourceRoot?: string;
+      signalCliUrl?: string;
     },
   ) {
     this.mentionTriggers = mentionTriggers;
@@ -83,6 +72,7 @@ export class MessageHandler {
     this.dbPath = options?.dbPath || './data/bot.db';
     this.githubRepo = options?.githubRepo || '';
     this.sourceRoot = options?.sourceRoot || '';
+    this.signalCliUrl = options?.signalCliUrl || '';
     this.timestampFormatter = new Intl.DateTimeFormat('en-CA', {
       timeZone: this.timezone,
       year: 'numeric',
@@ -254,14 +244,6 @@ export class MessageHandler {
       return;
     }
 
-    // Send acknowledgement (failure won't block response)
-    try {
-      const ackIndex = Math.floor(Math.random() * ACK_MESSAGES.length);
-      await this.signalClient.sendMessage(groupId, ACK_MESSAGES[ackIndex]);
-    } catch (ackError) {
-      console.error('Failed to send acknowledgement:', ackError);
-    }
-
     // Start typing indicator (failure won't block response)
     try {
       await this.signalClient.sendTyping(groupId);
@@ -302,19 +284,32 @@ export class MessageHandler {
         timezone: this.timezone,
         githubRepo: this.githubRepo,
         sourceRoot: this.sourceRoot,
+        signalCliUrl: this.signalCliUrl,
+        botPhoneNumber: this.botPhoneNumber,
       });
 
-      // Send response
-      await this.signalClient.sendMessage(groupId, response.content);
-
-      // Store bot response
-      this.storage.addMessage({
-        groupId,
-        sender: this.botPhoneNumber || 'bot',
-        content: response.content,
-        timestamp: Date.now(),
-        isBot: true,
-      });
+      if (response.sentViaMcp) {
+        // Claude sent messages directly — store each one
+        for (const mcpMsg of response.mcpMessages) {
+          this.storage.addMessage({
+            groupId,
+            sender: this.botPhoneNumber || 'bot',
+            content: mcpMsg,
+            timestamp: Date.now(),
+            isBot: true,
+          });
+        }
+      } else {
+        // Fallback: Claude didn't use the MCP tool, send result as before
+        await this.signalClient.sendMessage(groupId, response.content);
+        this.storage.addMessage({
+          groupId,
+          sender: this.botPhoneNumber || 'bot',
+          content: response.content,
+          timestamp: Date.now(),
+          isBot: true,
+        });
+      }
 
       // Trim old messages
       this.storage.trimMessages(groupId, this.messageRetentionCount);
