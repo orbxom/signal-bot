@@ -32,6 +32,7 @@ const MCP_TOOLS = [
   'mcp__sourcecode__search_code',
   'mcp__history__search_messages',
   'mcp__history__get_messages_by_date',
+  'mcp__signal__send_message',
 ].join(',');
 const ALLOWED_TOOLS = `${BASE_TOOLS},${MCP_TOOLS}`;
 
@@ -141,6 +142,7 @@ export class ClaudeCLIClient {
       const dossiers = resolveMcpServerPath('dossierMcpServer');
       const sourcecode = resolveMcpServerPath('sourceCodeMcpServer');
       const history = resolveMcpServerPath('messageHistoryMcpServer');
+      const signal = resolveMcpServerPath('signalMcpServer');
       const mcpConfig = JSON.stringify({
         mcpServers: {
           reminders: {
@@ -191,6 +193,15 @@ export class ClaudeCLIClient {
               DB_PATH: context.dbPath,
               MCP_GROUP_ID: context.groupId,
               TZ: context.timezone,
+            },
+          },
+          signal: {
+            command: signal.command,
+            args: signal.args,
+            env: {
+              SIGNAL_CLI_URL: context.signalCliUrl,
+              SIGNAL_ACCOUNT: context.botPhoneNumber,
+              MCP_GROUP_ID: context.groupId,
             },
           },
         },

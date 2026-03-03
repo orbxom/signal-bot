@@ -48,6 +48,8 @@ export interface MessageContext {
   timezone: string;
   githubRepo: string;
   sourceRoot: string;
+  signalCliUrl: string;
+  botPhoneNumber: string;
 }
 
 export interface SignalMessage {
