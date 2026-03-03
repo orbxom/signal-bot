@@ -52,6 +52,14 @@ export class SignalClient {
     await this.rpc('send', { groupId, message });
   }
 
+  async sendTyping(groupId: string): Promise<void> {
+    await this.rpc('sendTyping', { groupId });
+  }
+
+  async stopTyping(groupId: string): Promise<void> {
+    await this.rpc('sendTyping', { groupId, stop: true });
+  }
+
   async receiveMessages(): Promise<SignalMessage[]> {
     return (await this.rpc<SignalMessage[]>('receive', {})) ?? [];
   }

@@ -35,6 +35,7 @@ export class Storage {
     getDossier: Database.Statement;
     getDossiersByGroup: Database.Statement;
     deleteDossier: Database.Statement;
+    getDistinctGroupIds: Database.Statement;
   };
 
   constructor(dbPath: string) {
@@ -106,6 +107,9 @@ export class Storage {
         `),
         deleteDossier: this.db.prepare(`
           DELETE FROM dossiers WHERE groupId = ? AND personId = ?
+        `),
+        getDistinctGroupIds: this.db.prepare(`
+          SELECT DISTINCT groupId FROM messages
         `),
       };
     } catch (error) {
@@ -233,6 +237,17 @@ export class Storage {
       this.stmts.trim.run(groupId, groupId, keepCount);
     } catch (error) {
       wrapSqliteError(error, 'trim messages');
+    }
+  }
+
+  getDistinctGroupIds(): string[] {
+    this.ensureOpen();
+
+    try {
+      const rows = this.stmts.getDistinctGroupIds.all() as Array<{ groupId: string }>;
+      return rows.map(row => row.groupId);
+    } catch (error) {
+      wrapSqliteError(error, 'get distinct group IDs');
     }
   }
 

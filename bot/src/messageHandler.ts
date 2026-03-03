@@ -5,6 +5,19 @@ import type { SignalClient } from './signalClient';
 import type { Storage } from './storage';
 import type { ChatMessage, Message } from './types';
 
+export const ACK_MESSAGES = [
+  "Beep boop, I'm on it!",
+  'On it!',
+  'Processing... bzzzt...',
+  'One moment while I consult my circuits...',
+  'Hold tight, thinking...',
+  'Crunching the numbers...',
+  'Warming up the brain cells...',
+  'Roger that, working on it...',
+  'Copy that, stand by...',
+  'Firing up the neural networks...',
+];
+
 let cachedSkillContent: string | null = null;
 
 function loadSkillContent(): string {
@@ -197,6 +210,21 @@ export class MessageHandler {
       return;
     }
 
+    // Send acknowledgement (failure won't block response)
+    try {
+      const ackIndex = Math.floor(Math.random() * ACK_MESSAGES.length);
+      await this.signalClient.sendMessage(groupId, ACK_MESSAGES[ackIndex]);
+    } catch (ackError) {
+      console.error('Failed to send acknowledgement:', ackError);
+    }
+
+    // Start typing indicator (failure won't block response)
+    try {
+      await this.signalClient.sendTyping(groupId);
+    } catch (typingError) {
+      console.error('Failed to start typing indicator:', typingError);
+    }
+
     try {
       // Extract query
       const query = this.extractQuery(content);
@@ -257,6 +285,13 @@ export class MessageHandler {
         await this.signalClient.sendMessage(groupId, errorMsg);
       } catch (sendError) {
         console.error('Failed to send error message:', sendError);
+      }
+    } finally {
+      // Always stop typing indicator
+      try {
+        await this.signalClient.stopTyping(groupId);
+      } catch (stopTypingError) {
+        console.error('Failed to stop typing indicator:', stopTypingError);
       }
     }
   }

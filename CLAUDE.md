@@ -42,10 +42,13 @@ Claude-powered Signal bot for family group chat. Responds to mention triggers in
 3. Run the bot in dev mode (hot reload via tsx):
    ```bash
    cd bot
-   npm run dev
+   npm run dev:test    # Test channel only (default for dev — prevents spamming family group)
+   npm run dev         # All channels (only if specifically needed)
    ```
 
-4. Send a message starting with the mention trigger (e.g. `claude: hello`) in a Signal group the bot is a member of.
+   **Always use `npm run dev:test` for local development** unless specifically asked to test against all groups. This restricts the bot to the "Bot Test" group only.
+
+4. Send a message starting with the mention trigger (e.g. `claude: hello`) in the Bot Test Signal group.
 
 ### Troubleshooting
 

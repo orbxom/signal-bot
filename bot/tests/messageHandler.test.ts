@@ -1,11 +1,24 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ClaudeCLIClient } from '../src/claudeClient';
-import { MessageHandler } from '../src/messageHandler';
+import { ACK_MESSAGES, MessageHandler } from '../src/messageHandler';
 import type { SignalClient } from '../src/signalClient';
 import type { Storage } from '../src/storage';
 import type { Message } from '../src/types';
 
 describe('MessageHandler', () => {
+  describe('ACK_MESSAGES', () => {
+    it('should contain exactly 10 messages', () => {
+      expect(ACK_MESSAGES).toHaveLength(10);
+    });
+
+    it('should contain only non-empty strings', () => {
+      for (const msg of ACK_MESSAGES) {
+        expect(typeof msg).toBe('string');
+        expect(msg.length).toBeGreaterThan(0);
+      }
+    });
+  });
+
   it('should detect bot mentions', () => {
     const handler = new MessageHandler(['@bot', 'bot:']);
 
@@ -266,6 +279,8 @@ describe('MessageHandler', () => {
 
       mockSignal = {
         sendMessage: vi.fn().mockResolvedValue(undefined),
+        sendTyping: vi.fn().mockResolvedValue(undefined),
+        stopTyping: vi.fn().mockResolvedValue(undefined),
       } as any;
     });
 
@@ -565,6 +580,218 @@ describe('MessageHandler', () => {
       await handler.handleMessage('g1', 'Alice', '@bot hello', 2000);
 
       expect(mockLLM.generateResponse).toHaveBeenCalledTimes(2);
+    });
+
+    describe('acknowledgement messages', () => {
+      it('should send an acknowledgement message before calling LLM', async () => {
+        const handler = new MessageHandler(['@bot'], {
+          storage: mockStorage,
+          llmClient: mockLLM,
+          signalClient: mockSignal,
+        });
+
+        await handler.handleMessage('g1', 'Alice', '@bot hello', 1000);
+
+        // sendMessage called twice: once for ack, once for response
+        expect(mockSignal.sendMessage).toHaveBeenCalledTimes(2);
+
+        // First call is the acknowledgement (one of ACK_MESSAGES)
+        const firstCallMsg = mockSignal.sendMessage.mock.calls[0][1];
+        expect(ACK_MESSAGES).toContain(firstCallMsg);
+
+        // Second call is the LLM response
+        expect(mockSignal.sendMessage).toHaveBeenNthCalledWith(2, 'g1', 'Test response');
+      });
+
+      it('should not send acknowledgement when not mentioned', async () => {
+        const handler = new MessageHandler(['@bot'], {
+          storage: mockStorage,
+          llmClient: mockLLM,
+          signalClient: mockSignal,
+        });
+
+        await handler.handleMessage('g1', 'Alice', 'Just saying hello', 1000);
+
+        expect(mockSignal.sendMessage).not.toHaveBeenCalled();
+      });
+
+      it('should still call LLM and send response when acknowledgement fails', async () => {
+        mockSignal.sendMessage = vi
+          .fn()
+          .mockRejectedValueOnce(new Error('Ack failed'))
+          .mockResolvedValueOnce(undefined);
+        const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+        const handler = new MessageHandler(['@bot'], {
+          storage: mockStorage,
+          llmClient: mockLLM,
+          signalClient: mockSignal,
+        });
+
+        await handler.handleMessage('g1', 'Alice', '@bot hello', 1000);
+
+        expect(mockLLM.generateResponse).toHaveBeenCalled();
+        expect(mockSignal.sendMessage).toHaveBeenCalledTimes(2);
+        expect(mockSignal.sendMessage).toHaveBeenNthCalledWith(2, 'g1', 'Test response');
+
+        consoleErrorSpy.mockRestore();
+      });
+
+      it('should pick acknowledgement message based on Math.random', async () => {
+        vi.spyOn(Math, 'random').mockReturnValue(0);
+
+        const handler = new MessageHandler(['@bot'], {
+          storage: mockStorage,
+          llmClient: mockLLM,
+          signalClient: mockSignal,
+        });
+
+        await handler.handleMessage('g1', 'Alice', '@bot hello', 1000);
+
+        expect(mockSignal.sendMessage).toHaveBeenNthCalledWith(1, 'g1', ACK_MESSAGES[0]);
+
+        vi.restoreAllMocks();
+      });
+
+      it('should pick last acknowledgement message when Math.random returns 0.99', async () => {
+        vi.spyOn(Math, 'random').mockReturnValue(0.99);
+
+        const handler = new MessageHandler(['@bot'], {
+          storage: mockStorage,
+          llmClient: mockLLM,
+          signalClient: mockSignal,
+        });
+
+        await handler.handleMessage('g1', 'Alice', '@bot hello', 2000);
+
+        expect(mockSignal.sendMessage).toHaveBeenNthCalledWith(1, 'g1', ACK_MESSAGES[9]);
+
+        vi.restoreAllMocks();
+      });
+    });
+
+    it('should call signal client methods in correct order: ack, sendTyping, response, stopTyping', async () => {
+      const callOrder: string[] = [];
+
+      mockSignal.sendMessage = vi.fn().mockImplementation(async (_groupId: string, _msg: string) => {
+        callOrder.push(`sendMessage:${_msg}`);
+      });
+      mockSignal.sendTyping = vi.fn().mockImplementation(async () => {
+        callOrder.push('sendTyping');
+      });
+      mockSignal.stopTyping = vi.fn().mockImplementation(async () => {
+        callOrder.push('stopTyping');
+      });
+
+      vi.spyOn(Math, 'random').mockReturnValue(0);
+
+      const handler = new MessageHandler(['@bot'], {
+        storage: mockStorage,
+        llmClient: mockLLM,
+        signalClient: mockSignal,
+      });
+
+      await handler.handleMessage('g1', 'Alice', '@bot hello', 1000);
+
+      expect(callOrder).toEqual([
+        `sendMessage:${ACK_MESSAGES[0]}`,
+        'sendTyping',
+        'sendMessage:Test response',
+        'stopTyping',
+      ]);
+
+      vi.restoreAllMocks();
+    });
+
+    describe('typing indicators', () => {
+      it('should start typing indicator when mentioned', async () => {
+        const handler = new MessageHandler(['@bot'], {
+          storage: mockStorage,
+          llmClient: mockLLM,
+          signalClient: mockSignal,
+        });
+
+        await handler.handleMessage('g1', 'Alice', '@bot hello', 1000);
+
+        expect(mockSignal.sendTyping).toHaveBeenCalledWith('g1');
+      });
+
+      it('should stop typing indicator after sending response', async () => {
+        const handler = new MessageHandler(['@bot'], {
+          storage: mockStorage,
+          llmClient: mockLLM,
+          signalClient: mockSignal,
+        });
+
+        await handler.handleMessage('g1', 'Alice', '@bot hello', 1000);
+
+        expect(mockSignal.stopTyping).toHaveBeenCalledWith('g1');
+      });
+
+      it('should stop typing indicator even when LLM call fails', async () => {
+        mockLLM.generateResponse = vi.fn().mockRejectedValue(new Error('LLM API error'));
+        const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+        const handler = new MessageHandler(['@bot'], {
+          storage: mockStorage,
+          llmClient: mockLLM,
+          signalClient: mockSignal,
+        });
+
+        await handler.handleMessage('g1', 'Alice', '@bot hello', 1000);
+
+        expect(mockSignal.stopTyping).toHaveBeenCalledWith('g1');
+
+        consoleErrorSpy.mockRestore();
+      });
+
+      it('should not start typing indicator when not mentioned', async () => {
+        const handler = new MessageHandler(['@bot'], {
+          storage: mockStorage,
+          llmClient: mockLLM,
+          signalClient: mockSignal,
+        });
+
+        await handler.handleMessage('g1', 'Alice', 'Just saying hello', 1000);
+
+        expect(mockSignal.sendTyping).not.toHaveBeenCalled();
+        expect(mockSignal.stopTyping).not.toHaveBeenCalled();
+      });
+
+      it('should still call LLM when typing indicator start fails', async () => {
+        mockSignal.sendTyping = vi.fn().mockRejectedValue(new Error('Typing failed'));
+        const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+        const handler = new MessageHandler(['@bot'], {
+          storage: mockStorage,
+          llmClient: mockLLM,
+          signalClient: mockSignal,
+        });
+
+        await handler.handleMessage('g1', 'Alice', '@bot hello', 1000);
+
+        expect(mockLLM.generateResponse).toHaveBeenCalled();
+        expect(mockSignal.sendMessage).toHaveBeenCalledWith('g1', 'Test response');
+
+        consoleErrorSpy.mockRestore();
+      });
+
+      it('should not throw when typing indicator stop fails', async () => {
+        mockSignal.stopTyping = vi.fn().mockRejectedValue(new Error('Stop typing failed'));
+        const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+        const handler = new MessageHandler(['@bot'], {
+          storage: mockStorage,
+          llmClient: mockLLM,
+          signalClient: mockSignal,
+        });
+
+        await handler.handleMessage('g1', 'Alice', '@bot hello', 1000);
+
+        expect(mockSignal.sendMessage).toHaveBeenCalledWith('g1', 'Test response');
+
+        consoleErrorSpy.mockRestore();
+      });
     });
   });
 });

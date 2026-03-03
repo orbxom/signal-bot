@@ -386,6 +386,91 @@ describe('SignalClient', () => {
     });
   });
 
+  describe('sendTyping', () => {
+    let fetchMock: ReturnType<typeof vi.fn>;
+
+    beforeEach(() => {
+      fetchMock = vi.fn();
+      global.fetch = fetchMock;
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it('should send correct JSON-RPC payload for typing indicator', async () => {
+      const client = new SignalClient('http://localhost:8080', '+1234567890');
+
+      fetchMock.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ jsonrpc: '2.0', result: {}, id: 1 }),
+      });
+
+      await client.sendTyping('group123');
+
+      const callArgs = fetchMock.mock.calls[0][1];
+      const body = JSON.parse(callArgs.body);
+      expect(body.method).toBe('sendTyping');
+      expect(body.params.account).toBe('+1234567890');
+      expect(body.params.groupId).toBe('group123');
+      expect(body.params.stop).toBeUndefined();
+    });
+
+    it('should throw on network error', async () => {
+      const client = new SignalClient('http://localhost:8080', '+1234567890');
+
+      fetchMock.mockRejectedValueOnce(new Error('Network error'));
+
+      await expect(client.sendTyping('group123')).rejects.toThrow('Network error');
+    });
+
+    it('should throw on RPC error', async () => {
+      const client = new SignalClient('http://localhost:8080', '+1234567890');
+
+      fetchMock.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          jsonrpc: '2.0',
+          error: { code: -1, message: 'Invalid group' },
+          id: 1,
+        }),
+      });
+
+      await expect(client.sendTyping('group123')).rejects.toThrow('Signal RPC error: Invalid group');
+    });
+  });
+
+  describe('stopTyping', () => {
+    let fetchMock: ReturnType<typeof vi.fn>;
+
+    beforeEach(() => {
+      fetchMock = vi.fn();
+      global.fetch = fetchMock;
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it('should send correct JSON-RPC payload with stop: true', async () => {
+      const client = new SignalClient('http://localhost:8080', '+1234567890');
+
+      fetchMock.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ jsonrpc: '2.0', result: {}, id: 1 }),
+      });
+
+      await client.stopTyping('group123');
+
+      const callArgs = fetchMock.mock.calls[0][1];
+      const body = JSON.parse(callArgs.body);
+      expect(body.method).toBe('sendTyping');
+      expect(body.params.account).toBe('+1234567890');
+      expect(body.params.groupId).toBe('group123');
+      expect(body.params.stop).toBe(true);
+    });
+  });
+
   describe('waitForReady', () => {
     let fetchMock: ReturnType<typeof vi.fn>;
 

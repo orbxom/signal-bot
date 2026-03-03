@@ -14,6 +14,8 @@ export interface ConfigType {
   timezone: string;
   githubRepo: string;
   sourceRoot: string;
+  testChannelOnly: boolean;
+  testGroupId: string;
 }
 
 const DEFAULT_SYSTEM_PROMPT =
@@ -48,6 +50,9 @@ export class Config {
       .map(s => s.trim())
       .filter(s => s.length > 0);
 
+    const testChannelOnly = process.argv.includes('--test-channel-only') || process.env.TEST_CHANNEL_ONLY === 'true';
+    const testGroupId = process.env.TEST_GROUP_ID || 'kKWs+FQPBZKe7N7CdxMjNAAjE2uWEmtBij55MOfWFU4=';
+
     return {
       claude: {
         maxTurns,
@@ -61,6 +66,8 @@ export class Config {
       timezone: process.env.BOT_TIMEZONE || 'Australia/Sydney',
       githubRepo: process.env.GITHUB_REPO || '',
       sourceRoot: process.env.SOURCE_ROOT || path.resolve(__dirname, '..'),
+      testChannelOnly,
+      testGroupId,
     };
   }
 }
