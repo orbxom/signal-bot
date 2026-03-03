@@ -30,9 +30,16 @@ const MCP_TOOLS = [
   'mcp__sourcecode__list_files',
   'mcp__sourcecode__read_file',
   'mcp__sourcecode__search_code',
+  'mcp__transcription__transcribe_audio',
   'mcp__history__search_messages',
   'mcp__history__get_messages_by_date',
   'mcp__signal__send_message',
+  'mcp__personas__create_persona',
+  'mcp__personas__get_persona',
+  'mcp__personas__list_personas',
+  'mcp__personas__update_persona',
+  'mcp__personas__delete_persona',
+  'mcp__personas__switch_persona',
 ].join(',');
 const ALLOWED_TOOLS = `${BASE_TOOLS},${MCP_TOOLS}`;
 
@@ -50,6 +57,17 @@ function resolveMcpServerPath(name: string): { command: string; args: string[] }
   };
   mcpPathCache.set(name, result);
   return result;
+}
+
+// Resolve transcription binary (compiled Rust, not TS)
+function resolveTranscriptionBinary(): { command: string; args: string[] } {
+  const binPath = path.resolve(__dirname, '..', '..', 'transcription', 'target', 'release', 'signal-bot-transcription');
+  if (fs.existsSync(binPath)) {
+    return { command: binPath, args: [] };
+  }
+  // Dev fallback: cargo run
+  const cargoPath = path.resolve(__dirname, '..', '..', 'transcription');
+  return { command: 'cargo', args: ['run', '--release', '--manifest-path', `${cargoPath}/Cargo.toml`] };
 }
 
 function spawnPromise(
@@ -141,8 +159,10 @@ export class ClaudeCLIClient {
       const github = resolveMcpServerPath('githubMcpServer');
       const dossiers = resolveMcpServerPath('dossierMcpServer');
       const sourcecode = resolveMcpServerPath('sourceCodeMcpServer');
+      const transcriptionBin = resolveTranscriptionBinary();
       const history = resolveMcpServerPath('messageHistoryMcpServer');
       const signal = resolveMcpServerPath('signalMcpServer');
+      const personas = resolveMcpServerPath('personaMcpServer');
       const mcpConfig = JSON.stringify({
         mcpServers: {
           reminders: {
@@ -186,6 +206,14 @@ export class ClaudeCLIClient {
               SOURCE_ROOT: context.sourceRoot,
             },
           },
+          transcription: {
+            command: transcriptionBin.command,
+            args: transcriptionBin.args,
+            env: {
+              WHISPER_MODEL_PATH: context.whisperModelPath || '',
+              ATTACHMENTS_DIR: context.attachmentsDir || '',
+            },
+          },
           history: {
             command: history.command,
             args: history.args,
@@ -202,6 +230,15 @@ export class ClaudeCLIClient {
               SIGNAL_CLI_URL: context.signalCliUrl,
               SIGNAL_ACCOUNT: context.botPhoneNumber,
               MCP_GROUP_ID: context.groupId,
+            },
+          },
+          personas: {
+            command: personas.command,
+            args: personas.args,
+            env: {
+              DB_PATH: context.dbPath,
+              MCP_GROUP_ID: context.groupId,
+              MCP_SENDER: context.sender,
             },
           },
         },

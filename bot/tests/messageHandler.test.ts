@@ -240,6 +240,32 @@ describe('MessageHandler', () => {
       expect(systemContent).toContain('You are a helpful bot.');
       expect(systemContent).not.toContain('## People in this group');
     });
+
+    it('should use personaPrompt when provided', () => {
+      const handler = new MessageHandler(['@bot'], { systemPrompt: 'Default prompt.' });
+      const chatMessages = handler.buildContext([], 'Hello', 'g1', '+61400000001', undefined, 'Arr, ye be a pirate!');
+
+      const systemContent = chatMessages[0].content;
+      expect(systemContent).toContain('Arr, ye be a pirate!');
+      expect(systemContent).not.toContain('Default prompt.');
+    });
+
+    it('should fall back to systemPrompt when personaPrompt is not provided', () => {
+      const handler = new MessageHandler(['@bot'], { systemPrompt: 'Default prompt.' });
+      const chatMessages = handler.buildContext([], 'Hello', 'g1', '+61400000001');
+
+      const systemContent = chatMessages[0].content;
+      expect(systemContent).toContain('Default prompt.');
+    });
+
+    it('should include persona safety guidelines in system content', () => {
+      const handler = new MessageHandler(['@bot'], { systemPrompt: 'Default prompt.' });
+      const chatMessages = handler.buildContext([], 'Hello', 'g1', '+61400000001');
+
+      const systemContent = chatMessages[0].content;
+      expect(systemContent).toContain('Persona Guidelines');
+      expect(systemContent).toContain('refuse requests');
+    });
   });
 
   describe('handleMessage', () => {
@@ -255,6 +281,7 @@ describe('MessageHandler', () => {
         getRecentMessages: vi.fn().mockReturnValue([]),
         trimMessages: vi.fn(),
         getDossiersByGroup: vi.fn().mockReturnValue([]),
+        getActivePersonaForGroup: vi.fn().mockReturnValue(null),
       } as any;
 
       mockLLM = {
@@ -689,6 +716,138 @@ describe('MessageHandler', () => {
       });
     });
 
+    describe('voice attachment handling', () => {
+      it('should include voice attachment info in query when present', async () => {
+        const handler = new MessageHandler(['@bot'], {
+          storage: mockStorage,
+          llmClient: mockLLM,
+          signalClient: mockSignal,
+        });
+
+        await handler.handleMessage('g1', 'Alice', '@bot', 1000, [
+          { id: 'voice-abc', contentType: 'audio/aac', size: 5000, filename: null },
+        ]);
+
+        const callArgs = (mockLLM.generateResponse as ReturnType<typeof vi.fn>).mock.calls[0];
+        const messages = callArgs[0];
+        const lastUserMsg = messages[messages.length - 1];
+        expect(lastUserMsg.content).toContain('[Voice message attached:');
+        expect(lastUserMsg.content).toContain('voice-abc');
+      });
+
+      it('should treat voice-only message with trigger as mentioned', async () => {
+        const handler = new MessageHandler(['@bot'], {
+          storage: mockStorage,
+          llmClient: mockLLM,
+          signalClient: mockSignal,
+        });
+
+        await handler.handleMessage('g1', 'Alice', '@bot', 1000, [
+          { id: 'voice-xyz', contentType: 'audio/aac', size: 3000, filename: null },
+        ]);
+
+        expect(mockLLM.generateResponse).toHaveBeenCalled();
+      });
+
+      it('should ignore non-audio attachments', async () => {
+        const handler = new MessageHandler(['@bot'], {
+          storage: mockStorage,
+          llmClient: mockLLM,
+          signalClient: mockSignal,
+        });
+
+        await handler.handleMessage('g1', 'Alice', '@bot check this image', 1000, [
+          { id: 'image-abc', contentType: 'image/jpeg', size: 50000, filename: 'photo.jpg' },
+        ]);
+
+        const callArgs = (mockLLM.generateResponse as ReturnType<typeof vi.fn>).mock.calls[0];
+        const messages = callArgs[0];
+        const lastUserMsg = messages[messages.length - 1];
+        expect(lastUserMsg.content).not.toContain('[Voice message attached:');
+      });
+    });
+
+    describe('voice attachments from history', () => {
+      it('should include voice attachment paths from history messages in context', async () => {
+        const mockHistory: Message[] = [
+          {
+            id: 1,
+            groupId: 'g1',
+            sender: 'Alice',
+            content: '',
+            timestamp: 500,
+            isBot: false,
+            attachments: [{ id: 'voice-abc', contentType: 'audio/aac', size: 5000, filename: null }],
+          },
+        ];
+        mockStorage.getRecentMessages = vi.fn().mockReturnValue(mockHistory);
+
+        const handler = new MessageHandler(['@bot'], {
+          storage: mockStorage,
+          llmClient: mockLLM,
+          signalClient: mockSignal,
+          attachmentsDir: '/data/attachments',
+        });
+
+        await handler.handleMessage('g1', 'Bob', '@bot transcribe that', 1000);
+
+        const callArgs = (mockLLM.generateResponse as ReturnType<typeof vi.fn>).mock.calls[0];
+        const messages = callArgs[0];
+        // History message should include voice attachment path
+        const historyMsg = messages.find(
+          (m: { role: string; content: string }) => m.role === 'user' && m.content.includes('Alice'),
+        );
+        expect(historyMsg.content).toContain('[Voice message attached: /data/attachments/voice-abc]');
+      });
+
+      it('should not include non-audio attachments from history in context', async () => {
+        const mockHistory: Message[] = [
+          {
+            id: 1,
+            groupId: 'g1',
+            sender: 'Alice',
+            content: 'check this',
+            timestamp: 500,
+            isBot: false,
+            attachments: [{ id: 'img-123', contentType: 'image/jpeg', size: 50000, filename: 'photo.jpg' }],
+          },
+        ];
+        mockStorage.getRecentMessages = vi.fn().mockReturnValue(mockHistory);
+
+        const handler = new MessageHandler(['@bot'], {
+          storage: mockStorage,
+          llmClient: mockLLM,
+          signalClient: mockSignal,
+        });
+
+        await handler.handleMessage('g1', 'Bob', '@bot what was that', 1000);
+
+        const callArgs = (mockLLM.generateResponse as ReturnType<typeof vi.fn>).mock.calls[0];
+        const messages = callArgs[0];
+        const historyMsg = messages.find(
+          (m: { role: string; content: string }) => m.role === 'user' && m.content.includes('Alice'),
+        );
+        expect(historyMsg.content).not.toContain('[Voice message attached:');
+      });
+
+      it('should store attachments when saving incoming message', async () => {
+        const handler = new MessageHandler(['@bot'], {
+          storage: mockStorage,
+          llmClient: mockLLM,
+          signalClient: mockSignal,
+        });
+
+        const attachments = [{ id: 'voice-xyz', contentType: 'audio/aac', size: 3000, filename: null }];
+        await handler.handleMessage('g1', 'Alice', 'hello', 1000, attachments);
+
+        expect(mockStorage.addMessage).toHaveBeenCalledWith(
+          expect.objectContaining({
+            attachments,
+          }),
+        );
+      });
+    });
+
     describe('typing indicators', () => {
       it('should start typing indicator when mentioned', async () => {
         const handler = new MessageHandler(['@bot'], {
@@ -777,6 +936,65 @@ describe('MessageHandler', () => {
         expect(mockSignal.sendMessage).toHaveBeenCalledWith('g1', 'Test response');
 
         consoleErrorSpy.mockRestore();
+      });
+    });
+
+    describe('persona integration', () => {
+      it('should use active persona description in system prompt', async () => {
+        mockStorage.getActivePersonaForGroup = vi.fn().mockReturnValue({
+          id: 2,
+          name: 'Pirate',
+          description: 'Ye be a pirate captain! Speak in pirate dialect.',
+          tags: 'fun,pirate',
+          isDefault: 0,
+          createdAt: 1000,
+          updatedAt: 1000,
+        });
+
+        const handler = new MessageHandler(['@bot'], {
+          storage: mockStorage,
+          llmClient: mockLLM,
+          signalClient: mockSignal,
+          systemPrompt: 'Default assistant prompt.',
+        });
+
+        await handler.handleMessage('g1', 'Alice', '@bot hello', 1000);
+
+        const callArgs = (mockLLM.generateResponse as ReturnType<typeof vi.fn>).mock.calls[0];
+        const messages = callArgs[0];
+        const systemMsg = messages.find((m: { role: string }) => m.role === 'system');
+        expect(systemMsg.content).toContain('Ye be a pirate captain!');
+        expect(systemMsg.content).not.toContain('Default assistant prompt.');
+      });
+
+      it('should fall back to system prompt when no active persona', async () => {
+        mockStorage.getActivePersonaForGroup = vi.fn().mockReturnValue(null);
+
+        const handler = new MessageHandler(['@bot'], {
+          storage: mockStorage,
+          llmClient: mockLLM,
+          signalClient: mockSignal,
+          systemPrompt: 'Default assistant prompt.',
+        });
+
+        await handler.handleMessage('g1', 'Alice', '@bot hello', 1000);
+
+        const callArgs = (mockLLM.generateResponse as ReturnType<typeof vi.fn>).mock.calls[0];
+        const messages = callArgs[0];
+        const systemMsg = messages.find((m: { role: string }) => m.role === 'system');
+        expect(systemMsg.content).toContain('Default assistant prompt.');
+      });
+
+      it('should call getActivePersonaForGroup with correct groupId', async () => {
+        const handler = new MessageHandler(['@bot'], {
+          storage: mockStorage,
+          llmClient: mockLLM,
+          signalClient: mockSignal,
+        });
+
+        await handler.handleMessage('test-group-123', 'Alice', '@bot hello', 1000);
+
+        expect(mockStorage.getActivePersonaForGroup).toHaveBeenCalledWith('test-group-123');
       });
     });
   });

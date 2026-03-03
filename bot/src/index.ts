@@ -38,6 +38,8 @@ async function main() {
     githubRepo: config.githubRepo,
     sourceRoot: config.sourceRoot,
     signalCliUrl: config.signalCliUrl,
+    attachmentsDir: config.attachmentsDir,
+    whisperModelPath: config.whisperModelPath,
   });
   console.log(`Message handler initialized (triggers: ${config.mentionTriggers.join(', ')})`);
 
@@ -86,7 +88,7 @@ async function main() {
             continue;
           }
           console.log(`[${data.groupId}] ${data.sender}: ${data.content.substring(0, 50)}...`);
-          await messageHandler.handleMessage(data.groupId, data.sender, data.content, data.timestamp);
+          await messageHandler.handleMessage(data.groupId, data.sender, data.content, data.timestamp, data.attachments);
         }
       }
 

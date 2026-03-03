@@ -5,6 +5,7 @@ export interface Message {
   content: string;
   timestamp: number;
   isBot: boolean;
+  attachments?: SignalAttachment[];
 }
 
 export interface ChatMessage {
@@ -43,6 +44,22 @@ export interface Dossier {
   updatedAt: number;
 }
 
+export interface Persona {
+  id: number;
+  name: string;
+  description: string;
+  tags: string;
+  isDefault: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface ActivePersona {
+  groupId: string;
+  personaId: number;
+  activatedAt: number;
+}
+
 export interface MessageContext {
   groupId: string;
   sender: string;
@@ -52,6 +69,15 @@ export interface MessageContext {
   sourceRoot: string;
   signalCliUrl: string;
   botPhoneNumber: string;
+  attachmentsDir: string;
+  whisperModelPath: string;
+}
+
+export interface SignalAttachment {
+  id: string;
+  contentType: string;
+  size: number;
+  filename: string | null;
 }
 
 export interface SignalMessage {
@@ -66,6 +92,7 @@ export interface SignalMessage {
       groupInfo?: {
         groupId: string;
       };
+      attachments?: SignalAttachment[];
     };
   };
 }
