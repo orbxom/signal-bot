@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { isQuietHours } from '../src/index';
+import { isQuietHours } from '../src/lifecycle';
 
 // March 2026: Australia/Sydney is AEDT (UTC+11)
 

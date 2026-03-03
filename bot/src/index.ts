@@ -1,45 +1,10 @@
 import { ClaudeCLIClient } from './claudeClient';
 import { Config } from './config';
+import { broadcastToAllGroups } from './lifecycle';
 import { MessageHandler } from './messageHandler';
 import { ReminderScheduler } from './reminderScheduler';
 import { SignalClient } from './signalClient';
 import { Storage } from './storage';
-
-export function isQuietHours(timezone: string): boolean {
-  const hour = Number.parseInt(
-    new Intl.DateTimeFormat('en-US', { hour: 'numeric', hour12: false, timeZone: timezone }).format(new Date()),
-    10,
-  );
-  return hour >= 21 || hour < 6;
-}
-
-async function broadcastToAllGroups(
-  signalClient: SignalClient,
-  storage: Storage,
-  timezone: string,
-  message: string,
-): Promise<void> {
-  if (isQuietHours(timezone)) {
-    console.log('Quiet hours (9pm-6am), skipping notification');
-    return;
-  }
-
-  const groupIds = storage.getDistinctGroupIds();
-  if (groupIds.length === 0) {
-    console.log('No known groups to notify');
-    return;
-  }
-
-  console.log(`Sending notification to ${groupIds.length} group(s)...`);
-  const results = await Promise.allSettled(groupIds.map(groupId => signalClient.sendMessage(groupId, message)));
-
-  for (let i = 0; i < results.length; i++) {
-    const result = results[i];
-    if (result.status === 'rejected') {
-      console.error(`Failed to notify group ${groupIds[i]}:`, result.reason);
-    }
-  }
-}
 
 async function main() {
   console.log('Starting Signal Family Bot...');
@@ -78,44 +43,27 @@ async function main() {
   }
 
   // Graceful shutdown
-  let shuttingDown = false;
-
-  const shutdown = async () => {
-    if (shuttingDown) return;
-    shuttingDown = true;
-
+  const shutdown = () => {
     console.log('\nShutting down gracefully...');
-
-    try {
-      if (config.testChannelOnly) {
-        await signalClient.sendMessage(config.testGroupId, 'Im off to take a nap');
-      } else {
-        await broadcastToAllGroups(signalClient, storage, config.timezone, 'Im off to take a nap');
-      }
-    } catch (error) {
-      console.error('Error sending shutdown notification:', error);
-    }
-
     storage.close();
     process.exit(0);
   };
-
-  process.on('SIGINT', () => {
-    shutdown();
-  });
-  process.on('SIGTERM', () => {
-    shutdown();
-  });
+  process.on('SIGINT', shutdown);
+  process.on('SIGTERM', shutdown);
 
   // Wait for signal-cli to be ready
   console.log('Waiting for signal-cli...');
   await signalClient.waitForReady();
 
   // Notify groups that the bot is online
-  if (config.testChannelOnly) {
-    await signalClient.sendMessage(config.testGroupId, "I'm finished with my nap! (test channel only mode)");
-  } else {
-    await broadcastToAllGroups(signalClient, storage, config.timezone, "I'm finished with my nap!");
+  try {
+    if (config.testChannelOnly) {
+      await signalClient.sendMessage(config.testGroupId, "I'm finished with my nap! (test channel only)");
+    } else {
+      await broadcastToAllGroups(signalClient, storage, config.timezone, "I'm finished with my nap!");
+    }
+  } catch (error) {
+    console.error('Error sending startup notification:', error);
   }
 
   // Start polling loop
