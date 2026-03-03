@@ -1,6 +1,6 @@
 import Database from 'better-sqlite3';
 import { estimateTokens } from './mcpServerBase';
-import type { Dossier, Message, Persona, Reminder, ReminderStatus } from './types';
+import type { Dossier, Message, Persona, Reminder, ReminderStatus, SignalAttachment } from './types';
 
 export const DOSSIER_TOKEN_LIMIT = 1000;
 export const PERSONA_DESCRIPTION_TOKEN_LIMIT = 2000;
@@ -65,8 +65,8 @@ export class Storage {
       this.initTables();
       this.stmts = {
         insert: this.db.prepare(`
-          INSERT INTO messages (groupId, sender, content, timestamp, isBot)
-          VALUES (?, ?, ?, ?, ?)
+          INSERT INTO messages (groupId, sender, content, timestamp, isBot, attachments)
+          VALUES (?, ?, ?, ?, ?, ?)
         `),
         selectRecent: this.db.prepare(`
           SELECT * FROM messages
@@ -279,6 +279,12 @@ export class Storage {
         );
       `);
 
+      // Migration: add attachments column to messages table
+      const cols = this.db.pragma('table_info(messages)') as Array<{ name: string }>;
+      if (!cols.some(c => c.name === 'attachments')) {
+        this.db.exec('ALTER TABLE messages ADD COLUMN attachments TEXT');
+      }
+
       // Seed default persona if none exists
       const existing = this.db
         .prepare('SELECT id FROM personas WHERE name = ? COLLATE NOCASE')
@@ -309,7 +315,15 @@ export class Storage {
     }
 
     try {
-      this.stmts.insert.run(message.groupId, message.sender, message.content, message.timestamp, message.isBot ? 1 : 0);
+      const attachmentsJson = message.attachments?.length ? JSON.stringify(message.attachments) : null;
+      this.stmts.insert.run(
+        message.groupId,
+        message.sender,
+        message.content,
+        message.timestamp,
+        message.isBot ? 1 : 0,
+        attachmentsJson,
+      );
     } catch (error) {
       wrapSqliteError(error, 'add message');
     }
@@ -332,15 +346,22 @@ export class Storage {
         content: string;
         timestamp: number;
         isBot: number;
+        attachments: string | null;
       }>;
-      return rows.reverse().map(row => ({
-        id: row.id,
-        groupId: row.groupId,
-        sender: row.sender,
-        content: row.content,
-        timestamp: row.timestamp,
-        isBot: row.isBot === 1,
-      }));
+      return rows.reverse().map(row => {
+        const msg: Message = {
+          id: row.id,
+          groupId: row.groupId,
+          sender: row.sender,
+          content: row.content,
+          timestamp: row.timestamp,
+          isBot: row.isBot === 1,
+        };
+        if (row.attachments) {
+          msg.attachments = JSON.parse(row.attachments) as SignalAttachment[];
+        }
+        return msg;
+      });
     } catch (error) {
       wrapSqliteError(error, 'retrieve messages');
     }

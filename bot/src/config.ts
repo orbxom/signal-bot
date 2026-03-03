@@ -16,6 +16,8 @@ export interface ConfigType {
   timezone: string;
   githubRepo: string;
   sourceRoot: string;
+  attachmentsDir: string;
+  whisperModelPath: string;
   testChannelOnly: boolean;
   testGroupId: string;
 }
@@ -82,6 +84,8 @@ export class Config {
       timezone: process.env.BOT_TIMEZONE || 'Australia/Sydney',
       githubRepo: process.env.GITHUB_REPO || '',
       sourceRoot: process.env.SOURCE_ROOT || path.resolve(__dirname, '..'),
+      attachmentsDir: process.env.ATTACHMENTS_DIR || './data/signal-attachments',
+      whisperModelPath: process.env.WHISPER_MODEL_PATH || './models/ggml-base.en.bin',
       testChannelOnly,
       testGroupId,
     };

@@ -3,7 +3,7 @@ import path from 'node:path';
 import type { ClaudeCLIClient } from './claudeClient';
 import type { SignalClient } from './signalClient';
 import type { Storage } from './storage';
-import type { ChatMessage, Message } from './types';
+import type { ChatMessage, Message, SignalAttachment } from './types';
 
 export const ACK_MESSAGES = [
   "Beep boop, I'm on it!",
@@ -62,6 +62,8 @@ export class MessageHandler {
   private dbPath: string;
   private githubRepo: string;
   private sourceRoot: string;
+  private attachmentsDir: string;
+  private whisperModelPath: string;
   private processedMessages: Set<string> = new Set();
   private timestampFormatter: Intl.DateTimeFormat;
 
@@ -80,6 +82,8 @@ export class MessageHandler {
       dbPath?: string;
       githubRepo?: string;
       sourceRoot?: string;
+      attachmentsDir?: string;
+      whisperModelPath?: string;
     },
   ) {
     this.mentionTriggers = mentionTriggers;
@@ -96,6 +100,8 @@ export class MessageHandler {
     this.dbPath = options?.dbPath || './data/bot.db';
     this.githubRepo = options?.githubRepo || '';
     this.sourceRoot = options?.sourceRoot || '';
+    this.attachmentsDir = options?.attachmentsDir || './data/signal-attachments';
+    this.whisperModelPath = options?.whisperModelPath || './models/ggml-base.en.bin';
     this.timestampFormatter = new Intl.DateTimeFormat('en-CA', {
       timeZone: this.timezone,
       year: 'numeric',
@@ -116,10 +122,19 @@ export class MessageHandler {
 
   private formatMessageForContext(msg: Message): string {
     const ts = this.formatTimestamp(msg.timestamp);
+    let content: string;
     if (msg.isBot) {
-      return `[${ts}] ${msg.content}`;
+      content = `[${ts}] ${msg.content}`;
+    } else {
+      content = `[${ts}] ${msg.sender}: ${msg.content}`;
     }
-    return `[${ts}] ${msg.sender}: ${msg.content}`;
+    // Surface voice attachments from history so Claude can reference them
+    const voiceAttachments = msg.attachments?.filter(a => a.contentType.startsWith('audio/'));
+    if (voiceAttachments?.length) {
+      const lines = voiceAttachments.map(a => `[Voice message attached: ${path.join(this.attachmentsDir, a.id)}]`);
+      content = content ? `${content}\n${lines.join('\n')}` : lines.join('\n');
+    }
+    return content;
   }
 
   private fitToTokenBudget(messages: Message[]): Message[] {
@@ -198,6 +213,7 @@ export class MessageHandler {
         `Group ID: ${groupId}`,
         `Current requester: ${sender}`,
         `You have access to your own source code via the sourcecode tools (list_files, read_file, search_code). When asked how you work, what you can do, or technical questions about your implementation, use these tools to read the actual code before answering.`,
+        `When a voice message is attached (shown as [Voice message attached: <path>] in the conversation), use the transcribe_audio tool to transcribe it, then respond to the transcribed content as if the user had typed it. Voice messages may appear in the current message or in recent conversation history.`,
       ].join('\n');
 
       const effectivePrompt = personaPrompt || this.systemPrompt;
@@ -225,7 +241,13 @@ export class MessageHandler {
     return contextMessages;
   }
 
-  async handleMessage(groupId: string, sender: string, content: string, timestamp: number): Promise<void> {
+  async handleMessage(
+    groupId: string,
+    sender: string,
+    content: string,
+    timestamp: number,
+    attachments: SignalAttachment[] = [],
+  ): Promise<void> {
     if (!this.storage || !this.llmClient || !this.signalClient) {
       throw new Error('Handler not fully initialized');
     }
@@ -256,13 +278,14 @@ export class MessageHandler {
       history = this.fitToTokenBudget(batch);
     }
 
-    // Store incoming message
+    // Store incoming message (including any attachments for later context)
     this.storage.addMessage({
       groupId,
       sender,
       content,
       timestamp,
       isBot: false,
+      attachments: attachments.length > 0 ? attachments : undefined,
     });
 
     if (!mentioned) {
@@ -288,6 +311,16 @@ export class MessageHandler {
       // Extract query
       const query = this.extractQuery(content);
 
+      // Filter voice attachments and append info to query
+      const voiceAttachments = attachments.filter(a => a.contentType.startsWith('audio/'));
+      let queryWithAttachments = query;
+      if (voiceAttachments.length > 0) {
+        const attachmentLines = voiceAttachments.map(
+          a => `[Voice message attached: ${path.join(this.attachmentsDir, a.id)}]`,
+        );
+        queryWithAttachments = query ? `${query}\n\n${attachmentLines.join('\n')}` : attachmentLines.join('\n');
+      }
+
       // Load dossiers for context injection
       let dossierContext = '';
       const dossiers = this.storage.getDossiersByGroup(groupId);
@@ -311,7 +344,7 @@ export class MessageHandler {
       const personaPrompt = activePersona?.description;
 
       // Build context
-      const messages = this.buildContext(history, query, groupId, sender, dossierContext, personaPrompt);
+      const messages = this.buildContext(history, queryWithAttachments, groupId, sender, dossierContext, personaPrompt);
 
       // Get LLM response
       const response = await this.llmClient.generateResponse(messages, {
@@ -321,6 +354,8 @@ export class MessageHandler {
         timezone: this.timezone,
         githubRepo: this.githubRepo,
         sourceRoot: this.sourceRoot,
+        attachmentsDir: this.attachmentsDir,
+        whisperModelPath: this.whisperModelPath,
       });
 
       // Send response

@@ -5,6 +5,7 @@ export interface Message {
   content: string;
   timestamp: number;
   isBot: boolean;
+  attachments?: SignalAttachment[];
 }
 
 export interface ChatMessage {
@@ -64,6 +65,15 @@ export interface MessageContext {
   timezone: string;
   githubRepo: string;
   sourceRoot: string;
+  attachmentsDir: string;
+  whisperModelPath: string;
+}
+
+export interface SignalAttachment {
+  id: string;
+  contentType: string;
+  size: number;
+  filename: string | null;
 }
 
 export interface SignalMessage {
@@ -78,6 +88,7 @@ export interface SignalMessage {
       groupInfo?: {
         groupId: string;
       };
+      attachments?: SignalAttachment[];
     };
   };
 }
