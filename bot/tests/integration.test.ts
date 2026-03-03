@@ -85,7 +85,7 @@ describe('Integration Tests', () => {
 
       const assistantMessages = context.filter(m => m.role === 'assistant');
       expect(assistantMessages.length).toBeGreaterThan(0);
-      expect(assistantMessages[0].content).toBe('2+2 equals 4!');
+      expect(assistantMessages[0].content).toContain('2+2 equals 4!');
     });
   });
 

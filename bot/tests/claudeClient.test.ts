@@ -308,6 +308,96 @@ describe('ClaudeCLIClient', () => {
       expect(allowedTools).toContain('mcp__dossiers__list_dossiers');
     });
 
+    it('should include Agent in allowed tools', async () => {
+      mockSpawnSuccess(makeResultOutput('Done!'));
+
+      const client = new ClaudeCLIClient();
+      await client.generateResponse([{ role: 'user', content: 'Hi' }]);
+
+      const args = mockSpawn.mock.calls[0][1];
+      const allowedToolsIdx = args.indexOf('--allowedTools') + 1;
+      const allowedTools = args[allowedToolsIdx];
+
+      expect(allowedTools).toContain('Agent');
+    });
+
+    it('should include history MCP tools in allowed tools', async () => {
+      mockSpawnSuccess(makeResultOutput('Done!'));
+
+      const client = new ClaudeCLIClient();
+      await client.generateResponse([{ role: 'user', content: 'Hi' }]);
+
+      const args = mockSpawn.mock.calls[0][1];
+      const allowedToolsIdx = args.indexOf('--allowedTools') + 1;
+      const allowedTools = args[allowedToolsIdx];
+
+      expect(allowedTools).toContain('mcp__history__search_messages');
+      expect(allowedTools).toContain('mcp__history__get_messages_by_date');
+    });
+
+    it('should include --agents flag with message-historian when context is provided', async () => {
+      mockSpawnSuccess(makeResultOutput('Found it!'));
+
+      const client = new ClaudeCLIClient();
+      const messages: ChatMessage[] = [{ role: 'user', content: 'What did we talk about yesterday?' }];
+      const context = {
+        groupId: 'test-group',
+        sender: '+61400000000',
+        dbPath: '/tmp/test.db',
+        timezone: 'Australia/Sydney',
+        githubRepo: 'owner/repo',
+      };
+
+      await client.generateResponse(messages, context);
+
+      const args = mockSpawn.mock.calls[0][1];
+      expect(args).toContain('--agents');
+
+      const agentsIdx = args.indexOf('--agents') + 1;
+      const agentsConfig = JSON.parse(args[agentsIdx]);
+      expect(agentsConfig['message-historian']).toBeDefined();
+      expect(agentsConfig['message-historian'].model).toBe('haiku');
+      expect(agentsConfig['message-historian'].tools).toContain('mcp__history__search_messages');
+      expect(agentsConfig['message-historian'].tools).toContain('mcp__history__get_messages_by_date');
+      expect(agentsConfig['message-historian'].prompt).toContain('Australia/Sydney');
+    });
+
+    it('should not include --agents flag when context is not provided', async () => {
+      mockSpawnSuccess(makeResultOutput('Hello!'));
+
+      const client = new ClaudeCLIClient();
+      await client.generateResponse([{ role: 'user', content: 'Hi' }]);
+
+      const args = mockSpawn.mock.calls[0][1];
+      expect(args).not.toContain('--agents');
+    });
+
+    it('should include history MCP server in config when context is provided', async () => {
+      mockSpawnSuccess(makeResultOutput('History!'));
+
+      const client = new ClaudeCLIClient();
+      const messages: ChatMessage[] = [{ role: 'user', content: 'Search history' }];
+      const context = {
+        groupId: 'test-group',
+        sender: '+61400000000',
+        dbPath: '/tmp/test.db',
+        timezone: 'Australia/Sydney',
+        githubRepo: 'owner/repo',
+      };
+
+      await client.generateResponse(messages, context);
+
+      const args = mockSpawn.mock.calls[0][1];
+      const mcpConfigIdx = args.indexOf('--mcp-config') + 1;
+      const mcpConfig = JSON.parse(args[mcpConfigIdx]);
+
+      expect(mcpConfig.mcpServers.history).toBeDefined();
+      expect(['node', 'npx']).toContain(mcpConfig.mcpServers.history.command);
+      expect(mcpConfig.mcpServers.history.env.DB_PATH).toBe('/tmp/test.db');
+      expect(mcpConfig.mcpServers.history.env.MCP_GROUP_ID).toBe('test-group');
+      expect(mcpConfig.mcpServers.history.env.TZ).toBe('Australia/Sydney');
+    });
+
     it('should include dossier MCP server in config when context is provided', async () => {
       mockSpawnSuccess(makeResultOutput('Updated!'));
 
@@ -385,6 +475,50 @@ describe('ClaudeCLIClient', () => {
       const result = await client.generateResponse([{ role: 'user', content: 'Hi' }]);
 
       expect(result.content).toBe('Array format!');
+    });
+
+    it('should include persona MCP tools in allowed tools', async () => {
+      mockSpawnSuccess(makeResultOutput('Done!'));
+
+      const client = new ClaudeCLIClient();
+      await client.generateResponse([{ role: 'user', content: 'Hi' }]);
+
+      const args = mockSpawn.mock.calls[0][1];
+      const allowedToolsIdx = args.indexOf('--allowedTools') + 1;
+      const allowedTools = args[allowedToolsIdx];
+
+      expect(allowedTools).toContain('mcp__personas__create_persona');
+      expect(allowedTools).toContain('mcp__personas__get_persona');
+      expect(allowedTools).toContain('mcp__personas__list_personas');
+      expect(allowedTools).toContain('mcp__personas__update_persona');
+      expect(allowedTools).toContain('mcp__personas__delete_persona');
+      expect(allowedTools).toContain('mcp__personas__switch_persona');
+    });
+
+    it('should include persona MCP server in config when context is provided', async () => {
+      mockSpawnSuccess(makeResultOutput('Switched!'));
+
+      const client = new ClaudeCLIClient();
+      const messages: ChatMessage[] = [{ role: 'user', content: 'Switch persona' }];
+      const context = {
+        groupId: 'test-group',
+        sender: '+61400000000',
+        dbPath: '/tmp/test.db',
+        timezone: 'Australia/Sydney',
+        githubRepo: 'owner/repo',
+      };
+
+      await client.generateResponse(messages, context);
+
+      const args = mockSpawn.mock.calls[0][1];
+      const mcpConfigIdx = args.indexOf('--mcp-config') + 1;
+      const mcpConfig = JSON.parse(args[mcpConfigIdx]);
+
+      expect(mcpConfig.mcpServers.personas).toBeDefined();
+      expect(['node', 'npx']).toContain(mcpConfig.mcpServers.personas.command);
+      expect(mcpConfig.mcpServers.personas.env.DB_PATH).toBe('/tmp/test.db');
+      expect(mcpConfig.mcpServers.personas.env.MCP_GROUP_ID).toBe('test-group');
+      expect(mcpConfig.mcpServers.personas.env.MCP_SENDER).toBe('+61400000000');
     });
   });
 });

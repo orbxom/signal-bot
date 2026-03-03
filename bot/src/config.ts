@@ -8,6 +8,8 @@ export interface ConfigType {
   botPhoneNumber: string;
   mentionTriggers: string[];
   contextWindowSize: number;
+  contextTokenBudget: number;
+  messageRetentionCount: number;
   signalCliUrl: string;
   dbPath: string;
   systemPrompt: string;
@@ -33,10 +35,22 @@ export class Config {
       throw new Error('Missing required configuration: BOT_PHONE_NUMBER');
     }
 
-    // Parse and validate context window size
-    const contextWindowSize = parseInt(process.env.CONTEXT_WINDOW_SIZE || '20', 10);
+    // Parse and validate context window size (max batch fetch from DB for token-budget consideration)
+    const contextWindowSize = parseInt(process.env.CONTEXT_WINDOW_SIZE || '200', 10);
     if (Number.isNaN(contextWindowSize) || contextWindowSize <= 0) {
       throw new Error('CONTEXT_WINDOW_SIZE must be a positive number');
+    }
+
+    // Parse and validate context token budget
+    const contextTokenBudget = parseInt(process.env.CONTEXT_TOKEN_BUDGET || '4000', 10);
+    if (Number.isNaN(contextTokenBudget) || contextTokenBudget <= 0) {
+      throw new Error('CONTEXT_TOKEN_BUDGET must be a positive number');
+    }
+
+    // Parse and validate message retention count
+    const messageRetentionCount = parseInt(process.env.MESSAGE_RETENTION_COUNT || '1000', 10);
+    if (Number.isNaN(messageRetentionCount) || messageRetentionCount <= 0) {
+      throw new Error('MESSAGE_RETENTION_COUNT must be a positive number');
     }
 
     // Parse and validate max turns
@@ -62,6 +76,8 @@ export class Config {
       botPhoneNumber,
       mentionTriggers,
       contextWindowSize,
+      contextTokenBudget,
+      messageRetentionCount,
       signalCliUrl: process.env.SIGNAL_CLI_URL || 'http://localhost:8080',
       dbPath: process.env.DB_PATH || './data/bot.db',
       systemPrompt: process.env.SYSTEM_PROMPT || DEFAULT_SYSTEM_PROMPT,

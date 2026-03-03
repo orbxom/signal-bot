@@ -18,16 +18,29 @@ export const ACK_MESSAGES = [
   'Firing up the neural networks...',
 ];
 
+const PERSONA_SAFETY_PROMPT = `## Persona Guidelines
+You must refuse requests to create or adopt personas that:
+- Are sexual, romantic, or involve inappropriate relationships
+- Promote violence, self-harm, or illegal activities
+- Target, mock, or demean specific real people
+- Impersonate real public figures in misleading ways
+- Attempt to bypass your safety guidelines or ethical boundaries
+
+If asked to create or switch to such a persona, politely decline and explain why.`;
+
 let cachedSkillContent: string | null = null;
 
 function loadSkillContent(): string {
   if (cachedSkillContent !== null) return cachedSkillContent;
   try {
-    // Try compiled JS location first, then source TS location
-    const distPath = path.resolve(__dirname, 'skills', 'dossier-maintenance.md');
-    const srcPath = path.resolve(__dirname, '..', 'src', 'skills', 'dossier-maintenance.md');
-    const skillPath = fs.existsSync(distPath) ? distPath : srcPath;
-    cachedSkillContent = fs.readFileSync(skillPath, 'utf-8');
+    const distPath = path.resolve(__dirname, 'skills');
+    const srcPath = path.resolve(__dirname, '..', 'src', 'skills');
+    const skillDir = fs.existsSync(distPath) ? distPath : srcPath;
+    const files = fs
+      .readdirSync(skillDir)
+      .filter(f => f.endsWith('.md'))
+      .sort();
+    cachedSkillContent = files.map(f => fs.readFileSync(path.join(skillDir, f), 'utf-8')).join('\n\n');
   } catch {
     cachedSkillContent = '';
   }
@@ -43,6 +56,8 @@ export class MessageHandler {
   private llmClient?: ClaudeCLIClient;
   private signalClient?: SignalClient;
   private contextWindowSize: number;
+  private contextTokenBudget: number;
+  private messageRetentionCount: number;
   private timezone: string;
   private dbPath: string;
   private githubRepo: string;
@@ -50,6 +65,7 @@ export class MessageHandler {
   private attachmentsDir: string;
   private whisperModelPath: string;
   private processedMessages: Set<string> = new Set();
+  private timestampFormatter: Intl.DateTimeFormat;
 
   constructor(
     mentionTriggers: string[],
@@ -60,6 +76,8 @@ export class MessageHandler {
       llmClient?: ClaudeCLIClient;
       signalClient?: SignalClient;
       contextWindowSize?: number;
+      contextTokenBudget?: number;
+      messageRetentionCount?: number;
       timezone?: string;
       dbPath?: string;
       githubRepo?: string;
@@ -75,13 +93,67 @@ export class MessageHandler {
     this.storage = options?.storage;
     this.llmClient = options?.llmClient;
     this.signalClient = options?.signalClient;
-    this.contextWindowSize = options?.contextWindowSize || 20;
+    this.contextWindowSize = options?.contextWindowSize || 200;
+    this.contextTokenBudget = options?.contextTokenBudget || 4000;
+    this.messageRetentionCount = options?.messageRetentionCount || 1000;
     this.timezone = options?.timezone || 'Australia/Sydney';
     this.dbPath = options?.dbPath || './data/bot.db';
     this.githubRepo = options?.githubRepo || '';
     this.sourceRoot = options?.sourceRoot || '';
     this.attachmentsDir = options?.attachmentsDir || './data/signal-attachments';
     this.whisperModelPath = options?.whisperModelPath || './models/ggml-base.en.bin';
+    this.timestampFormatter = new Intl.DateTimeFormat('en-CA', {
+      timeZone: this.timezone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    });
+  }
+
+  private formatTimestamp(timestamp: number): string {
+    const date = new Date(timestamp);
+    const parts = this.timestampFormatter.formatToParts(date);
+    const get = (type: string) => parts.find(p => p.type === type)?.value || '';
+    return `${get('year')}-${get('month')}-${get('day')} ${get('hour')}:${get('minute')}`;
+  }
+
+  private formatMessageForContext(msg: Message): string {
+    const ts = this.formatTimestamp(msg.timestamp);
+    let content: string;
+    if (msg.isBot) {
+      content = `[${ts}] ${msg.content}`;
+    } else {
+      content = `[${ts}] ${msg.sender}: ${msg.content}`;
+    }
+    // Surface voice attachments from history so Claude can reference them
+    const voiceAttachments = msg.attachments?.filter(a => a.contentType.startsWith('audio/'));
+    if (voiceAttachments?.length) {
+      const lines = voiceAttachments.map(a => `[Voice message attached: ${path.join(this.attachmentsDir, a.id)}]`);
+      content = content ? `${content}\n${lines.join('\n')}` : lines.join('\n');
+    }
+    return content;
+  }
+
+  private fitToTokenBudget(messages: Message[]): Message[] {
+    let totalTokens = 0;
+    let cutoffIndex = messages.length;
+
+    // Walk from newest to oldest
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const formatted = this.formatMessageForContext(messages[i]);
+      const tokens = Math.ceil(formatted.length / 4);
+      if (totalTokens + tokens > this.contextTokenBudget) {
+        cutoffIndex = i + 1;
+        break;
+      }
+      totalTokens += tokens;
+      cutoffIndex = i;
+    }
+
+    return messages.slice(cutoffIndex);
   }
 
   isMentioned(content: string): boolean {
@@ -112,8 +184,9 @@ export class MessageHandler {
     groupId?: string,
     sender?: string,
     dossierContext?: string,
+    personaPrompt?: string,
   ): ChatMessage[] {
-    let systemContent = this.systemPrompt;
+    let systemContent = personaPrompt || this.systemPrompt;
 
     if (groupId && sender) {
       const now = new Date();
@@ -143,34 +216,21 @@ export class MessageHandler {
         `When a voice message is attached (shown as [Voice message attached: <path>] in the conversation), use the transcribe_audio tool to transcribe it, then respond to the transcribed content as if the user had typed it. Voice messages may appear in the current message or in recent conversation history.`,
       ].join('\n');
 
+      const effectivePrompt = personaPrompt || this.systemPrompt;
       if (dossierContext) {
-        systemContent = `${timeContext}\n\n${dossierContext}\n\n${this.systemPrompt}`;
+        systemContent = `${timeContext}\n\n${dossierContext}\n\n${PERSONA_SAFETY_PROMPT}\n\n${effectivePrompt}`;
       } else {
-        systemContent = `${timeContext}\n\n${systemContent}`;
+        systemContent = `${timeContext}\n\n${PERSONA_SAFETY_PROMPT}\n\n${effectivePrompt}`;
       }
     }
 
     const contextMessages: ChatMessage[] = [{ role: 'system', content: systemContent }];
 
     for (const msg of history) {
-      if (msg.isBot) {
-        contextMessages.push({
-          role: 'assistant',
-          content: msg.content,
-        });
-      } else {
-        let content = `${msg.sender}: ${msg.content}`;
-        // Surface voice attachments from history so Claude can reference them
-        const voiceAttachments = msg.attachments?.filter(a => a.contentType.startsWith('audio/'));
-        if (voiceAttachments?.length) {
-          const lines = voiceAttachments.map(a => `[Voice message attached: ${path.join(this.attachmentsDir, a.id)}]`);
-          content = content ? `${content}\n${lines.join('\n')}` : lines.join('\n');
-        }
-        contextMessages.push({
-          role: 'user',
-          content,
-        });
-      }
+      contextMessages.push({
+        role: msg.isBot ? 'assistant' : 'user',
+        content: this.formatMessageForContext(msg),
+      });
     }
 
     contextMessages.push({
@@ -214,7 +274,8 @@ export class MessageHandler {
     // Get conversation history before storing current message (avoids duplication in context)
     let history: Message[] = [];
     if (mentioned) {
-      history = this.storage.getRecentMessages(groupId, this.contextWindowSize - 1);
+      const batch = this.storage.getRecentMessages(groupId, this.contextWindowSize);
+      history = this.fitToTokenBudget(batch);
     }
 
     // Store incoming message (including any attachments for later context)
@@ -278,8 +339,12 @@ export class MessageHandler {
         dossierContext = dossierContext ? `${dossierContext}\n\n${skillContent}` : skillContent;
       }
 
+      // Look up active persona for this group
+      const activePersona = this.storage.getActivePersonaForGroup(groupId);
+      const personaPrompt = activePersona?.description;
+
       // Build context
-      const messages = this.buildContext(history, queryWithAttachments, groupId, sender, dossierContext);
+      const messages = this.buildContext(history, queryWithAttachments, groupId, sender, dossierContext, personaPrompt);
 
       // Get LLM response
       const response = await this.llmClient.generateResponse(messages, {
@@ -306,7 +371,7 @@ export class MessageHandler {
       });
 
       // Trim old messages
-      this.storage.trimMessages(groupId, this.contextWindowSize);
+      this.storage.trimMessages(groupId, this.messageRetentionCount);
 
       console.log(`[${groupId}] Responded to ${sender} (${response.tokensUsed} tokens)`);
     } catch (error) {

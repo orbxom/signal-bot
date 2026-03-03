@@ -19,18 +19,13 @@ Claude-powered Signal bot for family group chat. Responds to mention triggers in
 
 ### Prerequisites
 
-- signal-cli container must be running (handles Signal protocol)
+- signal-cli must be running locally (handles Signal protocol)
 - Claude CLI installed and authenticated (`claude login`)
 - Node.js 20+
 
 ### Steps
 
-1. Start the signal-cli container (if not already running):
-   ```bash
-   docker compose up -d signal-cli
-   ```
-
-2. Ensure `.env` exists in the project root with at least `BOT_PHONE_NUMBER` set. For local dev, override `SIGNAL_CLI_URL` to point at localhost since signal-cli exposes port 8080:
+1. Ensure `.env` exists in the project root with at least `BOT_PHONE_NUMBER` set:
    ```bash
    # .env
    BOT_PHONE_NUMBER=+61XXXXXXXXXX
@@ -39,7 +34,7 @@ Claude-powered Signal bot for family group chat. Responds to mention triggers in
    CLAUDE_MAX_TURNS=25
    ```
 
-3. Run the bot in dev mode (hot reload via tsx):
+2. Run the bot in dev mode (hot reload via tsx):
    ```bash
    cd bot
    npm run dev:test    # Test channel only (default for dev — prevents spamming family group)
@@ -48,29 +43,19 @@ Claude-powered Signal bot for family group chat. Responds to mention triggers in
 
    **Always use `npm run dev:test` for local development** unless specifically asked to test against all groups. This restricts the bot to the "Bot Test" group only.
 
-4. Send a message starting with the mention trigger (e.g. `claude: hello`) in the Bot Test Signal group.
+3. Send a message starting with the mention trigger (e.g. `claude: hello`) in the Bot Test Signal group.
 
 ### Troubleshooting
 
-- **signal-cli connection issues**: Check `docker logs signal-cli` for `Connection closed unexpectedly` errors. Fix with `docker compose down signal-cli && docker compose up -d signal-cli` (full recreate, not just restart).
 - **Bot not receiving messages**: The `extractMessageData` method only processes group messages with `dataMessage.message` and `groupInfo.groupId`. DMs and reactions are silently dropped.
-- **MCP tools not working**: In dev mode, MCP servers run via `npx tsx` on the `.ts` source files. In production (Docker), they run via `node` on compiled `.js` in `dist/`. The `resolveMcpServerPath` helper in `claudeClient.ts` handles this automatically.
-- **"Specified account does not exist"**: signal-cli failed to load the account on startup. Usually a transient network issue — recreate the container.
+- **MCP tools not working**: MCP servers run via `npx tsx` on the `.ts` source files. The `resolveMcpServerPath` helper in `claudeClient.ts` handles path resolution.
 
 ## Testing
 
 ```bash
 cd bot
-npm test              # Run all 166 tests (vitest watch mode)
+npm test              # Run all tests (vitest watch mode)
 npx vitest run        # Single run
 npm run lint          # Biome lint
 npm run check         # Biome lint + format check
 ```
-
-## Production Deployment
-
-```bash
-docker compose up --build -d
-```
-
-This builds the bot container (compiles TS to JS), starts both signal-cli and the bot, and connects them via the `bot-network` Docker network.
