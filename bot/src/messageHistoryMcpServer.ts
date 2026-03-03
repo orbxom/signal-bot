@@ -52,13 +52,30 @@ const TOOLS = [
   },
 ];
 
+// Use same YYYY-MM-DD HH:MM format as the conversation context timestamps
+const timestampFormatter = new Intl.DateTimeFormat('en-CA', {
+  timeZone: tz,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  hour12: false,
+});
+
+function formatTimestamp(timestamp: number): string {
+  const parts = timestampFormatter.formatToParts(new Date(timestamp));
+  const get = (type: string) => parts.find(p => p.type === type)?.value || '';
+  return `${get('year')}-${get('month')}-${get('day')} ${get('hour')}:${get('minute')}`;
+}
+
 function formatMessages(messages: Message[]): string {
   if (messages.length === 0) {
     return 'No messages found.';
   }
 
   const lines = messages.map(msg => {
-    const time = new Date(msg.timestamp).toLocaleString('en-AU', { timeZone: tz });
+    const time = formatTimestamp(msg.timestamp);
     return `[${time}] ${msg.sender}: ${msg.content}`;
   });
 

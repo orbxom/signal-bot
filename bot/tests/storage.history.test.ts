@@ -101,9 +101,7 @@ describe('Storage - History Search', () => {
 
     it('should return empty array when no matches', () => {
       createStorage();
-      seedMessages('group1', [
-        { sender: 'Alice', content: 'Hello world', timestamp: 1000 },
-      ]);
+      seedMessages('group1', [{ sender: 'Alice', content: 'Hello world', timestamp: 1000 }]);
 
       const results = storage.searchMessages('group1', 'nonexistent');
       expect(results).toEqual([]);
@@ -201,12 +199,8 @@ describe('Storage - History Search', () => {
 
     it('should only search within the specified group', () => {
       createStorage();
-      seedMessages('group1', [
-        { sender: 'Alice', content: 'Hello from group1', timestamp: 1000 },
-      ]);
-      seedMessages('group2', [
-        { sender: 'Bob', content: 'Hello from group2', timestamp: 2000 },
-      ]);
+      seedMessages('group1', [{ sender: 'Alice', content: 'Hello from group1', timestamp: 1000 }]);
+      seedMessages('group2', [{ sender: 'Bob', content: 'Hello from group2', timestamp: 2000 }]);
 
       const results = storage.searchMessages('group1', 'Hello');
       expect(results).toHaveLength(1);
@@ -354,9 +348,7 @@ describe('Storage - History Search', () => {
 
     it('should return empty array when no messages in range', () => {
       createStorage();
-      seedMessages('group1', [
-        { sender: 'Alice', content: 'Outside range', timestamp: 500 },
-      ]);
+      seedMessages('group1', [{ sender: 'Alice', content: 'Outside range', timestamp: 500 }]);
 
       const results = storage.getMessagesByDateRange('group1', 1000, 2000);
       expect(results).toEqual([]);
@@ -370,12 +362,8 @@ describe('Storage - History Search', () => {
 
     it('should only retrieve messages from the specified group', () => {
       createStorage();
-      seedMessages('group1', [
-        { sender: 'Alice', content: 'Group 1 message', timestamp: 1500 },
-      ]);
-      seedMessages('group2', [
-        { sender: 'Bob', content: 'Group 2 message', timestamp: 1500 },
-      ]);
+      seedMessages('group1', [{ sender: 'Alice', content: 'Group 1 message', timestamp: 1500 }]);
+      seedMessages('group2', [{ sender: 'Bob', content: 'Group 2 message', timestamp: 1500 }]);
 
       const results = storage.getMessagesByDateRange('group1', 1000, 2000);
       expect(results).toHaveLength(1);
@@ -458,9 +446,7 @@ describe('Storage - History Search', () => {
 
     it('should return empty when startTs > endTs', () => {
       createStorage();
-      seedMessages('group1', [
-        { sender: 'Alice', content: 'A message', timestamp: 1500 },
-      ]);
+      seedMessages('group1', [{ sender: 'Alice', content: 'A message', timestamp: 1500 }]);
 
       const results = storage.getMessagesByDateRange('group1', 2000, 1000);
       expect(results).toEqual([]);

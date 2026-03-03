@@ -356,9 +356,8 @@ describe('Message History MCP Server', () => {
 
       const result = response.result as { content: Array<{ text: string }> };
       // 2024-01-15 10:00 UTC = 2024-01-15 21:00 AEDT (Australia/Sydney)
-      // en-AU format: DD/MM/YYYY, h:mm:ss am/pm
-      expect(result.content[0].text).toContain('15/01/2024');
-      expect(result.content[0].text).toContain('9:00:00 pm');
+      // ISO-like format: YYYY-MM-DD HH:MM (same as conversation context timestamps)
+      expect(result.content[0].text).toContain('2024-01-15 21:00');
     } finally {
       proc.kill();
     }
