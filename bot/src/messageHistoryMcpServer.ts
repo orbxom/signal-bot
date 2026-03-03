@@ -13,7 +13,7 @@ const TOOLS = [
     name: 'search_messages',
     title: 'Search Messages',
     description:
-      'Search chat history for messages containing a keyword, with optional sender and date range filters.',
+      'Search chat history for messages containing a keyword, with optional sender and date range filters. Returns up to 100 results.',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -34,7 +34,7 @@ const TOOLS = [
   {
     name: 'get_messages_by_date',
     title: 'Get Messages by Date',
-    description: 'Retrieve all messages within a date range.',
+    description: 'Retrieve all messages within a date range. Returns up to 200 results.',
     inputSchema: {
       type: 'object' as const,
       properties: {

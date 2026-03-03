@@ -196,18 +196,10 @@ export class MessageHandler {
     const contextMessages: ChatMessage[] = [{ role: 'system', content: systemContent }];
 
     for (const msg of history) {
-      const ts = this.formatTimestamp(msg.timestamp);
-      if (msg.isBot) {
-        contextMessages.push({
-          role: 'assistant',
-          content: `[${ts}] ${msg.content}`,
-        });
-      } else {
-        contextMessages.push({
-          role: 'user',
-          content: `[${ts}] ${msg.sender}: ${msg.content}`,
-        });
-      }
+      contextMessages.push({
+        role: msg.isBot ? 'assistant' : 'user',
+        content: this.formatMessageForContext(msg),
+      });
     }
 
     contextMessages.push({

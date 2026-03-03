@@ -14,7 +14,7 @@ interface ClaudeResultLine {
   };
 }
 
-const BASE_TOOLS = 'WebSearch,WebFetch,Read,Glob,Grep';
+const BASE_TOOLS = 'WebSearch,WebFetch,Read,Glob,Grep,Agent';
 const MCP_TOOLS = [
   'mcp__reminders__set_reminder',
   'mcp__reminders__list_reminders',
@@ -30,6 +30,8 @@ const MCP_TOOLS = [
   'mcp__sourcecode__list_files',
   'mcp__sourcecode__read_file',
   'mcp__sourcecode__search_code',
+  'mcp__history__search_messages',
+  'mcp__history__get_messages_by_date',
 ].join(',');
 const ALLOWED_TOOLS = `${BASE_TOOLS},${MCP_TOOLS}`;
 
@@ -138,6 +140,7 @@ export class ClaudeCLIClient {
       const github = resolveMcpServerPath('githubMcpServer');
       const dossiers = resolveMcpServerPath('dossierMcpServer');
       const sourcecode = resolveMcpServerPath('sourceCodeMcpServer');
+      const history = resolveMcpServerPath('messageHistoryMcpServer');
       const mcpConfig = JSON.stringify({
         mcpServers: {
           reminders: {
@@ -181,9 +184,29 @@ export class ClaudeCLIClient {
               SOURCE_ROOT: context.sourceRoot,
             },
           },
+          history: {
+            command: history.command,
+            args: history.args,
+            env: {
+              DB_PATH: context.dbPath,
+              MCP_GROUP_ID: context.groupId,
+              TZ: context.timezone,
+            },
+          },
         },
       });
       args.push('--mcp-config', mcpConfig, '--strict-mcp-config');
+
+      const agentsConfig = JSON.stringify({
+        'message-historian': {
+          description:
+            'Searches and summarizes historical messages from this group chat. Use when someone asks about past conversations, what was said before, or wants to find old messages.',
+          prompt: `You search through chat history and return concise summaries. Use search_messages for keyword lookups and get_messages_by_date for date ranges. Quote relevant messages directly with timestamps and sender names. Timezone: ${context.timezone}`,
+          tools: ['mcp__history__search_messages', 'mcp__history__get_messages_by_date'],
+          model: 'haiku',
+        },
+      });
+      args.push('--agents', agentsConfig);
     }
 
     if (systemPrompt) {
