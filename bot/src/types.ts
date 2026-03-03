@@ -5,6 +5,7 @@ export interface Message {
   content: string;
   timestamp: number;
   isBot: boolean;
+  attachments?: SignalAttachment[];
 }
 
 export interface ChatMessage {

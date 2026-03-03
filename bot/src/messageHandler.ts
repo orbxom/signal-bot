@@ -140,7 +140,7 @@ export class MessageHandler {
         `Group ID: ${groupId}`,
         `Current requester: ${sender}`,
         `You have access to your own source code via the sourcecode tools (list_files, read_file, search_code). When asked how you work, what you can do, or technical questions about your implementation, use these tools to read the actual code before answering.`,
-        `When a voice message is attached, use the transcribe_audio tool to transcribe it, then respond to the transcribed content as if the user had typed it.`,
+        `When a voice message is attached (shown as [Voice message attached: <path>] in the conversation), use the transcribe_audio tool to transcribe it, then respond to the transcribed content as if the user had typed it. Voice messages may appear in the current message or in recent conversation history.`,
       ].join('\n');
 
       if (dossierContext) {
@@ -159,9 +159,16 @@ export class MessageHandler {
           content: msg.content,
         });
       } else {
+        let content = `${msg.sender}: ${msg.content}`;
+        // Surface voice attachments from history so Claude can reference them
+        const voiceAttachments = msg.attachments?.filter(a => a.contentType.startsWith('audio/'));
+        if (voiceAttachments?.length) {
+          const lines = voiceAttachments.map(a => `[Voice message attached: ${path.join(this.attachmentsDir, a.id)}]`);
+          content = content ? `${content}\n${lines.join('\n')}` : lines.join('\n');
+        }
         contextMessages.push({
           role: 'user',
-          content: `${msg.sender}: ${msg.content}`,
+          content,
         });
       }
     }
@@ -210,13 +217,14 @@ export class MessageHandler {
       history = this.storage.getRecentMessages(groupId, this.contextWindowSize - 1);
     }
 
-    // Store incoming message
+    // Store incoming message (including any attachments for later context)
     this.storage.addMessage({
       groupId,
       sender,
       content,
       timestamp,
       isBot: false,
+      attachments: attachments.length > 0 ? attachments : undefined,
     });
 
     if (!mentioned) {

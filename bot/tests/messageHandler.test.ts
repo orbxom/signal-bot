@@ -754,6 +754,87 @@ describe('MessageHandler', () => {
       });
     });
 
+    describe('voice attachments from history', () => {
+      it('should include voice attachment paths from history messages in context', async () => {
+        const mockHistory: Message[] = [
+          {
+            id: 1,
+            groupId: 'g1',
+            sender: 'Alice',
+            content: '',
+            timestamp: 500,
+            isBot: false,
+            attachments: [{ id: 'voice-abc', contentType: 'audio/aac', size: 5000, filename: null }],
+          },
+        ];
+        mockStorage.getRecentMessages = vi.fn().mockReturnValue(mockHistory);
+
+        const handler = new MessageHandler(['@bot'], {
+          storage: mockStorage,
+          llmClient: mockLLM,
+          signalClient: mockSignal,
+          attachmentsDir: '/data/attachments',
+        });
+
+        await handler.handleMessage('g1', 'Bob', '@bot transcribe that', 1000);
+
+        const callArgs = (mockLLM.generateResponse as ReturnType<typeof vi.fn>).mock.calls[0];
+        const messages = callArgs[0];
+        // History message should include voice attachment path
+        const historyMsg = messages.find(
+          (m: { role: string; content: string }) => m.role === 'user' && m.content.includes('Alice'),
+        );
+        expect(historyMsg.content).toContain('[Voice message attached: /data/attachments/voice-abc]');
+      });
+
+      it('should not include non-audio attachments from history in context', async () => {
+        const mockHistory: Message[] = [
+          {
+            id: 1,
+            groupId: 'g1',
+            sender: 'Alice',
+            content: 'check this',
+            timestamp: 500,
+            isBot: false,
+            attachments: [{ id: 'img-123', contentType: 'image/jpeg', size: 50000, filename: 'photo.jpg' }],
+          },
+        ];
+        mockStorage.getRecentMessages = vi.fn().mockReturnValue(mockHistory);
+
+        const handler = new MessageHandler(['@bot'], {
+          storage: mockStorage,
+          llmClient: mockLLM,
+          signalClient: mockSignal,
+        });
+
+        await handler.handleMessage('g1', 'Bob', '@bot what was that', 1000);
+
+        const callArgs = (mockLLM.generateResponse as ReturnType<typeof vi.fn>).mock.calls[0];
+        const messages = callArgs[0];
+        const historyMsg = messages.find(
+          (m: { role: string; content: string }) => m.role === 'user' && m.content.includes('Alice'),
+        );
+        expect(historyMsg.content).not.toContain('[Voice message attached:');
+      });
+
+      it('should store attachments when saving incoming message', async () => {
+        const handler = new MessageHandler(['@bot'], {
+          storage: mockStorage,
+          llmClient: mockLLM,
+          signalClient: mockSignal,
+        });
+
+        const attachments = [{ id: 'voice-xyz', contentType: 'audio/aac', size: 3000, filename: null }];
+        await handler.handleMessage('g1', 'Alice', 'hello', 1000, attachments);
+
+        expect(mockStorage.addMessage).toHaveBeenCalledWith(
+          expect.objectContaining({
+            attachments,
+          }),
+        );
+      });
+    });
+
     describe('typing indicators', () => {
       it('should start typing indicator when mentioned', async () => {
         const handler = new MessageHandler(['@bot'], {
