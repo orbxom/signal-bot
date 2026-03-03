@@ -720,7 +720,11 @@ describe('MessageHandler', () => {
 
       await handler.handleMessage('g1', 'Alice', '@bot hello', 1000);
 
-      expect(callOrder).toEqual([
+      // Filter out any interval-based sendTyping calls to test core ordering
+      const coreOrder = callOrder.filter(
+        (entry, i) => !(entry === 'sendTyping' && i > callOrder.indexOf('sendTyping')),
+      );
+      expect(coreOrder).toEqual([
         `sendMessage:${ACK_MESSAGES[0]}`,
         'sendTyping',
         'sendMessage:Test response',
@@ -950,6 +954,87 @@ describe('MessageHandler', () => {
         expect(mockSignal.sendMessage).toHaveBeenCalledWith('g1', 'Test response');
 
         consoleErrorSpy.mockRestore();
+      });
+
+      it('should refresh typing indicator during long-running LLM calls', async () => {
+        vi.useFakeTimers();
+
+        // Simulate a 25-second LLM call
+        mockLLM.generateResponse = vi.fn().mockImplementation(
+          () =>
+            new Promise(resolve => {
+              setTimeout(() => resolve({ content: 'Slow response', tokensUsed: 500 }), 25_000);
+            }),
+        );
+
+        const handler = new MessageHandler(['@bot'], {
+          storage: mockStorage,
+          llmClient: mockLLM,
+          signalClient: mockSignal,
+        });
+
+        const promise = handler.handleMessage('g1', 'Alice', '@bot hello', 1000);
+
+        // Initial sendTyping call
+        await vi.advanceTimersByTimeAsync(0);
+        expect(mockSignal.sendTyping).toHaveBeenCalledTimes(1);
+
+        // After 10s, interval fires
+        await vi.advanceTimersByTimeAsync(10_000);
+        expect(mockSignal.sendTyping).toHaveBeenCalledTimes(2);
+
+        // After 20s, interval fires again
+        await vi.advanceTimersByTimeAsync(10_000);
+        expect(mockSignal.sendTyping).toHaveBeenCalledTimes(3);
+
+        // Let the LLM resolve at 25s
+        await vi.advanceTimersByTimeAsync(5_000);
+        await promise;
+
+        // No more calls after resolution
+        expect(mockSignal.stopTyping).toHaveBeenCalledWith('g1');
+
+        vi.useRealTimers();
+      });
+
+      it('should clear typing interval even when LLM errors', async () => {
+        vi.useFakeTimers();
+
+        mockLLM.generateResponse = vi.fn().mockImplementation(
+          () =>
+            new Promise((_, reject) => {
+              setTimeout(() => reject(new Error('LLM failed')), 15_000);
+            }),
+        );
+        const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+        const handler = new MessageHandler(['@bot'], {
+          storage: mockStorage,
+          llmClient: mockLLM,
+          signalClient: mockSignal,
+        });
+
+        const promise = handler.handleMessage('g1', 'Alice', '@bot hello', 1000);
+
+        // Initial sendTyping + one interval tick at 10s
+        await vi.advanceTimersByTimeAsync(10_000);
+        expect(mockSignal.sendTyping).toHaveBeenCalledTimes(2);
+
+        // Let the LLM reject at 15s
+        await vi.advanceTimersByTimeAsync(5_000);
+        await promise;
+
+        // Reset the mock call count to verify no more interval calls
+        mockSignal.sendTyping.mockClear();
+
+        // Advance well past the next interval tick
+        await vi.advanceTimersByTimeAsync(20_000);
+        expect(mockSignal.sendTyping).not.toHaveBeenCalled();
+
+        expect(mockSignal.stopTyping).toHaveBeenCalledWith('g1');
+
+        consoleErrorSpy.mockRestore();
+        vi.useRealTimers();
       });
     });
 
