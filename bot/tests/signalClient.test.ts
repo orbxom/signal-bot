@@ -56,6 +56,7 @@ describe('SignalClient', () => {
       expect(extracted?.content).toBe('Test message');
       expect(extracted?.groupId).toBe('abc123');
       expect(extracted?.timestamp).toBe(1234567890);
+      expect(extracted?.attachments).toEqual([]);
     });
 
     it('should use source when sourceNumber is not available', () => {
@@ -78,6 +79,7 @@ describe('SignalClient', () => {
       const extracted = client.extractMessageData(signalMsg);
       expect(extracted).not.toBeNull();
       expect(extracted?.sender).toBe('+1111111111');
+      expect(extracted?.attachments).toEqual([]);
     });
 
     it('should use "unknown" when no sender info is available', () => {
@@ -99,6 +101,7 @@ describe('SignalClient', () => {
       const extracted = client.extractMessageData(signalMsg);
       expect(extracted).not.toBeNull();
       expect(extracted?.sender).toBe('unknown');
+      expect(extracted?.attachments).toEqual([]);
     });
 
     it('should return null when dataMessage is missing', () => {
@@ -172,6 +175,84 @@ describe('SignalClient', () => {
 
       const extracted = client.extractMessageData(signalMsg);
       expect(extracted).toBeNull();
+    });
+
+    it('should extract attachment metadata from Signal envelope', () => {
+      const client = new SignalClient('http://localhost:8080', '+1234567890');
+
+      const signalMsg: SignalMessage = {
+        envelope: {
+          sourceNumber: '+9876543210',
+          timestamp: 1234567890,
+          dataMessage: {
+            timestamp: 1234567890,
+            message: 'claude: check this',
+            groupInfo: { groupId: 'abc123' },
+            attachments: [
+              {
+                id: 'attachment-abc',
+                contentType: 'audio/aac',
+                size: 12345,
+                filename: null,
+              },
+            ],
+          },
+        },
+      };
+
+      const extracted = client.extractMessageData(signalMsg);
+      expect(extracted).not.toBeNull();
+      expect(extracted?.attachments).toHaveLength(1);
+      expect(extracted?.attachments?.[0].id).toBe('attachment-abc');
+      expect(extracted?.attachments?.[0].contentType).toBe('audio/aac');
+    });
+
+    it('should return message data with empty attachments array when none present', () => {
+      const client = new SignalClient('http://localhost:8080', '+1234567890');
+
+      const signalMsg: SignalMessage = {
+        envelope: {
+          sourceNumber: '+9876543210',
+          timestamp: 1234567890,
+          dataMessage: {
+            timestamp: 1234567890,
+            message: 'Hello',
+            groupInfo: { groupId: 'abc123' },
+          },
+        },
+      };
+
+      const extracted = client.extractMessageData(signalMsg);
+      expect(extracted).not.toBeNull();
+      expect(extracted?.attachments).toEqual([]);
+    });
+
+    it('should extract data from voice-only messages with no text', () => {
+      const client = new SignalClient('http://localhost:8080', '+1234567890');
+
+      const signalMsg: SignalMessage = {
+        envelope: {
+          sourceNumber: '+9876543210',
+          timestamp: 1234567890,
+          dataMessage: {
+            timestamp: 1234567890,
+            groupInfo: { groupId: 'abc123' },
+            attachments: [
+              {
+                id: 'voice-123',
+                contentType: 'audio/aac',
+                size: 5000,
+                filename: null,
+              },
+            ],
+          },
+        },
+      };
+
+      const extracted = client.extractMessageData(signalMsg);
+      expect(extracted).not.toBeNull();
+      expect(extracted?.content).toBe('');
+      expect(extracted?.attachments).toHaveLength(1);
     });
   });
 

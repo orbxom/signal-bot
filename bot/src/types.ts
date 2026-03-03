@@ -50,6 +50,13 @@ export interface MessageContext {
   sourceRoot: string;
 }
 
+export interface SignalAttachment {
+  id: string;
+  contentType: string;
+  size: number;
+  filename: string | null;
+}
+
 export interface SignalMessage {
   envelope: {
     source?: string;
@@ -62,6 +69,7 @@ export interface SignalMessage {
       groupInfo?: {
         groupId: string;
       };
+      attachments?: SignalAttachment[];
     };
   };
 }

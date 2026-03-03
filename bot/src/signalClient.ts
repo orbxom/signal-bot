@@ -1,4 +1,4 @@
-import type { SignalMessage } from './types';
+import type { SignalAttachment, SignalMessage } from './types';
 
 export class SignalClient {
   private baseUrl: string;
@@ -89,19 +89,24 @@ export class SignalClient {
     content: string;
     groupId: string;
     timestamp: number;
+    attachments: SignalAttachment[];
   } | null {
     const envelope = signalMsg.envelope;
     const dataMessage = envelope.dataMessage;
+    const attachments = dataMessage?.attachments ?? [];
+    const hasContent = !!dataMessage?.message;
+    const hasAttachments = attachments.length > 0;
 
-    if (!dataMessage?.message || !dataMessage.groupInfo?.groupId) {
+    if ((!hasContent && !hasAttachments) || !dataMessage?.groupInfo?.groupId) {
       return null;
     }
 
     return {
       sender: envelope.sourceNumber || envelope.source || 'unknown',
-      content: dataMessage.message,
+      content: dataMessage.message ?? '',
       groupId: dataMessage.groupInfo.groupId,
       timestamp: envelope.timestamp,
+      attachments,
     };
   }
 }
