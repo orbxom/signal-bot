@@ -48,11 +48,11 @@ describe('MessageHandler', () => {
 
     expect(chatMessages[0].role).toBe('system');
     expect(chatMessages[1].role).toBe('user');
-    expect(chatMessages[1].content).toContain('Alice: Hello');
+    expect(chatMessages[1].content).toBe('[1970-01-01 10:00] Alice: Hello');
     expect(chatMessages[2].role).toBe('assistant');
-    expect(chatMessages[2].content).toBe('Hi Alice!');
+    expect(chatMessages[2].content).toBe('[1970-01-01 10:00] Hi Alice!');
     expect(chatMessages[3].role).toBe('user');
-    expect(chatMessages[3].content).toContain('Bob: How are you?');
+    expect(chatMessages[3].content).toBe('[1970-01-01 10:00] Bob: How are you?');
     expect(chatMessages[4].role).toBe('user');
     expect(chatMessages[4].content).toContain('What time is it?');
   });
@@ -75,7 +75,7 @@ describe('MessageHandler', () => {
       expect(handler).toBeDefined();
     });
 
-    it('should use default context window size of 20', () => {
+    it('should use default context window size of 200', () => {
       const handler = new MessageHandler(['@bot']);
       expect(handler).toBeDefined();
     });
@@ -172,9 +172,9 @@ describe('MessageHandler', () => {
 
       const chatMessages = handler.buildContext(messages, 'Query');
 
-      expect(chatMessages[1].content).toContain('First');
-      expect(chatMessages[2].content).toContain('Second');
-      expect(chatMessages[3].content).toContain('Third');
+      expect(chatMessages[1].content).toBe('[1970-01-01 10:00] Alice: First');
+      expect(chatMessages[2].content).toBe('[1970-01-01 10:00] Bob: Second');
+      expect(chatMessages[3].content).toBe('[1970-01-01 10:00] Charlie: Third');
     });
 
     it('should correctly format bot vs user messages', () => {
@@ -187,9 +187,9 @@ describe('MessageHandler', () => {
       const chatMessages = handler.buildContext(messages, 'How are you?');
 
       expect(chatMessages[1].role).toBe('user');
-      expect(chatMessages[1].content).toBe('Alice: Hello');
+      expect(chatMessages[1].content).toBe('[1970-01-01 10:00] Alice: Hello');
       expect(chatMessages[2].role).toBe('assistant');
-      expect(chatMessages[2].content).toBe('Hi!');
+      expect(chatMessages[2].content).toBe('[1970-01-01 10:00] Hi!');
     });
 
     it('should always include system prompt first', () => {
@@ -381,7 +381,7 @@ describe('MessageHandler', () => {
       expect(mockLLM.generateResponse).toHaveBeenCalledWith(
         expect.arrayContaining([
           expect.objectContaining({ role: 'system' }),
-          expect.objectContaining({ role: 'user', content: 'Alice: Previous message' }),
+          expect.objectContaining({ role: 'user', content: '[1970-01-01 10:00] Alice: Previous message' }),
           expect.objectContaining({ role: 'user', content: 'what is 2+2?' }),
         ]),
         expect.objectContaining({
@@ -422,7 +422,7 @@ describe('MessageHandler', () => {
 
       await handler.handleMessage('g1', 'Alice', '@bot hello', 1000);
 
-      expect(mockStorage.trimMessages).toHaveBeenCalledWith('g1', 20);
+      expect(mockStorage.trimMessages).toHaveBeenCalledWith('g1', 1000);
     });
 
     it('should handle LLM errors gracefully', async () => {
@@ -473,8 +473,8 @@ describe('MessageHandler', () => {
 
       await handler.handleMessage('g1', 'Alice', '@bot hello', 1000);
 
-      expect(mockStorage.getRecentMessages).toHaveBeenCalledWith('g1', 9);
-      expect(mockStorage.trimMessages).toHaveBeenCalledWith('g1', 10);
+      expect(mockStorage.getRecentMessages).toHaveBeenCalledWith('g1', 10);
+      expect(mockStorage.trimMessages).toHaveBeenCalledWith('g1', 1000);
     });
 
     it('should log response with token usage', async () => {

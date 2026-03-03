@@ -31,6 +31,8 @@ async function main() {
     llmClient,
     signalClient,
     contextWindowSize: config.contextWindowSize,
+    contextTokenBudget: config.contextTokenBudget,
+    messageRetentionCount: config.messageRetentionCount,
     timezone: config.timezone,
     dbPath: config.dbPath,
     githubRepo: config.githubRepo,
