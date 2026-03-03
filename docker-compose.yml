@@ -27,6 +27,7 @@ services:
       - DB_PATH=/app/data/bot.db
       - SYSTEM_PROMPT=${SYSTEM_PROMPT:-}
       - CLAUDE_MAX_TURNS=${CLAUDE_MAX_TURNS:-1}
+      - BOT_TIMEZONE=${BOT_TIMEZONE:-Australia/Sydney}
     volumes:
       - ./data/bot:/app/data
       - ${HOME}/.claude:/root/.claude:ro

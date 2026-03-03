@@ -17,6 +17,20 @@ export interface LLMResponse {
   tokensUsed: number;
 }
 
+export type ReminderStatus = 'pending' | 'sent' | 'cancelled' | 'failed';
+
+export interface Reminder {
+  id: number;
+  groupId: string;
+  requester: string;
+  reminderText: string;
+  dueAt: number;
+  status: ReminderStatus;
+  retryCount: number;
+  createdAt: number;
+  sentAt: number | null;
+}
+
 export interface SignalMessage {
   envelope: {
     source?: string;

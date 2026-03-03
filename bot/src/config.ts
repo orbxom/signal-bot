@@ -10,6 +10,7 @@ export interface ConfigType {
   signalCliUrl: string;
   dbPath: string;
   systemPrompt: string;
+  timezone: string;
 }
 
 const DEFAULT_SYSTEM_PROMPT =
@@ -54,6 +55,7 @@ export class Config {
       signalCliUrl: process.env.SIGNAL_CLI_URL || 'http://localhost:8080',
       dbPath: process.env.DB_PATH || './data/bot.db',
       systemPrompt: process.env.SYSTEM_PROMPT || DEFAULT_SYSTEM_PROMPT,
+      timezone: process.env.BOT_TIMEZONE || 'Australia/Sydney',
     };
   }
 }
