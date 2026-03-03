@@ -249,9 +249,7 @@ export class MessageHandler {
         const attachmentLines = voiceAttachments.map(
           a => `[Voice message attached: ${path.join(this.attachmentsDir, a.id)}]`,
         );
-        queryWithAttachments = query
-          ? `${query}\n\n${attachmentLines.join('\n')}`
-          : attachmentLines.join('\n');
+        queryWithAttachments = query ? `${query}\n\n${attachmentLines.join('\n')}` : attachmentLines.join('\n');
       }
 
       // Load dossiers for context injection

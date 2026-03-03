@@ -30,6 +30,7 @@ const MCP_TOOLS = [
   'mcp__sourcecode__list_files',
   'mcp__sourcecode__read_file',
   'mcp__sourcecode__search_code',
+  'mcp__transcription__transcribe_audio',
 ].join(',');
 const ALLOWED_TOOLS = `${BASE_TOOLS},${MCP_TOOLS}`;
 
@@ -47,6 +48,17 @@ function resolveMcpServerPath(name: string): { command: string; args: string[] }
   };
   mcpPathCache.set(name, result);
   return result;
+}
+
+// Resolve transcription binary (compiled Rust, not TS)
+function resolveTranscriptionBinary(): { command: string; args: string[] } {
+  const binPath = path.resolve(__dirname, '..', '..', 'transcription', 'target', 'release', 'signal-bot-transcription');
+  if (fs.existsSync(binPath)) {
+    return { command: binPath, args: [] };
+  }
+  // Dev fallback: cargo run
+  const cargoPath = path.resolve(__dirname, '..', '..', 'transcription');
+  return { command: 'cargo', args: ['run', '--release', '--manifest-path', `${cargoPath}/Cargo.toml`] };
 }
 
 function spawnPromise(
@@ -138,6 +150,7 @@ export class ClaudeCLIClient {
       const github = resolveMcpServerPath('githubMcpServer');
       const dossiers = resolveMcpServerPath('dossierMcpServer');
       const sourcecode = resolveMcpServerPath('sourceCodeMcpServer');
+      const transcriptionBin = resolveTranscriptionBinary();
       const mcpConfig = JSON.stringify({
         mcpServers: {
           reminders: {
@@ -179,6 +192,14 @@ export class ClaudeCLIClient {
             args: sourcecode.args,
             env: {
               SOURCE_ROOT: context.sourceRoot,
+            },
+          },
+          transcription: {
+            command: transcriptionBin.command,
+            args: transcriptionBin.args,
+            env: {
+              WHISPER_MODEL_PATH: context.whisperModelPath || '',
+              ATTACHMENTS_DIR: context.attachmentsDir || '',
             },
           },
         },

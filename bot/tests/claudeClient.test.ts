@@ -334,6 +334,46 @@ describe('ClaudeCLIClient', () => {
       expect(mcpConfig.mcpServers.dossiers.env.MCP_SENDER).toBe('+61400000000');
     });
 
+    it('should include transcription MCP server in config when context is provided', async () => {
+      mockSpawnSuccess(makeResultOutput('Transcribed!'));
+
+      const client = new ClaudeCLIClient();
+      const messages: ChatMessage[] = [{ role: 'user', content: 'Transcribe this' }];
+      const context = {
+        groupId: 'test-group',
+        sender: '+61400000000',
+        dbPath: '/tmp/test.db',
+        timezone: 'Australia/Sydney',
+        githubRepo: 'owner/repo',
+        sourceRoot: '/app/source',
+        attachmentsDir: '/app/signal-attachments',
+        whisperModelPath: '/models/ggml-large.bin',
+      };
+
+      await client.generateResponse(messages, context);
+
+      const args = mockSpawn.mock.calls[0][1];
+      const mcpConfigIdx = args.indexOf('--mcp-config') + 1;
+      const mcpConfig = JSON.parse(args[mcpConfigIdx]);
+
+      expect(mcpConfig.mcpServers.transcription).toBeDefined();
+      expect(mcpConfig.mcpServers.transcription.env.WHISPER_MODEL_PATH).toBe('/models/ggml-large.bin');
+      expect(mcpConfig.mcpServers.transcription.env.ATTACHMENTS_DIR).toBe('/app/signal-attachments');
+    });
+
+    it('should include transcription tool in allowed tools', async () => {
+      mockSpawnSuccess(makeResultOutput('Done!'));
+
+      const client = new ClaudeCLIClient();
+      await client.generateResponse([{ role: 'user', content: 'Hi' }]);
+
+      const args = mockSpawn.mock.calls[0][1];
+      const allowedToolsIdx = args.indexOf('--allowedTools') + 1;
+      const allowedTools = args[allowedToolsIdx];
+
+      expect(allowedTools).toContain('mcp__transcription__transcribe_audio');
+    });
+
     it('should parse JSON array output format', async () => {
       const output = JSON.stringify([
         { type: 'system', subtype: 'init', session_id: 'test' },
