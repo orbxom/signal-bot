@@ -37,6 +37,7 @@ async function main() {
     dbPath: config.dbPath,
     githubRepo: config.githubRepo,
     sourceRoot: config.sourceRoot,
+    signalCliUrl: config.signalCliUrl,
   });
   console.log(`Message handler initialized (triggers: ${config.mentionTriggers.join(', ')})`);
 
