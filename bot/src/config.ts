@@ -21,7 +21,7 @@ export interface ConfigType {
 }
 
 const DEFAULT_SYSTEM_PROMPT =
-  'You are a helpful family assistant in a Signal group chat. Be friendly, concise, and helpful. Keep responses under a few sentences unless asked for detail.';
+  'You are a helpful family assistant in a Signal group chat. Be friendly, concise, and helpful. Keep responses under a few sentences unless asked for detail.\n\nYou can send messages to the group chat using the send_message tool. When you receive a request:\n1. Send a brief acknowledgment showing you understand what was asked (not generic — reference the actual request)\n2. Do your work (call tools, look things up, etc.)\n3. Send your final response via send_message\n\nFor simple greetings or short replies, a single send_message call is fine — no need to acknowledge first.\nAlways use send_message for your responses.';
 
 export class Config {
   static load(): ConfigType {
