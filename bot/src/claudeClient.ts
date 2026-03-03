@@ -33,6 +33,7 @@ const MCP_TOOLS = [
   'mcp__transcription__transcribe_audio',
   'mcp__history__search_messages',
   'mcp__history__get_messages_by_date',
+  'mcp__signal__send_message',
   'mcp__personas__create_persona',
   'mcp__personas__get_persona',
   'mcp__personas__list_personas',
@@ -160,6 +161,7 @@ export class ClaudeCLIClient {
       const sourcecode = resolveMcpServerPath('sourceCodeMcpServer');
       const transcriptionBin = resolveTranscriptionBinary();
       const history = resolveMcpServerPath('messageHistoryMcpServer');
+      const signal = resolveMcpServerPath('signalMcpServer');
       const personas = resolveMcpServerPath('personaMcpServer');
       const mcpConfig = JSON.stringify({
         mcpServers: {
@@ -221,6 +223,15 @@ export class ClaudeCLIClient {
               TZ: context.timezone,
             },
           },
+          signal: {
+            command: signal.command,
+            args: signal.args,
+            env: {
+              SIGNAL_CLI_URL: context.signalCliUrl,
+              SIGNAL_ACCOUNT: context.botPhoneNumber,
+              MCP_GROUP_ID: context.groupId,
+            },
+          },
           personas: {
             command: personas.command,
             args: personas.args,
@@ -272,12 +283,27 @@ export class ClaudeCLIClient {
         }
       }
 
-      // Single pass: find result line and last assistant entry
+      // Single pass: find result line, last assistant entry, and MCP send_message calls
       let resultLine: ClaudeResultLine | undefined;
       let lastAssistant: { message?: { content?: Array<{ type: string; text?: string }> } } | undefined;
+      const mcpMessages: string[] = [];
       for (const e of entries) {
         if (e.type === 'result') resultLine = e as unknown as ClaudeResultLine;
         if (e.type === 'assistant') lastAssistant = e as unknown as typeof lastAssistant;
+
+        // Detect send_message MCP tool calls
+        if (e.type === 'assistant') {
+          const msg = e as unknown as {
+            message?: {
+              content?: Array<{ type: string; name?: string; input?: { message?: string } }>;
+            };
+          };
+          for (const block of msg.message?.content || []) {
+            if (block.type === 'tool_use' && block.name === 'mcp__signal__send_message' && block.input?.message) {
+              mcpMessages.push(block.input.message);
+            }
+          }
+        }
       }
 
       if (!resultLine) {
@@ -319,6 +345,8 @@ export class ClaudeCLIClient {
       return {
         content,
         tokensUsed: resultLine.usage?.output_tokens || 0,
+        sentViaMcp: mcpMessages.length > 0,
+        mcpMessages,
       };
     } catch (error) {
       if (error instanceof Error) {

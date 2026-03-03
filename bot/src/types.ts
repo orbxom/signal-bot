@@ -16,6 +16,8 @@ export interface ChatMessage {
 export interface LLMResponse {
   content: string;
   tokensUsed: number;
+  sentViaMcp: boolean;
+  mcpMessages: string[];
 }
 
 export type ReminderStatus = 'pending' | 'sent' | 'cancelled' | 'failed';
@@ -65,6 +67,8 @@ export interface MessageContext {
   timezone: string;
   githubRepo: string;
   sourceRoot: string;
+  signalCliUrl: string;
+  botPhoneNumber: string;
   attachmentsDir: string;
   whisperModelPath: string;
 }

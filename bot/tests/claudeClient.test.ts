@@ -259,6 +259,9 @@ describe('ClaudeCLIClient', () => {
         dbPath: '/tmp/test.db',
         timezone: 'Australia/Sydney',
         githubRepo: 'owner/repo',
+        sourceRoot: '/tmp/src',
+        signalCliUrl: 'http://localhost:8080',
+        botPhoneNumber: '+61400000000',
       };
 
       await client.generateResponse(messages, context);
@@ -280,6 +283,35 @@ describe('ClaudeCLIClient', () => {
       expect(['node', 'npx']).toContain(mcpConfig.mcpServers.github.command);
       expect(mcpConfig.mcpServers.github.env.GITHUB_REPO).toBe('owner/repo');
       expect(mcpConfig.mcpServers.github.env.MCP_SENDER).toBe('+61400000000');
+    });
+
+    it('should include signal MCP server in config when context is provided', async () => {
+      mockSpawnSuccess(makeResultOutput('Sent!'));
+
+      const client = new ClaudeCLIClient();
+      const messages: ChatMessage[] = [{ role: 'user', content: 'Hello' }];
+      const context = {
+        groupId: 'test-group',
+        sender: '+61400000000',
+        dbPath: '/tmp/test.db',
+        timezone: 'Australia/Sydney',
+        githubRepo: 'owner/repo',
+        sourceRoot: '/tmp/src',
+        signalCliUrl: 'http://localhost:8080',
+        botPhoneNumber: '+61400000000',
+      };
+
+      await client.generateResponse(messages, context);
+
+      const args = mockSpawn.mock.calls[0][1];
+      const mcpConfigIdx = args.indexOf('--mcp-config') + 1;
+      const mcpConfig = JSON.parse(args[mcpConfigIdx]);
+
+      expect(mcpConfig.mcpServers.signal).toBeDefined();
+      expect(['node', 'npx']).toContain(mcpConfig.mcpServers.signal.command);
+      expect(mcpConfig.mcpServers.signal.env.SIGNAL_CLI_URL).toBe('http://localhost:8080');
+      expect(mcpConfig.mcpServers.signal.env.SIGNAL_ACCOUNT).toBe('+61400000000');
+      expect(mcpConfig.mcpServers.signal.env.MCP_GROUP_ID).toBe('test-group');
     });
 
     it('should not include MCP config when context is not provided', async () => {
@@ -346,6 +378,9 @@ describe('ClaudeCLIClient', () => {
         dbPath: '/tmp/test.db',
         timezone: 'Australia/Sydney',
         githubRepo: 'owner/repo',
+        sourceRoot: '/tmp/src',
+        signalCliUrl: 'http://localhost:8080',
+        botPhoneNumber: '+61400000000',
       };
 
       await client.generateResponse(messages, context);
@@ -383,6 +418,9 @@ describe('ClaudeCLIClient', () => {
         dbPath: '/tmp/test.db',
         timezone: 'Australia/Sydney',
         githubRepo: 'owner/repo',
+        sourceRoot: '/tmp/src',
+        signalCliUrl: 'http://localhost:8080',
+        botPhoneNumber: '+61400000000',
       };
 
       await client.generateResponse(messages, context);
@@ -409,6 +447,9 @@ describe('ClaudeCLIClient', () => {
         dbPath: '/tmp/test.db',
         timezone: 'Australia/Sydney',
         githubRepo: 'owner/repo',
+        sourceRoot: '/tmp/src',
+        signalCliUrl: 'http://localhost:8080',
+        botPhoneNumber: '+61400000000',
       };
 
       await client.generateResponse(messages, context);
@@ -424,6 +465,59 @@ describe('ClaudeCLIClient', () => {
       expect(mcpConfig.mcpServers.dossiers.env.MCP_SENDER).toBe('+61400000000');
     });
 
+    it('should detect when messages were sent via MCP signal tool', async () => {
+      const output = [
+        JSON.stringify({ type: 'system', subtype: 'init', session_id: 'test' }),
+        JSON.stringify({
+          type: 'assistant',
+          message: {
+            content: [
+              {
+                type: 'tool_use',
+                name: 'mcp__signal__send_message',
+                input: { message: 'Looking into it...' },
+              },
+            ],
+          },
+        }),
+        JSON.stringify({
+          type: 'assistant',
+          message: {
+            content: [
+              {
+                type: 'tool_use',
+                name: 'mcp__signal__send_message',
+                input: { message: 'Here is the answer!' },
+              },
+            ],
+          },
+        }),
+        JSON.stringify({
+          type: 'result',
+          is_error: false,
+          result: 'Here is the answer!',
+          usage: { output_tokens: 20 },
+        }),
+      ].join('\n');
+      mockSpawnSuccess(output);
+
+      const client = new ClaudeCLIClient();
+      const result = await client.generateResponse([{ role: 'user', content: 'Hi' }]);
+
+      expect(result.sentViaMcp).toBe(true);
+      expect(result.mcpMessages).toEqual(['Looking into it...', 'Here is the answer!']);
+    });
+
+    it('should set sentViaMcp to false when no signal tool calls', async () => {
+      mockSpawnSuccess(makeResultOutput('Simple response'));
+
+      const client = new ClaudeCLIClient();
+      const result = await client.generateResponse([{ role: 'user', content: 'Hi' }]);
+
+      expect(result.sentViaMcp).toBe(false);
+      expect(result.mcpMessages).toEqual([]);
+    });
+
     it('should include transcription MCP server in config when context is provided', async () => {
       mockSpawnSuccess(makeResultOutput('Transcribed!'));
 
@@ -436,6 +530,8 @@ describe('ClaudeCLIClient', () => {
         timezone: 'Australia/Sydney',
         githubRepo: 'owner/repo',
         sourceRoot: '/app/source',
+        signalCliUrl: 'http://localhost:8080',
+        botPhoneNumber: '+61400000000',
         attachmentsDir: '/app/signal-attachments',
         whisperModelPath: '/models/ggml-large.bin',
       };
@@ -506,6 +602,11 @@ describe('ClaudeCLIClient', () => {
         dbPath: '/tmp/test.db',
         timezone: 'Australia/Sydney',
         githubRepo: 'owner/repo',
+        sourceRoot: '/tmp/src',
+        signalCliUrl: 'http://localhost:8080',
+        botPhoneNumber: '+61400000000',
+        attachmentsDir: '/app/signal-attachments',
+        whisperModelPath: '/models/ggml-large.bin',
       };
 
       await client.generateResponse(messages, context);
