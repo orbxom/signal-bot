@@ -3,7 +3,7 @@ import path from 'node:path';
 import type { ClaudeCLIClient } from './claudeClient';
 import type { SignalClient } from './signalClient';
 import type { Storage } from './storage';
-import type { ChatMessage, Message } from './types';
+import type { ChatMessage, Message, SignalAttachment } from './types';
 
 export const ACK_MESSAGES = [
   "Beep boop, I'm on it!",
@@ -47,6 +47,8 @@ export class MessageHandler {
   private dbPath: string;
   private githubRepo: string;
   private sourceRoot: string;
+  private attachmentsDir: string;
+  private whisperModelPath: string;
   private processedMessages: Set<string> = new Set();
 
   constructor(
@@ -62,6 +64,8 @@ export class MessageHandler {
       dbPath?: string;
       githubRepo?: string;
       sourceRoot?: string;
+      attachmentsDir?: string;
+      whisperModelPath?: string;
     },
   ) {
     this.mentionTriggers = mentionTriggers;
@@ -76,6 +80,8 @@ export class MessageHandler {
     this.dbPath = options?.dbPath || './data/bot.db';
     this.githubRepo = options?.githubRepo || '';
     this.sourceRoot = options?.sourceRoot || '';
+    this.attachmentsDir = options?.attachmentsDir || './data/signal-attachments';
+    this.whisperModelPath = options?.whisperModelPath || './models/ggml-base.en.bin';
   }
 
   isMentioned(content: string): boolean {
@@ -134,6 +140,7 @@ export class MessageHandler {
         `Group ID: ${groupId}`,
         `Current requester: ${sender}`,
         `You have access to your own source code via the sourcecode tools (list_files, read_file, search_code). When asked how you work, what you can do, or technical questions about your implementation, use these tools to read the actual code before answering.`,
+        `When a voice message is attached, use the transcribe_audio tool to transcribe it, then respond to the transcribed content as if the user had typed it.`,
       ].join('\n');
 
       if (dossierContext) {
@@ -167,7 +174,13 @@ export class MessageHandler {
     return contextMessages;
   }
 
-  async handleMessage(groupId: string, sender: string, content: string, timestamp: number): Promise<void> {
+  async handleMessage(
+    groupId: string,
+    sender: string,
+    content: string,
+    timestamp: number,
+    attachments: SignalAttachment[] = [],
+  ): Promise<void> {
     if (!this.storage || !this.llmClient || !this.signalClient) {
       throw new Error('Handler not fully initialized');
     }
@@ -229,6 +242,18 @@ export class MessageHandler {
       // Extract query
       const query = this.extractQuery(content);
 
+      // Filter voice attachments and append info to query
+      const voiceAttachments = attachments.filter(a => a.contentType.startsWith('audio/'));
+      let queryWithAttachments = query;
+      if (voiceAttachments.length > 0) {
+        const attachmentLines = voiceAttachments.map(
+          a => `[Voice message attached: ${path.join(this.attachmentsDir, a.id)}]`,
+        );
+        queryWithAttachments = query
+          ? `${query}\n\n${attachmentLines.join('\n')}`
+          : attachmentLines.join('\n');
+      }
+
       // Load dossiers for context injection
       let dossierContext = '';
       const dossiers = this.storage.getDossiersByGroup(groupId);
@@ -248,7 +273,7 @@ export class MessageHandler {
       }
 
       // Build context
-      const messages = this.buildContext(history, query, groupId, sender, dossierContext);
+      const messages = this.buildContext(history, queryWithAttachments, groupId, sender, dossierContext);
 
       // Get LLM response
       const response = await this.llmClient.generateResponse(messages, {
@@ -258,6 +283,8 @@ export class MessageHandler {
         timezone: this.timezone,
         githubRepo: this.githubRepo,
         sourceRoot: this.sourceRoot,
+        attachmentsDir: this.attachmentsDir,
+        whisperModelPath: this.whisperModelPath,
       });
 
       // Send response

@@ -48,6 +48,8 @@ export interface MessageContext {
   timezone: string;
   githubRepo: string;
   sourceRoot: string;
+  attachmentsDir: string;
+  whisperModelPath: string;
 }
 
 export interface SignalAttachment {

@@ -703,6 +703,57 @@ describe('MessageHandler', () => {
       vi.restoreAllMocks();
     });
 
+    describe('voice attachment handling', () => {
+      it('should include voice attachment info in query when present', async () => {
+        const handler = new MessageHandler(['@bot'], {
+          storage: mockStorage,
+          llmClient: mockLLM,
+          signalClient: mockSignal,
+        });
+
+        await handler.handleMessage('g1', 'Alice', '@bot', 1000, [
+          { id: 'voice-abc', contentType: 'audio/aac', size: 5000, filename: null },
+        ]);
+
+        const callArgs = (mockLLM.generateResponse as ReturnType<typeof vi.fn>).mock.calls[0];
+        const messages = callArgs[0];
+        const lastUserMsg = messages[messages.length - 1];
+        expect(lastUserMsg.content).toContain('[Voice message attached:');
+        expect(lastUserMsg.content).toContain('voice-abc');
+      });
+
+      it('should treat voice-only message with trigger as mentioned', async () => {
+        const handler = new MessageHandler(['@bot'], {
+          storage: mockStorage,
+          llmClient: mockLLM,
+          signalClient: mockSignal,
+        });
+
+        await handler.handleMessage('g1', 'Alice', '@bot', 1000, [
+          { id: 'voice-xyz', contentType: 'audio/aac', size: 3000, filename: null },
+        ]);
+
+        expect(mockLLM.generateResponse).toHaveBeenCalled();
+      });
+
+      it('should ignore non-audio attachments', async () => {
+        const handler = new MessageHandler(['@bot'], {
+          storage: mockStorage,
+          llmClient: mockLLM,
+          signalClient: mockSignal,
+        });
+
+        await handler.handleMessage('g1', 'Alice', '@bot check this image', 1000, [
+          { id: 'image-abc', contentType: 'image/jpeg', size: 50000, filename: 'photo.jpg' },
+        ]);
+
+        const callArgs = (mockLLM.generateResponse as ReturnType<typeof vi.fn>).mock.calls[0];
+        const messages = callArgs[0];
+        const lastUserMsg = messages[messages.length - 1];
+        expect(lastUserMsg.content).not.toContain('[Voice message attached:');
+      });
+    });
+
     describe('typing indicators', () => {
       it('should start typing indicator when mentioned', async () => {
         const handler = new MessageHandler(['@bot'], {
