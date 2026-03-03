@@ -1,3 +1,4 @@
+import path from 'node:path';
 import { config as loadEnv } from 'dotenv';
 
 export interface ConfigType {
@@ -11,6 +12,8 @@ export interface ConfigType {
   dbPath: string;
   systemPrompt: string;
   timezone: string;
+  githubRepo: string;
+  sourceRoot: string;
 }
 
 const DEFAULT_SYSTEM_PROMPT =
@@ -33,7 +36,7 @@ export class Config {
     }
 
     // Parse and validate max turns
-    const maxTurns = parseInt(process.env.CLAUDE_MAX_TURNS || '1', 10);
+    const maxTurns = parseInt(process.env.CLAUDE_MAX_TURNS || '25', 10);
     if (Number.isNaN(maxTurns) || maxTurns <= 0) {
       throw new Error('CLAUDE_MAX_TURNS must be a positive number');
     }
@@ -56,6 +59,8 @@ export class Config {
       dbPath: process.env.DB_PATH || './data/bot.db',
       systemPrompt: process.env.SYSTEM_PROMPT || DEFAULT_SYSTEM_PROMPT,
       timezone: process.env.BOT_TIMEZONE || 'Australia/Sydney',
+      githubRepo: process.env.GITHUB_REPO || '',
+      sourceRoot: process.env.SOURCE_ROOT || path.resolve(__dirname, '..'),
     };
   }
 }

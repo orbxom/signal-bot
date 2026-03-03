@@ -47,7 +47,7 @@ describe('Config', () => {
     expect(config.signalCliUrl).toBe('http://localhost:8080');
     expect(config.dbPath).toBe('./data/bot.db');
     expect(config.systemPrompt).toContain('helpful family assistant');
-    expect(config.claude.maxTurns).toBe(1);
+    expect(config.claude.maxTurns).toBe(25);
   });
 
   it('should throw error when BOT_PHONE_NUMBER is missing', () => {

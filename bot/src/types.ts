@@ -31,6 +31,25 @@ export interface Reminder {
   sentAt: number | null;
 }
 
+export interface Dossier {
+  id: number;
+  groupId: string;
+  personId: string;
+  displayName: string;
+  notes: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface MessageContext {
+  groupId: string;
+  sender: string;
+  dbPath: string;
+  timezone: string;
+  githubRepo: string;
+  sourceRoot: string;
+}
+
 export interface SignalMessage {
   envelope: {
     source?: string;

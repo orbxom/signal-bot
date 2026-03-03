@@ -1,5 +1,7 @@
 import Database from 'better-sqlite3';
-import type { Message, Reminder, ReminderStatus } from './types';
+import type { Dossier, Message, Reminder, ReminderStatus } from './types';
+
+export const DOSSIER_TOKEN_LIMIT = 1000;
 
 function wrapSqliteError(error: unknown, operation: string): never {
   if (error instanceof Error) {
@@ -29,6 +31,10 @@ export class Storage {
     incrementReminderRetry: Database.Statement;
     cancelReminder: Database.Statement;
     listReminders: Database.Statement;
+    upsertDossier: Database.Statement;
+    getDossier: Database.Statement;
+    getDossiersByGroup: Database.Statement;
+    deleteDossier: Database.Statement;
   };
 
   constructor(dbPath: string) {
@@ -84,6 +90,23 @@ export class Storage {
           WHERE groupId = ? AND status = 'pending'
           ORDER BY dueAt ASC
         `),
+        upsertDossier: this.db.prepare(`
+          INSERT INTO dossiers (groupId, personId, displayName, notes, createdAt, updatedAt)
+          VALUES (?, ?, ?, ?, ?, ?)
+          ON CONFLICT(groupId, personId) DO UPDATE SET
+            displayName = excluded.displayName,
+            notes = excluded.notes,
+            updatedAt = excluded.updatedAt
+        `),
+        getDossier: this.db.prepare(`
+          SELECT * FROM dossiers WHERE groupId = ? AND personId = ?
+        `),
+        getDossiersByGroup: this.db.prepare(`
+          SELECT * FROM dossiers WHERE groupId = ? ORDER BY displayName ASC
+        `),
+        deleteDossier: this.db.prepare(`
+          DELETE FROM dossiers WHERE groupId = ? AND personId = ?
+        `),
       };
     } catch (error) {
       if (error instanceof Error && error.message.includes('EACCES')) {
@@ -125,6 +148,22 @@ export class Storage {
 
         CREATE INDEX IF NOT EXISTS idx_reminders_group
         ON reminders(groupId, status);
+
+        CREATE TABLE IF NOT EXISTS dossiers (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          groupId TEXT NOT NULL,
+          personId TEXT NOT NULL,
+          displayName TEXT NOT NULL DEFAULT '',
+          notes TEXT NOT NULL DEFAULT '',
+          createdAt INTEGER NOT NULL,
+          updatedAt INTEGER NOT NULL
+        );
+
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_dossiers_group_person
+        ON dossiers(groupId, personId);
+
+        CREATE INDEX IF NOT EXISTS idx_dossiers_group
+        ON dossiers(groupId);
       `);
     } catch (error) {
       wrapSqliteError(error, 'create tables');
@@ -205,9 +244,6 @@ export class Storage {
     if (!reminderText || reminderText.trim() === '') {
       throw new Error('Invalid reminderText: cannot be empty');
     }
-    if (dueAt <= Date.now()) {
-      throw new Error('Invalid dueAt: must be in the future');
-    }
 
     try {
       const result = this.stmts.insertReminder.run(groupId, requester, reminderText, dueAt, Date.now());
@@ -285,6 +321,74 @@ export class Storage {
     }
   }
 
+  upsertDossier(groupId: string, personId: string, displayName: string, notes: string): Dossier {
+    this.ensureOpen();
+    if (!groupId || groupId.trim() === '') {
+      throw new Error('Invalid groupId: cannot be empty');
+    }
+    if (!personId || personId.trim() === '') {
+      throw new Error('Invalid personId: cannot be empty');
+    }
+    if (Math.ceil(notes.length / 4) > DOSSIER_TOKEN_LIMIT) {
+      throw new Error(`Notes exceeds token limit of ${DOSSIER_TOKEN_LIMIT} tokens`);
+    }
+
+    try {
+      const now = Date.now();
+      this.stmts.upsertDossier.run(groupId, personId, displayName, notes, now, now);
+      const dossier = this.getDossier(groupId, personId);
+      if (!dossier) {
+        throw new Error('Failed to upsert dossier: not found after insert');
+      }
+      return dossier;
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        (error.message.startsWith('Invalid ') ||
+          error.message.startsWith('Notes exceeds') ||
+          error.message.startsWith('Failed to upsert'))
+      ) {
+        throw error;
+      }
+      wrapSqliteError(error, 'upsert dossier');
+    }
+  }
+
+  getDossier(groupId: string, personId: string): Dossier | null {
+    this.ensureOpen();
+
+    try {
+      const row = this.stmts.getDossier.get(groupId, personId) as Dossier | undefined;
+      return row ?? null;
+    } catch (error) {
+      wrapSqliteError(error, 'get dossier');
+    }
+  }
+
+  getDossiersByGroup(groupId: string): Dossier[] {
+    this.ensureOpen();
+    if (!groupId || groupId.trim() === '') {
+      throw new Error('Invalid groupId: cannot be empty');
+    }
+
+    try {
+      return this.stmts.getDossiersByGroup.all(groupId) as Dossier[];
+    } catch (error) {
+      wrapSqliteError(error, 'get dossiers by group');
+    }
+  }
+
+  deleteDossier(groupId: string, personId: string): boolean {
+    this.ensureOpen();
+
+    try {
+      const result = this.stmts.deleteDossier.run(groupId, personId);
+      return result.changes > 0;
+    } catch (error) {
+      wrapSqliteError(error, 'delete dossier');
+    }
+  }
+
   close(): void {
     if (!this.closed) {
       this.db.close();
@@ -293,28 +397,8 @@ export class Storage {
   }
 }
 
-interface ReminderRow {
-  id: number;
-  groupId: string;
-  requester: string;
-  reminderText: string;
-  dueAt: number;
-  status: string;
-  retryCount: number;
-  createdAt: number;
-  sentAt: number | null;
-}
+type ReminderRow = Omit<Reminder, 'status'> & { status: string };
 
 function mapReminderRow(row: ReminderRow): Reminder {
-  return {
-    id: row.id,
-    groupId: row.groupId,
-    requester: row.requester,
-    reminderText: row.reminderText,
-    dueAt: row.dueAt,
-    status: row.status as ReminderStatus,
-    retryCount: row.retryCount,
-    createdAt: row.createdAt,
-    sentAt: row.sentAt,
-  };
+  return { ...row, status: row.status as ReminderStatus };
 }

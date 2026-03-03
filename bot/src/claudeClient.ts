@@ -1,13 +1,7 @@
 import { spawn } from 'node:child_process';
+import fs from 'node:fs';
 import path from 'node:path';
-import type { ChatMessage, LLMResponse } from './types';
-
-export interface MessageContext {
-  groupId: string;
-  sender: string;
-  dbPath: string;
-  timezone: string;
-}
+import type { ChatMessage, LLMResponse, MessageContext } from './types';
 
 interface ClaudeResultLine {
   type: 'result';
@@ -20,8 +14,34 @@ interface ClaudeResultLine {
 }
 
 const BASE_TOOLS = 'WebSearch,WebFetch,Read,Glob,Grep';
-const MCP_TOOLS = 'mcp__reminders__set_reminder,mcp__reminders__list_reminders,mcp__reminders__cancel_reminder';
+const MCP_TOOLS = [
+  'mcp__reminders__set_reminder',
+  'mcp__reminders__list_reminders',
+  'mcp__reminders__cancel_reminder',
+  'mcp__weather__search_location',
+  'mcp__weather__get_observations',
+  'mcp__weather__get_forecast',
+  'mcp__weather__get_warnings',
+  'mcp__github__create_feature_request',
+  'mcp__dossiers__update_dossier',
+  'mcp__dossiers__get_dossier',
+  'mcp__dossiers__list_dossiers',
+  'mcp__sourcecode__list_files',
+  'mcp__sourcecode__read_file',
+  'mcp__sourcecode__search_code',
+].join(',');
 const ALLOWED_TOOLS = `${BASE_TOOLS},${MCP_TOOLS}`;
+
+// Resolve MCP server path for dev (tsx) vs production (compiled JS)
+function resolveMcpServerPath(name: string): { command: string; args: string[] } {
+  const jsPath = path.resolve(__dirname, `${name}.js`);
+  const tsPath = path.resolve(__dirname, `${name}.ts`);
+  const useTs = !fs.existsSync(jsPath) && fs.existsSync(tsPath);
+  return {
+    command: useTs ? 'npx' : 'node',
+    args: useTs ? ['tsx', tsPath] : [jsPath],
+  };
+}
 
 function spawnPromise(
   cmd: string,
@@ -107,17 +127,52 @@ export class ClaudeCLIClient {
     ];
 
     if (context) {
-      const mcpServerPath = path.resolve(__dirname, 'reminderMcpServer.js');
+      const reminders = resolveMcpServerPath('reminderMcpServer');
+      const weather = resolveMcpServerPath('weatherMcpServer');
+      const github = resolveMcpServerPath('githubMcpServer');
+      const dossiers = resolveMcpServerPath('dossierMcpServer');
+      const sourcecode = resolveMcpServerPath('sourceCodeMcpServer');
       const mcpConfig = JSON.stringify({
         mcpServers: {
           reminders: {
-            command: 'node',
-            args: [mcpServerPath],
+            command: reminders.command,
+            args: reminders.args,
             env: {
               DB_PATH: context.dbPath,
               MCP_GROUP_ID: context.groupId,
               MCP_SENDER: context.sender,
               TZ: context.timezone,
+            },
+          },
+          weather: {
+            command: weather.command,
+            args: weather.args,
+            env: {
+              TZ: context.timezone,
+            },
+          },
+          github: {
+            command: github.command,
+            args: github.args,
+            env: {
+              GITHUB_REPO: context.githubRepo || '',
+              MCP_SENDER: context.sender,
+            },
+          },
+          dossiers: {
+            command: dossiers.command,
+            args: dossiers.args,
+            env: {
+              DB_PATH: context.dbPath,
+              MCP_GROUP_ID: context.groupId,
+              MCP_SENDER: context.sender,
+            },
+          },
+          sourcecode: {
+            command: sourcecode.command,
+            args: sourcecode.args,
+            env: {
+              SOURCE_ROOT: context.sourceRoot,
             },
           },
         },

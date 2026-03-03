@@ -30,6 +30,7 @@ describe('ReminderScheduler', () => {
   let scheduler: ReminderScheduler;
 
   beforeEach(() => {
+    vi.restoreAllMocks();
     mockStorage = {
       getDueReminders: vi.fn().mockReturnValue([]),
       markReminderSent: vi.fn(),

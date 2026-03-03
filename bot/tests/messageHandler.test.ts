@@ -210,6 +210,36 @@ describe('MessageHandler', () => {
       expect(lastMessage.role).toBe('user');
       expect(lastMessage.content).toBe('What is 2+2?');
     });
+
+    it('should include dossier context in system prompt when provided', () => {
+      const handler = new MessageHandler(['@bot'], { systemPrompt: 'You are a helpful bot.' });
+      const dossierContext = '## People in this group\n- Alice (+61400000001)\n  Loves cats';
+
+      const chatMessages = handler.buildContext([], 'Hello', 'g1', '+61400000001', dossierContext);
+
+      const systemContent = chatMessages[0].content;
+      expect(systemContent).toContain('## People in this group');
+      expect(systemContent).toContain('Alice (+61400000001)');
+      expect(systemContent).toContain('Loves cats');
+      expect(systemContent).toContain('You are a helpful bot.');
+      // Dossier context should appear between time context and system prompt
+      const timeIdx = systemContent.indexOf('Current time:');
+      const dossierIdx = systemContent.indexOf('## People in this group');
+      const promptIdx = systemContent.indexOf('You are a helpful bot.');
+      expect(timeIdx).toBeLessThan(dossierIdx);
+      expect(dossierIdx).toBeLessThan(promptIdx);
+    });
+
+    it('should work without dossier context (backward compatible)', () => {
+      const handler = new MessageHandler(['@bot'], { systemPrompt: 'You are a helpful bot.' });
+
+      const chatMessages = handler.buildContext([], 'Hello', 'g1', '+61400000001');
+
+      const systemContent = chatMessages[0].content;
+      expect(systemContent).toContain('Current time:');
+      expect(systemContent).toContain('You are a helpful bot.');
+      expect(systemContent).not.toContain('## People in this group');
+    });
   });
 
   describe('handleMessage', () => {
@@ -224,6 +254,7 @@ describe('MessageHandler', () => {
         addMessage: vi.fn(),
         getRecentMessages: vi.fn().mockReturnValue([]),
         trimMessages: vi.fn(),
+        getDossiersByGroup: vi.fn().mockReturnValue([]),
       } as any;
 
       mockLLM = {
@@ -447,6 +478,66 @@ describe('MessageHandler', () => {
       expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('25 tokens'));
 
       consoleLogSpy.mockRestore();
+    });
+
+    it('should load dossiers and include them in LLM context', async () => {
+      mockStorage.getDossiersByGroup = vi.fn().mockReturnValue([
+        {
+          id: 1,
+          groupId: 'g1',
+          personId: '+61400000001',
+          displayName: 'Alice',
+          notes: 'Loves cats',
+          createdAt: 1000,
+          updatedAt: 2000,
+        },
+        {
+          id: 2,
+          groupId: 'g1',
+          personId: '+61400000002',
+          displayName: 'Bob',
+          notes: 'Enjoys hiking',
+          createdAt: 1000,
+          updatedAt: 2000,
+        },
+      ]);
+
+      const handler = new MessageHandler(['@bot'], {
+        storage: mockStorage,
+        llmClient: mockLLM,
+        signalClient: mockSignal,
+      });
+
+      await handler.handleMessage('g1', 'Alice', '@bot hello', 1000);
+
+      expect(mockStorage.getDossiersByGroup).toHaveBeenCalledWith('g1');
+
+      // Verify the system prompt includes dossier information
+      const callArgs = (mockLLM.generateResponse as ReturnType<typeof vi.fn>).mock.calls[0];
+      const messages = callArgs[0];
+      const systemMsg = messages.find((m: { role: string }) => m.role === 'system');
+      expect(systemMsg.content).toContain('## People in this group');
+      expect(systemMsg.content).toContain('Alice (+61400000001)');
+      expect(systemMsg.content).toContain('Loves cats');
+      expect(systemMsg.content).toContain('Bob (+61400000002)');
+      expect(systemMsg.content).toContain('Enjoys hiking');
+    });
+
+    it('should not include dossier section when no dossiers exist', async () => {
+      mockStorage.getDossiersByGroup = vi.fn().mockReturnValue([]);
+
+      const handler = new MessageHandler(['@bot'], {
+        storage: mockStorage,
+        llmClient: mockLLM,
+        signalClient: mockSignal,
+      });
+
+      await handler.handleMessage('g1', 'Alice', '@bot hello', 1000);
+
+      const callArgs = (mockLLM.generateResponse as ReturnType<typeof vi.fn>).mock.calls[0];
+      const messages = callArgs[0];
+      const systemMsg = messages.find((m: { role: string }) => m.role === 'system');
+      expect(systemMsg.content).not.toContain('## People in this group');
     });
 
     it('should ignore duplicate messages with same groupId/sender/timestamp', async () => {
