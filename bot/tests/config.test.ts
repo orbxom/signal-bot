@@ -13,6 +13,8 @@ describe('Config', () => {
     delete process.env.BOT_PHONE_NUMBER;
     delete process.env.MENTION_TRIGGERS;
     delete process.env.CONTEXT_WINDOW_SIZE;
+    delete process.env.CONTEXT_TOKEN_BUDGET;
+    delete process.env.MESSAGE_RETENTION_COUNT;
     delete process.env.SIGNAL_CLI_URL;
     delete process.env.DB_PATH;
     delete process.env.SYSTEM_PROMPT;
@@ -27,6 +29,8 @@ describe('Config', () => {
     process.env.BOT_PHONE_NUMBER = '+1234567890';
     process.env.MENTION_TRIGGERS = '@bot,bot:';
     process.env.CONTEXT_WINDOW_SIZE = '20';
+    process.env.CONTEXT_TOKEN_BUDGET = '8000';
+    process.env.MESSAGE_RETENTION_COUNT = '500';
     process.env.SYSTEM_PROMPT = 'Custom prompt';
     process.env.CLAUDE_MAX_TURNS = '2';
 
@@ -34,6 +38,8 @@ describe('Config', () => {
     expect(config.botPhoneNumber).toBe('+1234567890');
     expect(config.mentionTriggers).toEqual(['@bot', 'bot:']);
     expect(config.contextWindowSize).toBe(20);
+    expect(config.contextTokenBudget).toBe(8000);
+    expect(config.messageRetentionCount).toBe(500);
     expect(config.systemPrompt).toBe('Custom prompt');
     expect(config.claude.maxTurns).toBe(2);
   });
@@ -43,7 +49,9 @@ describe('Config', () => {
 
     const config = Config.load();
     expect(config.mentionTriggers).toEqual(['@bot']);
-    expect(config.contextWindowSize).toBe(20);
+    expect(config.contextWindowSize).toBe(200);
+    expect(config.contextTokenBudget).toBe(4000);
+    expect(config.messageRetentionCount).toBe(1000);
     expect(config.signalCliUrl).toBe('http://localhost:8080');
     expect(config.dbPath).toBe('./data/bot.db');
     expect(config.systemPrompt).toContain('helpful family assistant');
@@ -87,6 +95,48 @@ describe('Config', () => {
     process.env.CLAUDE_MAX_TURNS = '0';
 
     expect(() => Config.load()).toThrow('CLAUDE_MAX_TURNS must be a positive number');
+  });
+
+  it('should throw error when CONTEXT_TOKEN_BUDGET is not a number', () => {
+    process.env.BOT_PHONE_NUMBER = '+1234567890';
+    process.env.CONTEXT_TOKEN_BUDGET = 'abc';
+
+    expect(() => Config.load()).toThrow('CONTEXT_TOKEN_BUDGET must be a positive number');
+  });
+
+  it('should throw error when CONTEXT_TOKEN_BUDGET is zero', () => {
+    process.env.BOT_PHONE_NUMBER = '+1234567890';
+    process.env.CONTEXT_TOKEN_BUDGET = '0';
+
+    expect(() => Config.load()).toThrow('CONTEXT_TOKEN_BUDGET must be a positive number');
+  });
+
+  it('should throw error when CONTEXT_TOKEN_BUDGET is negative', () => {
+    process.env.BOT_PHONE_NUMBER = '+1234567890';
+    process.env.CONTEXT_TOKEN_BUDGET = '-100';
+
+    expect(() => Config.load()).toThrow('CONTEXT_TOKEN_BUDGET must be a positive number');
+  });
+
+  it('should throw error when MESSAGE_RETENTION_COUNT is not a number', () => {
+    process.env.BOT_PHONE_NUMBER = '+1234567890';
+    process.env.MESSAGE_RETENTION_COUNT = 'abc';
+
+    expect(() => Config.load()).toThrow('MESSAGE_RETENTION_COUNT must be a positive number');
+  });
+
+  it('should throw error when MESSAGE_RETENTION_COUNT is zero', () => {
+    process.env.BOT_PHONE_NUMBER = '+1234567890';
+    process.env.MESSAGE_RETENTION_COUNT = '0';
+
+    expect(() => Config.load()).toThrow('MESSAGE_RETENTION_COUNT must be a positive number');
+  });
+
+  it('should throw error when MESSAGE_RETENTION_COUNT is negative', () => {
+    process.env.BOT_PHONE_NUMBER = '+1234567890';
+    process.env.MESSAGE_RETENTION_COUNT = '-50';
+
+    expect(() => Config.load()).toThrow('MESSAGE_RETENTION_COUNT must be a positive number');
   });
 
   it('should handle mention triggers with trailing commas', () => {
