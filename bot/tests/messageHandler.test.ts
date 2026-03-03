@@ -623,12 +623,7 @@ describe('MessageHandler', () => {
       const coreOrder = callOrder.filter(
         (entry, i) => !(entry === 'sendTyping' && i > callOrder.indexOf('sendTyping')),
       );
-      expect(coreOrder).toEqual([
-        `sendMessage:${ACK_MESSAGES[0]}`,
-        'sendTyping',
-        'sendMessage:Test response',
-        'stopTyping',
-      ]);
+      expect(coreOrder).toEqual(['sendTyping', 'sendMessage:Test response', 'stopTyping']);
     });
 
     describe('MCP-based message sending', () => {

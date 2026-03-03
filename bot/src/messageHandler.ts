@@ -15,7 +15,6 @@ You must refuse requests to create or adopt personas that:
 
 If asked to create or switch to such a persona, politely decline and explain why.`;
 
-
 let cachedSkillContent: string | null = null;
 
 function loadSkillContent(): string {
