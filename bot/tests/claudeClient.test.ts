@@ -508,6 +508,38 @@ describe('ClaudeCLIClient', () => {
       expect(result.mcpMessages).toEqual(['Looking into it...', 'Here is the answer!']);
     });
 
+    it('should succeed when MCP messages sent but result has no text content', async () => {
+      const output = [
+        JSON.stringify({ type: 'system', subtype: 'init', session_id: 'test' }),
+        JSON.stringify({
+          type: 'assistant',
+          message: {
+            content: [
+              {
+                type: 'tool_use',
+                name: 'mcp__signal__send_message',
+                input: { message: 'Here is the answer!' },
+              },
+            ],
+          },
+        }),
+        JSON.stringify({
+          type: 'result',
+          is_error: false,
+          result: '',
+          usage: { output_tokens: 10 },
+        }),
+      ].join('\n');
+      mockSpawnSuccess(output);
+
+      const client = new ClaudeCLIClient();
+      const result = await client.generateResponse([{ role: 'user', content: 'Hi' }]);
+
+      expect(result.sentViaMcp).toBe(true);
+      expect(result.mcpMessages).toEqual(['Here is the answer!']);
+      expect(result.content).toBe('Here is the answer!');
+    });
+
     it('should set sentViaMcp to false when no signal tool calls', async () => {
       mockSpawnSuccess(makeResultOutput('Simple response'));
 
@@ -620,6 +652,128 @@ describe('ClaudeCLIClient', () => {
       expect(mcpConfig.mcpServers.personas.env.DB_PATH).toBe('/tmp/test.db');
       expect(mcpConfig.mcpServers.personas.env.MCP_GROUP_ID).toBe('test-group');
       expect(mcpConfig.mcpServers.personas.env.MCP_SENDER).toBe('+61400000000');
+    });
+
+    it('should include send_image in allowed tools', async () => {
+      mockSpawnSuccess(makeResultOutput('Done!'));
+
+      const client = new ClaudeCLIClient();
+      await client.generateResponse([{ role: 'user', content: 'Hi' }]);
+
+      const args = mockSpawn.mock.calls[0][1];
+      const allowedToolsIdx = args.indexOf('--allowedTools') + 1;
+      const allowedTools = args[allowedToolsIdx];
+
+      expect(allowedTools).toContain('mcp__signal__send_image');
+    });
+
+    it('should detect send_image MCP tool calls as sentViaMcp', async () => {
+      const output = [
+        JSON.stringify({ type: 'system', subtype: 'init', session_id: 'test' }),
+        JSON.stringify({
+          type: 'assistant',
+          message: {
+            content: [
+              {
+                type: 'tool_use',
+                name: 'mcp__signal__send_image',
+                input: { imagePath: '/tmp/screenshot.png', caption: 'Here is the page' },
+              },
+            ],
+          },
+        }),
+        JSON.stringify({
+          type: 'result',
+          is_error: false,
+          result: '',
+          usage: { output_tokens: 15 },
+        }),
+      ].join('\n');
+      mockSpawnSuccess(output);
+
+      const client = new ClaudeCLIClient();
+      const result = await client.generateResponse([{ role: 'user', content: 'Screenshot this' }]);
+
+      expect(result.sentViaMcp).toBe(true);
+      expect(result.mcpMessages).toContain('[sent an image: Here is the page]');
+    });
+
+    it('should detect send_image without caption as generic placeholder', async () => {
+      const output = [
+        JSON.stringify({ type: 'system', subtype: 'init', session_id: 'test' }),
+        JSON.stringify({
+          type: 'assistant',
+          message: {
+            content: [
+              {
+                type: 'tool_use',
+                name: 'mcp__signal__send_image',
+                input: { imagePath: '/tmp/screenshot.png' },
+              },
+            ],
+          },
+        }),
+        JSON.stringify({
+          type: 'result',
+          is_error: false,
+          result: '',
+          usage: { output_tokens: 10 },
+        }),
+      ].join('\n');
+      mockSpawnSuccess(output);
+
+      const client = new ClaudeCLIClient();
+      const result = await client.generateResponse([{ role: 'user', content: 'Screenshot' }]);
+
+      expect(result.sentViaMcp).toBe(true);
+      expect(result.mcpMessages).toContain('[sent an image]');
+    });
+
+    it('should include playwright MCP tools in allowed tools', async () => {
+      mockSpawnSuccess(makeResultOutput('Done!'));
+
+      const client = new ClaudeCLIClient();
+      await client.generateResponse([{ role: 'user', content: 'Hi' }]);
+
+      const args = mockSpawn.mock.calls[0][1];
+      const allowedToolsIdx = args.indexOf('--allowedTools') + 1;
+      const allowedTools = args[allowedToolsIdx];
+
+      expect(allowedTools).toContain('mcp__playwright__browser_navigate');
+      expect(allowedTools).toContain('mcp__playwright__browser_snapshot');
+      expect(allowedTools).toContain('mcp__playwright__browser_take_screenshot');
+      expect(allowedTools).toContain('mcp__playwright__browser_click');
+      expect(allowedTools).toContain('mcp__playwright__browser_type');
+      expect(allowedTools).toContain('mcp__playwright__browser_close');
+    });
+
+    it('should include playwright MCP server in config when context is provided', async () => {
+      mockSpawnSuccess(makeResultOutput('Browsed!'));
+
+      const client = new ClaudeCLIClient();
+      const messages: ChatMessage[] = [{ role: 'user', content: 'Browse web' }];
+      const context = {
+        groupId: 'test-group',
+        sender: '+61400000000',
+        dbPath: '/tmp/test.db',
+        timezone: 'Australia/Sydney',
+        githubRepo: 'owner/repo',
+        sourceRoot: '/tmp/src',
+        signalCliUrl: 'http://localhost:8080',
+        botPhoneNumber: '+61400000000',
+        attachmentsDir: '/app/signal-attachments',
+        whisperModelPath: '/models/ggml-large.bin',
+      };
+
+      await client.generateResponse(messages, context);
+
+      const args = mockSpawn.mock.calls[0][1];
+      const mcpConfigIdx = args.indexOf('--mcp-config') + 1;
+      const mcpConfig = JSON.parse(args[mcpConfigIdx]);
+
+      expect(mcpConfig.mcpServers.playwright).toBeDefined();
+      expect(mcpConfig.mcpServers.playwright.command).toBe('npx');
+      expect(mcpConfig.mcpServers.playwright.args).toContain('--headless');
     });
   });
 });

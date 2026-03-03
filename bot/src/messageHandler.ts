@@ -128,17 +128,26 @@ export class MessageHandler {
       .map(a => `[Voice message attached: ${path.join(this.attachmentsDir, a.id)}]`);
   }
 
-  private formatMessageForContext(msg: Message): string {
+  private formatImageAttachmentLines(attachments: SignalAttachment[]): string[] {
+    return attachments
+      .filter(a => a.contentType.startsWith('image/'))
+      .map(a => `[Image attached: ${path.join(this.attachmentsDir, a.id)}]`);
+  }
+
+  private formatMessageForContext(msg: Message, nameMap?: Map<string, string>): string {
     const ts = this.formatTimestamp(msg.timestamp);
     let content: string;
     if (msg.isBot) {
       content = `[${ts}] ${msg.content}`;
     } else {
-      content = `[${ts}] ${msg.sender}: ${msg.content}`;
+      const displayName = nameMap?.get(msg.sender) ?? msg.sender;
+      content = `[${ts}] ${displayName}: ${msg.content}`;
     }
     const voiceLines = msg.attachments ? this.formatVoiceAttachmentLines(msg.attachments) : [];
-    if (voiceLines.length) {
-      content = content ? `${content}\n${voiceLines.join('\n')}` : voiceLines.join('\n');
+    const imageLines = msg.attachments ? this.formatImageAttachmentLines(msg.attachments) : [];
+    const attachmentLines = [...voiceLines, ...imageLines];
+    if (attachmentLines.length) {
+      content = content ? `${content}\n${attachmentLines.join('\n')}` : attachmentLines.join('\n');
     }
     return content;
   }
@@ -191,6 +200,7 @@ export class MessageHandler {
     sender?: string,
     dossierContext?: string,
     personaPrompt?: string,
+    nameMap?: Map<string, string>,
   ): ChatMessage[] {
     const effectivePrompt = personaPrompt || this.systemPrompt;
     let systemContent: string;
@@ -207,9 +217,10 @@ export class MessageHandler {
         `Current time: ${isoString} (Unix ms: ${unixMs})`,
         `Timezone: ${this.timezone}`,
         `Group ID: ${groupId}`,
-        `Current requester: ${sender}`,
+        `Current requester: ${nameMap?.get(sender) ? `${nameMap.get(sender)} (${sender})` : sender}`,
         `You have access to your own source code via the sourcecode tools (list_files, read_file, search_code). When asked how you work, what you can do, or technical questions about your implementation, use these tools to read the actual code before answering.`,
         `When a voice message is attached (shown as [Voice message attached: <path>] in the conversation), use the transcribe_audio tool to transcribe it, then respond to the transcribed content as if the user had typed it. Voice messages may appear in the current message or in recent conversation history.`,
+        `When an image is attached (shown as [Image attached: <path>] in the conversation), use the Read tool to view it, then respond about the image content. Images may appear in the current message or in recent conversation history.`,
       ].join('\n');
 
       if (dossierContext) {
@@ -226,7 +237,7 @@ export class MessageHandler {
     for (const msg of history) {
       contextMessages.push({
         role: msg.isBot ? 'assistant' : 'user',
-        content: this.formatMessageForContext(msg),
+        content: this.formatMessageForContext(msg, nameMap),
       });
     }
 
@@ -309,17 +320,20 @@ export class MessageHandler {
       // Extract query
       const query = this.extractQuery(content);
 
-      // Append voice attachment info to query
+      // Append voice and image attachment info to query
       const voiceLines = this.formatVoiceAttachmentLines(attachments);
+      const imageLines = this.formatImageAttachmentLines(attachments);
+      const allAttachmentLines = [...voiceLines, ...imageLines];
       let queryWithAttachments = query;
-      if (voiceLines.length > 0) {
-        const voiceBlock = voiceLines.join('\n');
-        queryWithAttachments = query ? `${query}\n\n${voiceBlock}` : voiceBlock;
+      if (allAttachmentLines.length > 0) {
+        const attachmentBlock = allAttachmentLines.join('\n');
+        queryWithAttachments = query ? `${query}\n\n${attachmentBlock}` : attachmentBlock;
       }
 
       // Build additional system context (dossiers + skills)
       const contextParts: string[] = [];
       const dossiers = this.storage.getDossiersByGroup(groupId);
+      const nameMap = new Map(dossiers.map(d => [d.personId, d.displayName]));
       if (dossiers.length > 0) {
         const entries = dossiers.map(d => {
           const parts = [`- ${d.displayName} (${d.personId})`];
@@ -339,7 +353,15 @@ export class MessageHandler {
 
       // Build context
       const additionalContext = contextParts.join('\n\n') || undefined;
-      const messages = this.buildContext(history, queryWithAttachments, groupId, sender, additionalContext, personaPrompt);
+      const messages = this.buildContext(
+        history,
+        queryWithAttachments,
+        groupId,
+        sender,
+        additionalContext,
+        personaPrompt,
+        nameMap,
+      );
 
       // Get LLM response
       const response = await this.llmClient.generateResponse(messages, {

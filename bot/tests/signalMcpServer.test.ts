@@ -56,8 +56,8 @@ describe('signalMcpServer', () => {
     });
 
     const result = response.result as { tools: Array<{ name: string }> };
-    expect(result.tools).toHaveLength(1);
-    expect(result.tools[0].name).toBe('send_message');
+    const toolNames = result.tools.map(t => t.name);
+    expect(toolNames).toContain('send_message');
   });
 
   it('should return error for unknown tool', async () => {
@@ -98,6 +98,66 @@ describe('signalMcpServer', () => {
     const result = response.result as { content: Array<{ text: string }>; isError: boolean };
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toContain('Missing or invalid message');
+  });
+
+  it('should list send_image tool', async () => {
+    const server = spawnMcpServer({
+      SIGNAL_CLI_URL: 'http://localhost:8080',
+      SIGNAL_ACCOUNT: '+61400000000',
+      MCP_GROUP_ID: 'test-group-id',
+    });
+    await initializeServer(server);
+
+    const response = await sendAndReceive(server, {
+      jsonrpc: '2.0',
+      id: 10,
+      method: 'tools/list',
+      params: {},
+    });
+
+    const result = response.result as { tools: Array<{ name: string }> };
+    const toolNames = result.tools.map(t => t.name);
+    expect(toolNames).toContain('send_image');
+  });
+
+  it('should return error when imagePath is missing for send_image', async () => {
+    const server = spawnMcpServer({
+      SIGNAL_CLI_URL: 'http://localhost:8080',
+      SIGNAL_ACCOUNT: '+61400000000',
+      MCP_GROUP_ID: 'test-group-id',
+    });
+    await initializeServer(server);
+
+    const response = await sendAndReceive(server, {
+      jsonrpc: '2.0',
+      id: 11,
+      method: 'tools/call',
+      params: { name: 'send_image', arguments: {} },
+    });
+
+    const result = response.result as { content: Array<{ text: string }>; isError: boolean };
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('imagePath');
+  });
+
+  it('should return error when image file does not exist for send_image', async () => {
+    const server = spawnMcpServer({
+      SIGNAL_CLI_URL: 'http://localhost:8080',
+      SIGNAL_ACCOUNT: '+61400000000',
+      MCP_GROUP_ID: 'test-group-id',
+    });
+    await initializeServer(server);
+
+    const response = await sendAndReceive(server, {
+      jsonrpc: '2.0',
+      id: 12,
+      method: 'tools/call',
+      params: { name: 'send_image', arguments: { imagePath: '/tmp/nonexistent-image-12345.png' } },
+    });
+
+    const result = response.result as { content: Array<{ text: string }>; isError: boolean };
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('not found');
   });
 
   it('should return error when SIGNAL_CLI_URL is not configured', async () => {

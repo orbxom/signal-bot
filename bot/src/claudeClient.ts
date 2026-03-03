@@ -34,12 +34,24 @@ const MCP_TOOLS = [
   'mcp__history__search_messages',
   'mcp__history__get_messages_by_date',
   'mcp__signal__send_message',
+  'mcp__signal__send_image',
   'mcp__personas__create_persona',
   'mcp__personas__get_persona',
   'mcp__personas__list_personas',
   'mcp__personas__update_persona',
   'mcp__personas__delete_persona',
   'mcp__personas__switch_persona',
+  'mcp__playwright__browser_navigate',
+  'mcp__playwright__browser_navigate_back',
+  'mcp__playwright__browser_snapshot',
+  'mcp__playwright__browser_take_screenshot',
+  'mcp__playwright__browser_click',
+  'mcp__playwright__browser_type',
+  'mcp__playwright__browser_press_key',
+  'mcp__playwright__browser_wait_for',
+  'mcp__playwright__browser_close',
+  'mcp__playwright__browser_tabs',
+  'mcp__playwright__browser_evaluate',
 ].join(',');
 const ALLOWED_TOOLS = `${BASE_TOOLS},${MCP_TOOLS}`;
 
@@ -232,6 +244,10 @@ export class ClaudeCLIClient {
               MCP_GROUP_ID: context.groupId,
             },
           },
+          playwright: {
+            command: 'npx',
+            args: ['@playwright/mcp', '--headless'],
+          },
           personas: {
             command: personas.command,
             args: personas.args,
@@ -263,7 +279,7 @@ export class ClaudeCLIClient {
 
     try {
       const { stdout } = await spawnPromise('claude', args, {
-        timeout: 120000,
+        timeout: 300000,
         env: { ...process.env, CLAUDECODE: '' },
       });
 
@@ -291,16 +307,20 @@ export class ClaudeCLIClient {
         if (e.type === 'result') resultLine = e as unknown as ClaudeResultLine;
         if (e.type === 'assistant') lastAssistant = e as unknown as typeof lastAssistant;
 
-        // Detect send_message MCP tool calls
+        // Detect send_message and send_image MCP tool calls
         if (e.type === 'assistant') {
           const msg = e as unknown as {
             message?: {
-              content?: Array<{ type: string; name?: string; input?: { message?: string } }>;
+              content?: Array<{ type: string; name?: string; input?: Record<string, unknown> }>;
             };
           };
           for (const block of msg.message?.content || []) {
             if (block.type === 'tool_use' && block.name === 'mcp__signal__send_message' && block.input?.message) {
-              mcpMessages.push(block.input.message);
+              mcpMessages.push(block.input.message as string);
+            }
+            if (block.type === 'tool_use' && block.name === 'mcp__signal__send_image') {
+              const caption = block.input?.caption as string | undefined;
+              mcpMessages.push(caption ? `[sent an image: ${caption}]` : '[sent an image]');
             }
           }
         }
@@ -338,8 +358,12 @@ export class ClaudeCLIClient {
       }
 
       if (!content) {
-        console.error('[Claude] No content found. Full output:', JSON.stringify(entries, null, 2).substring(0, 2000));
-        throw new Error('No response content from Claude CLI');
+        if (mcpMessages.length === 0) {
+          console.error('[Claude] No content found. Full output:', JSON.stringify(entries, null, 2).substring(0, 2000));
+          throw new Error('No response content from Claude CLI');
+        }
+        // Response delivered via MCP send_message — use last sent message as content fallback
+        content = mcpMessages[mcpMessages.length - 1];
       }
 
       return {

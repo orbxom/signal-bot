@@ -266,6 +266,55 @@ describe('MessageHandler', () => {
       expect(systemContent).toContain('Persona Guidelines');
       expect(systemContent).toContain('refuse requests');
     });
+
+    it('should resolve sender IDs to display names in history when nameMap provided', () => {
+      const handler = new MessageHandler(['@bot']);
+      const messages: Message[] = [
+        { id: 1, groupId: 'g1', sender: 'uuid-alice', content: 'Hello', timestamp: 1000, isBot: false },
+        { id: 2, groupId: 'g1', sender: 'uuid-bob', content: 'Hi there', timestamp: 2000, isBot: false },
+      ];
+      const nameMap = new Map([
+        ['uuid-alice', 'Alice'],
+        ['uuid-bob', 'Bob'],
+      ]);
+
+      const chatMessages = handler.buildContext(messages, 'Query', 'g1', 'uuid-alice', undefined, undefined, nameMap);
+
+      expect(chatMessages[1].content).toBe('[1970-01-01 10:00] Alice: Hello');
+      expect(chatMessages[2].content).toBe('[1970-01-01 10:00] Bob: Hi there');
+    });
+
+    it('should fall back to raw sender ID when nameMap has no entry', () => {
+      const handler = new MessageHandler(['@bot']);
+      const messages: Message[] = [
+        { id: 1, groupId: 'g1', sender: 'uuid-unknown', content: 'Hello', timestamp: 1000, isBot: false },
+      ];
+      const nameMap = new Map([['uuid-alice', 'Alice']]);
+
+      const chatMessages = handler.buildContext(messages, 'Query', 'g1', 'uuid-unknown', undefined, undefined, nameMap);
+
+      expect(chatMessages[1].content).toBe('[1970-01-01 10:00] uuid-unknown: Hello');
+    });
+
+    it('should resolve Current requester to display name when nameMap provided', () => {
+      const handler = new MessageHandler(['@bot'], { systemPrompt: 'Default prompt.' });
+      const nameMap = new Map([['uuid-zach', 'Zach']]);
+
+      const chatMessages = handler.buildContext([], 'Hello', 'g1', 'uuid-zach', undefined, undefined, nameMap);
+
+      const systemContent = chatMessages[0].content;
+      expect(systemContent).toContain('Current requester: Zach (uuid-zach)');
+    });
+
+    it('should show raw sender in Current requester when no nameMap', () => {
+      const handler = new MessageHandler(['@bot'], { systemPrompt: 'Default prompt.' });
+
+      const chatMessages = handler.buildContext([], 'Hello', 'g1', 'uuid-zach');
+
+      const systemContent = chatMessages[0].content;
+      expect(systemContent).toContain('Current requester: uuid-zach');
+      expect(systemContent).not.toContain('Current requester: Zach');
+    });
   });
 
   describe('handleMessage', () => {
@@ -554,6 +603,78 @@ describe('MessageHandler', () => {
       expect(systemMsg.content).toContain('Enjoys hiking');
     });
 
+    it('should resolve sender IDs to display names in history using dossier data', async () => {
+      const mockHistory: Message[] = [
+        { id: 1, groupId: 'g1', sender: '+61400000001', content: 'Previous message', timestamp: 500, isBot: false },
+        { id: 2, groupId: 'g1', sender: '+61400000002', content: 'Another message', timestamp: 600, isBot: false },
+      ];
+      mockStorage.getRecentMessages = vi.fn().mockReturnValue(mockHistory);
+      mockStorage.getDossiersByGroup = vi.fn().mockReturnValue([
+        {
+          id: 1,
+          groupId: 'g1',
+          personId: '+61400000001',
+          displayName: 'Alice',
+          notes: '',
+          createdAt: 1000,
+          updatedAt: 2000,
+        },
+        {
+          id: 2,
+          groupId: 'g1',
+          personId: '+61400000002',
+          displayName: 'Bob',
+          notes: '',
+          createdAt: 1000,
+          updatedAt: 2000,
+        },
+      ]);
+
+      const handler = new MessageHandler(['@bot'], {
+        storage: mockStorage,
+        llmClient: mockLLM,
+        signalClient: mockSignal,
+      });
+
+      await handler.handleMessage('g1', '+61400000001', '@bot hello', 1000);
+
+      const callArgs = (mockLLM.generateResponse as ReturnType<typeof vi.fn>).mock.calls[0];
+      const messages = callArgs[0];
+      const aliceMsg = messages.find((m: { role: string; content: string }) => m.content.includes('Previous message'));
+      const bobMsg = messages.find((m: { role: string; content: string }) => m.content.includes('Another message'));
+      expect(aliceMsg.content).toContain('Alice: Previous message');
+      expect(aliceMsg.content).not.toContain('+61400000001');
+      expect(bobMsg.content).toContain('Bob: Another message');
+      expect(bobMsg.content).not.toContain('+61400000002');
+    });
+
+    it('should resolve Current requester to display name using dossier data', async () => {
+      mockStorage.getDossiersByGroup = vi.fn().mockReturnValue([
+        {
+          id: 1,
+          groupId: 'g1',
+          personId: '+61400000001',
+          displayName: 'Alice',
+          notes: '',
+          createdAt: 1000,
+          updatedAt: 2000,
+        },
+      ]);
+
+      const handler = new MessageHandler(['@bot'], {
+        storage: mockStorage,
+        llmClient: mockLLM,
+        signalClient: mockSignal,
+      });
+
+      await handler.handleMessage('g1', '+61400000001', '@bot hello', 1000);
+
+      const callArgs = (mockLLM.generateResponse as ReturnType<typeof vi.fn>).mock.calls[0];
+      const messages = callArgs[0];
+      const systemMsg = messages.find((m: { role: string }) => m.role === 'system');
+      expect(systemMsg.content).toContain('Current requester: Alice (+61400000001)');
+    });
+
     it('should not include dossier section when no dossiers exist', async () => {
       mockStorage.getDossiersByGroup = vi.fn().mockReturnValue([]);
 
@@ -753,7 +874,7 @@ describe('MessageHandler', () => {
         expect(mockLLM.generateResponse).toHaveBeenCalled();
       });
 
-      it('should ignore non-audio attachments', async () => {
+      it('should not include image attachments as voice attachments', async () => {
         const handler = new MessageHandler(['@bot'], {
           storage: mockStorage,
           llmClient: mockLLM,
@@ -849,6 +970,75 @@ describe('MessageHandler', () => {
             attachments,
           }),
         );
+      });
+    });
+
+    describe('image attachment handling', () => {
+      it('should include image attachment info in query when present', async () => {
+        const handler = new MessageHandler(['@bot'], {
+          storage: mockStorage,
+          llmClient: mockLLM,
+          signalClient: mockSignal,
+          attachmentsDir: '/data/attachments',
+        });
+
+        await handler.handleMessage('g1', 'Alice', '@bot what is this', 1000, [
+          { id: 'img-abc', contentType: 'image/jpeg', size: 50000, filename: 'photo.jpg' },
+        ]);
+
+        const callArgs = (mockLLM.generateResponse as ReturnType<typeof vi.fn>).mock.calls[0];
+        const messages = callArgs[0];
+        const lastUserMsg = messages[messages.length - 1];
+        expect(lastUserMsg.content).toContain('[Image attached: /data/attachments/img-abc]');
+      });
+
+      it('should include image attachment paths from history messages in context', async () => {
+        const mockHistory: Message[] = [
+          {
+            id: 1,
+            groupId: 'g1',
+            sender: 'Alice',
+            content: 'check this out',
+            timestamp: 500,
+            isBot: false,
+            attachments: [{ id: 'img-123', contentType: 'image/jpeg', size: 50000, filename: 'photo.jpg' }],
+          },
+        ];
+        mockStorage.getRecentMessages = vi.fn().mockReturnValue(mockHistory);
+
+        const handler = new MessageHandler(['@bot'], {
+          storage: mockStorage,
+          llmClient: mockLLM,
+          signalClient: mockSignal,
+          attachmentsDir: '/data/attachments',
+        });
+
+        await handler.handleMessage('g1', 'Bob', '@bot what was that image', 1000);
+
+        const callArgs = (mockLLM.generateResponse as ReturnType<typeof vi.fn>).mock.calls[0];
+        const messages = callArgs[0];
+        const historyMsg = messages.find(
+          (m: { role: string; content: string }) => m.role === 'user' && m.content.includes('Alice'),
+        );
+        expect(historyMsg.content).toContain('[Image attached: /data/attachments/img-123]');
+      });
+
+      it('should not include non-image non-audio attachments', async () => {
+        const handler = new MessageHandler(['@bot'], {
+          storage: mockStorage,
+          llmClient: mockLLM,
+          signalClient: mockSignal,
+        });
+
+        await handler.handleMessage('g1', 'Alice', '@bot check this', 1000, [
+          { id: 'doc-abc', contentType: 'application/pdf', size: 10000, filename: 'doc.pdf' },
+        ]);
+
+        const callArgs = (mockLLM.generateResponse as ReturnType<typeof vi.fn>).mock.calls[0];
+        const messages = callArgs[0];
+        const lastUserMsg = messages[messages.length - 1];
+        expect(lastUserMsg.content).not.toContain('[Image attached:');
+        expect(lastUserMsg.content).not.toContain('[Voice message attached:');
       });
     });
 
