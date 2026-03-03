@@ -1,4 +1,5 @@
 mod audio;
+mod transcribe;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -166,6 +167,16 @@ fn handle_tool_call(params: Option<&Value>) -> Value {
     }
 }
 
-fn transcribe_file(_file_path: &str) -> Result<String, String> {
-    Err("Transcription not yet implemented".to_string())
+fn transcribe_file(file_path: &str) -> Result<String, String> {
+    // Lazy-init model on first call
+    let model_path = std::env::var("WHISPER_MODEL_PATH")
+        .map_err(|_| "WHISPER_MODEL_PATH env var not set".to_string())?;
+    transcribe::init_model(&model_path)?;
+
+    let audio_data = audio::decode_audio_file(file_path)?;
+    if audio_data.is_empty() {
+        return Err("Audio file is empty or contains no audio data".to_string());
+    }
+
+    transcribe::transcribe(&audio_data)
 }
