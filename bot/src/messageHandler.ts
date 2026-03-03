@@ -290,6 +290,15 @@ export class MessageHandler {
       console.error('Failed to start typing indicator:', typingError);
     }
 
+    // Refresh typing indicator every 10s to prevent Signal timeout
+    const typingInterval = setInterval(async () => {
+      try {
+        await this.signalClient.sendTyping(groupId);
+      } catch {
+        // Non-fatal — indicator may briefly disappear
+      }
+    }, 10_000);
+
     try {
       // Extract query
       const query = this.extractQuery(content);
@@ -381,6 +390,7 @@ export class MessageHandler {
         console.error('Failed to send error message:', sendError);
       }
     } finally {
+      clearInterval(typingInterval);
       // Always stop typing indicator
       try {
         await this.signalClient.stopTyping(groupId);
