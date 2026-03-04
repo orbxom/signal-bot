@@ -255,6 +255,7 @@ export class MessageHandler {
     content: string,
     timestamp: number,
     attachments: SignalAttachment[] = [],
+    options?: { storeOnly?: boolean },
   ): Promise<void> {
     if (!this.storage || !this.llmClient || !this.signalClient) {
       throw new Error('Handler not fully initialized');
@@ -296,7 +297,7 @@ export class MessageHandler {
       attachments: attachments.length > 0 ? attachments : undefined,
     });
 
-    if (!mentioned) {
+    if (options?.storeOnly || !mentioned) {
       return;
     }
 

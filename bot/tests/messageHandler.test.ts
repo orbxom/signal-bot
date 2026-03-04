@@ -971,6 +971,27 @@ describe('MessageHandler', () => {
           }),
         );
       });
+
+      it('should store message but not invoke Claude when storeOnly is true', async () => {
+        const handler = new MessageHandler(['@bot'], {
+          storage: mockStorage,
+          llmClient: mockLLM,
+          signalClient: mockSignal,
+        });
+
+        await handler.handleMessage('g1', 'Alice', '@bot hello', 1000, [], { storeOnly: true });
+
+        expect(mockStorage.addMessage).toHaveBeenCalledWith(
+          expect.objectContaining({
+            groupId: 'g1',
+            sender: 'Alice',
+            content: '@bot hello',
+          }),
+        );
+        expect(mockLLM.generateResponse).not.toHaveBeenCalled();
+        expect(mockSignal.sendMessage).not.toHaveBeenCalled();
+        expect(mockSignal.sendTyping).not.toHaveBeenCalled();
+      });
     });
 
     describe('image attachment handling', () => {

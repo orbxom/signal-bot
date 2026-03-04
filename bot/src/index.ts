@@ -72,11 +72,13 @@ async function main() {
         const data = signalClient.extractMessageData(signalMsg);
 
         if (data) {
-          if (config.testChannelOnly && data.groupId !== config.testGroupId) {
-            continue;
+          const storeOnly = config.testChannelOnly && data.groupId !== config.testGroupId;
+          if (storeOnly) {
+            console.log(`[${data.groupId}] (store-only) ${data.sender}: ${data.content.substring(0, 50)}...`);
+          } else {
+            console.log(`[${data.groupId}] ${data.sender}: ${data.content.substring(0, 50)}...`);
           }
-          console.log(`[${data.groupId}] ${data.sender}: ${data.content.substring(0, 50)}...`);
-          await messageHandler.handleMessage(data.groupId, data.sender, data.content, data.timestamp, data.attachments);
+          await messageHandler.handleMessage(data.groupId, data.sender, data.content, data.timestamp, data.attachments, { storeOnly });
         }
       }
 
