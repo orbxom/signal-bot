@@ -1,7 +1,7 @@
 import type Database from 'better-sqlite3';
 import type { DatabaseConnection } from '../db';
 import { wrapSqliteError } from '../db';
-import { estimateTokens } from '../mcpServerBase';
+import { estimateTokens } from '../mcp/result';
 import type { Dossier } from '../types';
 
 export const DOSSIER_TOKEN_LIMIT = 1000;

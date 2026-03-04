@@ -1,7 +1,7 @@
 import type Database from 'better-sqlite3';
 import type { DatabaseConnection } from '../db';
 import { wrapSqliteError } from '../db';
-import { estimateTokens } from '../mcpServerBase';
+import { estimateTokens } from '../mcp/result';
 import type { Persona } from '../types';
 
 export const PERSONA_DESCRIPTION_TOKEN_LIMIT = 2000;

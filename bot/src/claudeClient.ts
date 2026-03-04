@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 import { buildAllowedTools, buildMcpConfig } from './mcp/registry';
-import { getErrorMessage } from './mcpServerBase';
+import { getErrorMessage } from './mcp/result';
 import type { ChatMessage, LLMResponse, MessageContext } from './types';
 
 interface ClaudeResultLine {
