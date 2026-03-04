@@ -2,7 +2,8 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { MessageHandler } from '../src/messageHandler';
+import { ContextBuilder } from '../src/contextBuilder';
+import { MentionDetector } from '../src/mentionDetector';
 import { Storage } from '../src/storage';
 
 describe('Integration Tests', () => {
@@ -46,20 +47,25 @@ describe('Integration Tests', () => {
     });
 
     it('should detect mentions and extract queries', () => {
-      const handler = new MessageHandler(['@bot', 'bot:']);
+      const detector = new MentionDetector(['@bot', 'bot:']);
 
-      expect(handler.isMentioned('@bot what is 2+2?')).toBe(true);
-      expect(handler.isMentioned('Hello everyone')).toBe(false);
+      expect(detector.isMentioned('@bot what is 2+2?')).toBe(true);
+      expect(detector.isMentioned('Hello everyone')).toBe(false);
 
-      const query = handler.extractQuery('@bot what is 2+2?');
+      const query = detector.extractQuery('@bot what is 2+2?');
       expect(query).toBe('what is 2+2?');
     });
 
     it('should build context from stored history', () => {
-      const handler = new MessageHandler(['@bot'], { systemPrompt: 'You are a helpful family assistant.' });
+      const builder = new ContextBuilder({
+        systemPrompt: 'You are a helpful family assistant.',
+        timezone: 'UTC',
+        contextTokenBudget: 4000,
+        attachmentsDir: '/tmp',
+      });
 
       const history = storage.getRecentMessages(groupId, 10);
-      const context = handler.buildContext(history, 'what is 2+2?');
+      const context = builder.buildContext({ history, query: 'what is 2+2?' });
 
       expect(context[0].role).toBe('system');
       expect(context[0].content).toContain('helpful family assistant');
@@ -79,9 +85,14 @@ describe('Integration Tests', () => {
         isBot: true,
       });
 
-      const handler = new MessageHandler(['@bot']);
+      const builder = new ContextBuilder({
+        systemPrompt: 'You are a helpful assistant.',
+        timezone: 'UTC',
+        contextTokenBudget: 4000,
+        attachmentsDir: '/tmp',
+      });
       const history = storage.getRecentMessages(groupId, 10);
-      const context = handler.buildContext(history, 'thanks!');
+      const context = builder.buildContext({ history, query: 'thanks!' });
 
       const assistantMessages = context.filter(m => m.role === 'assistant');
       expect(assistantMessages.length).toBeGreaterThan(0);
