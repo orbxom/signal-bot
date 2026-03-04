@@ -13,7 +13,7 @@ describe('Weather MCP Server', () => {
   });
 
   function spawnMcpServer(): ChildProcess {
-    proc = spawnServer('weatherMcpServer.ts', { TZ: 'Australia/Sydney' });
+    proc = spawnServer('mcp/servers/weather.ts', { TZ: 'Australia/Sydney' });
     return proc;
   }
 

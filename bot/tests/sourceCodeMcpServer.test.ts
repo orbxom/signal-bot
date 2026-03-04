@@ -37,7 +37,7 @@ describe('Source Code MCP Server', () => {
   });
 
   function spawnMcpServer(sourceRoot?: string): ChildProcess {
-    proc = spawnServer('sourceCodeMcpServer.ts', { SOURCE_ROOT: sourceRoot ?? tempDir });
+    proc = spawnServer('mcp/servers/sourceCode.ts', { SOURCE_ROOT: sourceRoot ?? tempDir });
     return proc;
   }
 

@@ -13,7 +13,7 @@ describe('signalMcpServer', () => {
   });
 
   function spawnMcpServer(env?: Record<string, string>): ChildProcess {
-    proc = spawnServer('signalMcpServer.ts', env);
+    proc = spawnServer('mcp/servers/signal.ts', env);
     return proc;
   }
 

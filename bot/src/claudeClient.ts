@@ -1,6 +1,5 @@
 import { spawn } from 'node:child_process';
-import fs from 'node:fs';
-import path from 'node:path';
+import { buildAllowedTools, buildMcpConfig } from './mcp/registry';
 import { getErrorMessage } from './mcpServerBase';
 import type { ChatMessage, LLMResponse, MessageContext } from './types';
 
@@ -14,73 +13,7 @@ interface ClaudeResultLine {
   };
 }
 
-const BASE_TOOLS = 'WebSearch,WebFetch,Read,Glob,Grep,Agent';
-const MCP_TOOLS = [
-  'mcp__reminders__set_reminder',
-  'mcp__reminders__list_reminders',
-  'mcp__reminders__cancel_reminder',
-  'mcp__weather__search_location',
-  'mcp__weather__get_observations',
-  'mcp__weather__get_forecast',
-  'mcp__weather__get_warnings',
-  'mcp__github__create_feature_request',
-  'mcp__dossiers__update_dossier',
-  'mcp__dossiers__get_dossier',
-  'mcp__dossiers__list_dossiers',
-  'mcp__sourcecode__list_files',
-  'mcp__sourcecode__read_file',
-  'mcp__sourcecode__search_code',
-  'mcp__transcription__transcribe_audio',
-  'mcp__history__search_messages',
-  'mcp__history__get_messages_by_date',
-  'mcp__signal__send_message',
-  'mcp__signal__send_image',
-  'mcp__personas__create_persona',
-  'mcp__personas__get_persona',
-  'mcp__personas__list_personas',
-  'mcp__personas__update_persona',
-  'mcp__personas__delete_persona',
-  'mcp__personas__switch_persona',
-  'mcp__playwright__browser_navigate',
-  'mcp__playwright__browser_navigate_back',
-  'mcp__playwright__browser_snapshot',
-  'mcp__playwright__browser_take_screenshot',
-  'mcp__playwright__browser_click',
-  'mcp__playwright__browser_type',
-  'mcp__playwright__browser_press_key',
-  'mcp__playwright__browser_wait_for',
-  'mcp__playwright__browser_close',
-  'mcp__playwright__browser_tabs',
-  'mcp__playwright__browser_evaluate',
-].join(',');
-const ALLOWED_TOOLS = `${BASE_TOOLS},${MCP_TOOLS}`;
-
-// Resolve MCP server path for dev (tsx) vs production (compiled JS)
-const mcpPathCache = new Map<string, { command: string; args: string[] }>();
-function resolveMcpServerPath(name: string): { command: string; args: string[] } {
-  const cached = mcpPathCache.get(name);
-  if (cached) return cached;
-  const jsPath = path.resolve(__dirname, `${name}.js`);
-  const tsPath = path.resolve(__dirname, `${name}.ts`);
-  const useTs = !fs.existsSync(jsPath) && fs.existsSync(tsPath);
-  const result = {
-    command: useTs ? 'npx' : 'node',
-    args: useTs ? ['tsx', tsPath] : [jsPath],
-  };
-  mcpPathCache.set(name, result);
-  return result;
-}
-
-// Resolve transcription binary (compiled Rust, not TS)
-function resolveTranscriptionBinary(): { command: string; args: string[] } {
-  const binPath = path.resolve(__dirname, '..', '..', 'transcription', 'target', 'release', 'signal-bot-transcription');
-  if (fs.existsSync(binPath)) {
-    return { command: binPath, args: [] };
-  }
-  // Dev fallback: cargo run
-  const cargoPath = path.resolve(__dirname, '..', '..', 'transcription');
-  return { command: 'cargo', args: ['run', '--release', '--manifest-path', `${cargoPath}/Cargo.toml`] };
-}
+const ALLOWED_TOOLS = buildAllowedTools();
 
 function spawnPromise(
   cmd: string,
@@ -166,99 +99,7 @@ export class ClaudeCLIClient {
     ];
 
     if (context) {
-      const reminders = resolveMcpServerPath('reminderMcpServer');
-      const weather = resolveMcpServerPath('weatherMcpServer');
-      const github = resolveMcpServerPath('githubMcpServer');
-      const dossiers = resolveMcpServerPath('dossierMcpServer');
-      const sourcecode = resolveMcpServerPath('sourceCodeMcpServer');
-      const transcriptionBin = resolveTranscriptionBinary();
-      const history = resolveMcpServerPath('messageHistoryMcpServer');
-      const signal = resolveMcpServerPath('signalMcpServer');
-      const personas = resolveMcpServerPath('personaMcpServer');
-      const mcpConfig = JSON.stringify({
-        mcpServers: {
-          reminders: {
-            command: reminders.command,
-            args: reminders.args,
-            env: {
-              DB_PATH: context.dbPath,
-              MCP_GROUP_ID: context.groupId,
-              MCP_SENDER: context.sender,
-              TZ: context.timezone,
-            },
-          },
-          weather: {
-            command: weather.command,
-            args: weather.args,
-            env: {
-              TZ: context.timezone,
-            },
-          },
-          github: {
-            command: github.command,
-            args: github.args,
-            env: {
-              GITHUB_REPO: context.githubRepo || '',
-              MCP_SENDER: context.sender,
-            },
-          },
-          dossiers: {
-            command: dossiers.command,
-            args: dossiers.args,
-            env: {
-              DB_PATH: context.dbPath,
-              MCP_GROUP_ID: context.groupId,
-              MCP_SENDER: context.sender,
-            },
-          },
-          sourcecode: {
-            command: sourcecode.command,
-            args: sourcecode.args,
-            env: {
-              SOURCE_ROOT: context.sourceRoot,
-            },
-          },
-          transcription: {
-            command: transcriptionBin.command,
-            args: transcriptionBin.args,
-            env: {
-              WHISPER_MODEL_PATH: context.whisperModelPath || '',
-              ATTACHMENTS_DIR: context.attachmentsDir || '',
-            },
-          },
-          history: {
-            command: history.command,
-            args: history.args,
-            env: {
-              DB_PATH: context.dbPath,
-              MCP_GROUP_ID: context.groupId,
-              TZ: context.timezone,
-            },
-          },
-          signal: {
-            command: signal.command,
-            args: signal.args,
-            env: {
-              SIGNAL_CLI_URL: context.signalCliUrl,
-              SIGNAL_ACCOUNT: context.botPhoneNumber,
-              MCP_GROUP_ID: context.groupId,
-            },
-          },
-          playwright: {
-            command: 'npx',
-            args: ['@playwright/mcp', '--headless'],
-          },
-          personas: {
-            command: personas.command,
-            args: personas.args,
-            env: {
-              DB_PATH: context.dbPath,
-              MCP_GROUP_ID: context.groupId,
-              MCP_SENDER: context.sender,
-            },
-          },
-        },
-      });
+      const mcpConfig = JSON.stringify(buildMcpConfig(context));
       args.push('--mcp-config', mcpConfig, '--strict-mcp-config');
 
       const agentsConfig = JSON.stringify({

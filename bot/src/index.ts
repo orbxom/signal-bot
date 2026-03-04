@@ -20,7 +20,7 @@ async function main() {
   const signalClient = new SignalClient(config.signalCliUrl, config.botPhoneNumber);
   console.log('Signal client initialized');
 
-  const reminderScheduler = new ReminderScheduler(storage, signalClient);
+  const reminderScheduler = new ReminderScheduler(storage.reminders, signalClient);
   console.log('Reminder scheduler initialized');
 
   const messageHandler = new MessageHandler(config.mentionTriggers, {
