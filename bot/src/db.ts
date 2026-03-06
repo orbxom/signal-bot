@@ -193,6 +193,15 @@ export class DatabaseConnection {
     `);
   }
 
+  runOp<T>(name: string, fn: () => T): T {
+    this.ensureOpen();
+    try {
+      return fn();
+    } catch (error) {
+      wrapSqliteError(error, name);
+    }
+  }
+
   ensureOpen(): void {
     if (this.closed) {
       throw new Error('Database is closed');

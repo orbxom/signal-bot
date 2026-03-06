@@ -28,7 +28,7 @@ describe('Storage - Personas', () => {
       const defaultPersona = storage.getDefaultPersona();
       expect(defaultPersona).not.toBeNull();
       expect(defaultPersona?.name).toBe('Default Assistant');
-      expect(defaultPersona?.isDefault).toBe(1);
+      expect(defaultPersona?.isDefault).toBe(true);
       expect(defaultPersona?.description).toContain('helpful family assistant');
     });
 
@@ -50,7 +50,7 @@ describe('Storage - Personas', () => {
         name: 'Pirate',
         description: 'Ye be a pirate captain!',
         tags: 'fun,pirate',
-        isDefault: 0,
+        isDefault: false,
       });
       expect(persona.id).toBeGreaterThan(0);
       expect(persona.createdAt).toBeGreaterThan(0);
@@ -138,7 +138,7 @@ describe('Storage - Personas', () => {
     it('should include the seeded default persona', () => {
       createStorage();
       const personas = storage.listPersonas();
-      expect(personas.some(p => p.isDefault === 1)).toBe(true);
+      expect(personas.some(p => p.isDefault === true)).toBe(true);
     });
   });
 
@@ -211,7 +211,7 @@ describe('Storage - Personas', () => {
       storage.deletePersona(created.id);
       // Group should fall back to default
       const active = storage.getActivePersonaForGroup('group1');
-      expect(active?.isDefault).toBe(1);
+      expect(active?.isDefault).toBe(true);
     });
   });
 
@@ -220,7 +220,7 @@ describe('Storage - Personas', () => {
       createStorage();
       const persona = storage.getDefaultPersona();
       expect(persona).not.toBeNull();
-      expect(persona?.isDefault).toBe(1);
+      expect(persona?.isDefault).toBe(true);
       expect(persona?.name).toBe('Default Assistant');
     });
   });
@@ -265,7 +265,7 @@ describe('Storage - Personas', () => {
       createStorage();
       const active = storage.getActivePersonaForGroup('group1');
       expect(active).not.toBeNull();
-      expect(active?.isDefault).toBe(1);
+      expect(active?.isDefault).toBe(true);
     });
 
     it('should support different personas per group', () => {
@@ -286,7 +286,7 @@ describe('Storage - Personas', () => {
       storage.setActivePersona('group1', created.id);
       storage.clearActivePersona('group1');
       const active = storage.getActivePersonaForGroup('group1');
-      expect(active?.isDefault).toBe(1);
+      expect(active?.isDefault).toBe(true);
     });
 
     it('should be a no-op if no active persona set', () => {

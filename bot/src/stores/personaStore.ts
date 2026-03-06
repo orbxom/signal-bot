@@ -1,8 +1,14 @@
 import type Database from 'better-sqlite3';
 import type { DatabaseConnection } from '../db';
 import { wrapSqliteError } from '../db';
-import { estimateTokens } from '../mcp/result';
 import type { Persona } from '../types';
+import { estimateTokens } from '../utils/tokens';
+
+type PersonaRow = Omit<Persona, 'isDefault'> & { isDefault: number };
+
+function mapPersonaRow(row: PersonaRow): Persona {
+  return { ...row, isDefault: row.isDefault === 1 };
+}
 
 export const PERSONA_DESCRIPTION_TOKEN_LIMIT = 2000;
 
@@ -24,6 +30,7 @@ export class PersonaStore {
     getActive: Database.Statement;
     clearActive: Database.Statement;
     clearActiveByPersonaId: Database.Statement;
+    seedDefault: Database.Statement;
   };
 
   constructor(conn: DatabaseConnection) {
@@ -70,6 +77,10 @@ export class PersonaStore {
       clearActiveByPersonaId: conn.db.prepare(`
         DELETE FROM active_personas WHERE personaId = ?
       `),
+      seedDefault: conn.db.prepare(`
+        INSERT INTO personas (name, description, tags, isDefault, createdAt, updatedAt)
+        VALUES (?, ?, ?, 1, ?, ?)
+      `),
     };
   }
 
@@ -80,11 +91,13 @@ export class PersonaStore {
       const existing = this.stmts.getByName.get(DEFAULT_PERSONA_NAME);
       if (!existing) {
         const now = Date.now();
-        this.conn.db
-          .prepare(
-            'INSERT INTO personas (name, description, tags, isDefault, createdAt, updatedAt) VALUES (?, ?, ?, 1, ?, ?)',
-          )
-          .run(DEFAULT_PERSONA_NAME, DEFAULT_PERSONA_DESCRIPTION, 'default,family,helpful', now, now);
+        this.stmts.seedDefault.run(
+          DEFAULT_PERSONA_NAME,
+          DEFAULT_PERSONA_DESCRIPTION,
+          'default,family,helpful',
+          now,
+          now,
+        );
       }
     } catch (error) {
       wrapSqliteError(error, 'seed default persona');
@@ -111,7 +124,7 @@ export class PersonaStore {
         name,
         description,
         tags,
-        isDefault: 0,
+        isDefault: false,
         createdAt: now,
         updatedAt: now,
       };
@@ -124,32 +137,24 @@ export class PersonaStore {
   }
 
   getById(id: number): Persona | null {
-    this.conn.ensureOpen();
-    try {
-      const row = this.stmts.getById.get(id) as Persona | undefined;
-      return row ?? null;
-    } catch (error) {
-      wrapSqliteError(error, 'get persona');
-    }
+    return this.conn.runOp('get persona', () => {
+      const row = this.stmts.getById.get(id) as PersonaRow | undefined;
+      return row ? mapPersonaRow(row) : null;
+    });
   }
 
   getByName(name: string): Persona | null {
-    this.conn.ensureOpen();
-    try {
-      const row = this.stmts.getByName.get(name) as Persona | undefined;
-      return row ?? null;
-    } catch (error) {
-      wrapSqliteError(error, 'get persona by name');
-    }
+    return this.conn.runOp('get persona by name', () => {
+      const row = this.stmts.getByName.get(name) as PersonaRow | undefined;
+      return row ? mapPersonaRow(row) : null;
+    });
   }
 
   list(): Persona[] {
-    this.conn.ensureOpen();
-    try {
-      return this.stmts.list.all() as Persona[];
-    } catch (error) {
-      wrapSqliteError(error, 'list personas');
-    }
+    return this.conn.runOp('list personas', () => {
+      const rows = this.stmts.list.all() as PersonaRow[];
+      return rows.map(mapPersonaRow);
+    });
   }
 
   update(id: number, name: string, description: string, tags: string): boolean {
@@ -174,26 +179,23 @@ export class PersonaStore {
   }
 
   delete(id: number): boolean {
-    this.conn.ensureOpen();
-
     try {
-      // Clean up any active_personas references first
-      this.stmts.clearActiveByPersonaId.run(id);
-      const result = this.stmts.delete.run(id);
-      return result.changes > 0;
+      return this.conn.transaction(() => {
+        // Clean up any active_personas references first
+        this.stmts.clearActiveByPersonaId.run(id);
+        const result = this.stmts.delete.run(id);
+        return result.changes > 0;
+      });
     } catch (error) {
       wrapSqliteError(error, 'delete persona');
     }
   }
 
   getDefault(): Persona | null {
-    this.conn.ensureOpen();
-    try {
-      const row = this.stmts.getDefault.get() as Persona | undefined;
-      return row ?? null;
-    } catch (error) {
-      wrapSqliteError(error, 'get default persona');
-    }
+    return this.conn.runOp('get default persona', () => {
+      const row = this.stmts.getDefault.get() as PersonaRow | undefined;
+      return row ? mapPersonaRow(row) : null;
+    });
   }
 
   setActive(groupId: string, personaId: number): void {
@@ -212,8 +214,8 @@ export class PersonaStore {
   getActiveForGroup(groupId: string): Persona | null {
     this.conn.ensureOpen();
     try {
-      const row = this.stmts.getActive.get(groupId) as Persona | undefined;
-      if (row) return row;
+      const row = this.stmts.getActive.get(groupId) as PersonaRow | undefined;
+      if (row) return mapPersonaRow(row);
       // Fall back to default persona
       return this.getDefault();
     } catch (error) {
@@ -222,11 +224,8 @@ export class PersonaStore {
   }
 
   clearActive(groupId: string): void {
-    this.conn.ensureOpen();
-    try {
+    this.conn.runOp('clear active persona', () => {
       this.stmts.clearActive.run(groupId);
-    } catch (error) {
-      wrapSqliteError(error, 'clear active persona');
-    }
+    });
   }
 }

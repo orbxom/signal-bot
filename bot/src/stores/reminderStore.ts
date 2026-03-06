@@ -97,68 +97,44 @@ export class ReminderStore {
   }
 
   getDueByGroup(groupId: string, now: number, limit: number): Reminder[] {
-    this.conn.ensureOpen();
-
-    try {
+    return this.conn.runOp('get due reminders by group', () => {
       const rows = this.stmts.getDueByGroup.all(groupId, now, limit) as Array<ReminderRow>;
       return rows.map(mapReminderRow);
-    } catch (error) {
-      wrapSqliteError(error, 'get due reminders by group');
-    }
+    });
   }
 
   getGroupsWithDueReminders(now: number): string[] {
-    this.conn.ensureOpen();
-
-    try {
+    return this.conn.runOp('get groups with due reminders', () => {
       const rows = this.stmts.getGroupsWithDueReminders.all(now) as Array<{ groupId: string }>;
       return rows.map(r => r.groupId);
-    } catch (error) {
-      wrapSqliteError(error, 'get groups with due reminders');
-    }
+    });
   }
 
   markSent(id: number): boolean {
-    this.conn.ensureOpen();
-
-    try {
+    return this.conn.runOp('mark reminder sent', () => {
       const result = this.stmts.markSent.run(Date.now(), id);
       return result.changes > 0;
-    } catch (error) {
-      wrapSqliteError(error, 'mark reminder sent');
-    }
+    });
   }
 
   markFailed(id: number, reason: string): boolean {
-    this.conn.ensureOpen();
-
-    try {
+    return this.conn.runOp('mark reminder failed', () => {
       const result = this.stmts.markFailed.run(reason, id);
       return result.changes > 0;
-    } catch (error) {
-      wrapSqliteError(error, 'mark reminder failed');
-    }
+    });
   }
 
   recordAttempt(id: number): void {
-    this.conn.ensureOpen();
-
-    try {
+    this.conn.runOp('record attempt', () => {
       this.stmts.recordAttempt.run(Date.now(), id);
-    } catch (error) {
-      wrapSqliteError(error, 'record attempt');
-    }
+    });
   }
 
   cancel(id: number, groupId: string): boolean {
-    this.conn.ensureOpen();
-
-    try {
+    return this.conn.runOp('cancel reminder', () => {
       const result = this.stmts.cancel.run(id, groupId);
       return result.changes > 0;
-    } catch (error) {
-      wrapSqliteError(error, 'cancel reminder');
-    }
+    });
   }
 
   listPending(groupId: string): Reminder[] {
@@ -177,14 +153,10 @@ export class ReminderStore {
 
   // Legacy compatibility methods (used by existing Storage facade)
   getDueReminders(now?: number, limit = 50): Reminder[] {
-    this.conn.ensureOpen();
-
-    try {
+    return this.conn.runOp('get due reminders', () => {
       const rows = this.stmts.selectDueReminders.all(now ?? Date.now(), limit) as Array<ReminderRow>;
       return rows.map(mapReminderRow);
-    } catch (error) {
-      wrapSqliteError(error, 'get due reminders');
-    }
+    });
   }
 
   /**
@@ -198,12 +170,8 @@ export class ReminderStore {
    * Legacy: increment retry without setting lastAttemptAt
    */
   incrementRetry(id: number): void {
-    this.conn.ensureOpen();
-
-    try {
+    this.conn.runOp('increment reminder retry', () => {
       this.stmts.incrementRetry.run(id);
-    } catch (error) {
-      wrapSqliteError(error, 'increment reminder retry');
-    }
+    });
   }
 }
