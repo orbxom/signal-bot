@@ -96,9 +96,10 @@ export class ContextBuilder {
     return content;
   }
 
-  fitToTokenBudget(messages: Message[]): Message[] {
+  fitToTokenBudget(messages: Message[]): { messages: Message[]; formatted: string[] } {
     let totalTokens = 0;
     let cutoffIndex = messages.length;
+    const formattedStrings: string[] = [];
 
     // Walk from newest to oldest
     for (let i = messages.length - 1; i >= 0; i--) {
@@ -110,9 +111,11 @@ export class ContextBuilder {
       }
       totalTokens += tokens;
       cutoffIndex = i;
+      formattedStrings.push(formatted);
     }
 
-    return messages.slice(cutoffIndex);
+    formattedStrings.reverse();
+    return { messages: messages.slice(cutoffIndex), formatted: formattedStrings };
   }
 
   loadSkillContent(): string {
@@ -140,8 +143,9 @@ export class ContextBuilder {
     dossierContext?: string;
     personaDescription?: string;
     nameMap?: Map<string, string>;
+    preFormatted?: string[];
   }): ChatMessage[] {
-    const { history, query, groupId, sender, dossierContext, personaDescription, nameMap } = params;
+    const { history, query, groupId, sender, dossierContext, personaDescription, nameMap, preFormatted } = params;
     const effectivePrompt = personaDescription || this.systemPrompt;
     let systemContent: string;
 
@@ -174,10 +178,13 @@ export class ContextBuilder {
 
     const contextMessages: ChatMessage[] = [{ role: 'system', content: systemContent }];
 
-    for (const msg of history) {
+    // preFormatted was built without nameMap, so skip cache when names are available
+    const useCache = preFormatted && !nameMap;
+    for (let i = 0; i < history.length; i++) {
+      const msg = history[i];
       contextMessages.push({
         role: msg.isBot ? 'assistant' : 'user',
-        content: this.formatMessageForContext(msg, nameMap),
+        content: useCache ? preFormatted[i] : this.formatMessageForContext(msg, nameMap),
       });
     }
 

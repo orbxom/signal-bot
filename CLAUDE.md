@@ -38,7 +38,7 @@ Claude-powered Signal bot for family group chat. Responds to mention triggers in
 - `weather.ts` — BOM weather: search, observations, forecast, warnings (4 tools)
 - `github.ts` — Create GitHub issues from feature requests (1 tool)
 - `dossiers.ts` — Person dossier CRUD (3 tools)
-- `sourceCode.ts` — List/read/search source files (3 tools)
+- `sourceCode.ts` — List/read/search source files (3 tools). Paths are relative to `bot/`, not the repo root (e.g., use `src/index.ts` not `bot/src/index.ts`)
 - `messageHistory.ts` — Search and date-range message queries (2 tools)
 - `signal.ts` — Send messages and images via Signal (2 tools)
 - `personas.ts` — Bot persona CRUD + switching (6 tools)

@@ -1,7 +1,10 @@
-import { Storage } from '../../storage';
-import { error, getErrorMessage, ok } from '../result';
+import { DatabaseConnection } from '../../db';
+import { ReminderStore } from '../../stores/reminderStore';
+import { readStorageEnv, readTimezone } from '../env';
+import { catchErrors, error, ok } from '../result';
 import { runServer } from '../runServer';
 import type { McpServerDefinition } from '../types';
+import { requireGroupId, requireNumber, requireString } from '../validate';
 
 const TOOLS = [
   {
@@ -44,7 +47,11 @@ const TOOLS = [
   },
 ];
 
-let storage: Storage;
+let conn: DatabaseConnection;
+let store: ReminderStore;
+let groupId: string;
+let sender: string;
+let tz: string;
 
 export const reminderServer: McpServerDefinition = {
   serverName: 'signal-bot-reminders',
@@ -54,46 +61,34 @@ export const reminderServer: McpServerDefinition = {
   envMapping: { DB_PATH: 'dbPath', MCP_GROUP_ID: 'groupId', MCP_SENDER: 'sender', TZ: 'timezone' },
   handlers: {
     set_reminder(args) {
-      const reminderText = args.reminderText as string;
-      const dueAt = args.dueAt as number;
-      const groupId = process.env.MCP_GROUP_ID || '';
-      const sender = process.env.MCP_SENDER || '';
+      const reminderText = requireString(args, 'reminderText');
+      if (reminderText.error) return reminderText.error;
+      const dueAt = requireNumber(args, 'dueAt');
+      if (dueAt.error) return dueAt.error;
+      const groupErr = requireGroupId(groupId);
+      if (groupErr) return groupErr;
 
-      if (!reminderText || typeof reminderText !== 'string') {
-        return error('Missing or invalid reminderText parameter.');
-      }
-      if (!dueAt || typeof dueAt !== 'number') {
-        return error('Missing or invalid dueAt parameter.');
-      }
-      if (dueAt <= Date.now()) {
+      if (dueAt.value <= Date.now()) {
         return error('The reminder time must be in the future.');
       }
-      if (!groupId) {
-        return error('No group context available.');
-      }
 
-      try {
-        const id = storage.createReminder(groupId, sender, reminderText, dueAt);
-        const dueDate = new Date(dueAt);
-        const formatted = dueDate.toLocaleString('en-AU', { timeZone: process.env.TZ || 'Australia/Sydney' });
-        return ok(`Reminder #${id} set for ${formatted}: "${reminderText}"`);
-      } catch (err) {
-        return error(`Failed to set reminder: ${getErrorMessage(err)}`);
-      }
+      return catchErrors(() => {
+        const id = store.create(groupId, sender, reminderText.value, dueAt.value);
+        const formatted = new Date(dueAt.value).toLocaleString('en-AU', { timeZone: tz });
+        return ok(`Reminder #${id} set for ${formatted}: "${reminderText.value}"`);
+      }, 'Failed to set reminder');
     },
 
     list_reminders() {
-      const groupId = process.env.MCP_GROUP_ID || '';
       if (!groupId) {
         return ok('No group context available.');
       }
 
-      const reminders = storage.listReminders(groupId);
+      const reminders = store.listPending(groupId);
       if (reminders.length === 0) {
         return ok('No pending reminders for this group.');
       }
 
-      const tz = process.env.TZ || 'Australia/Sydney';
       const lines = reminders.map(r => {
         const due = new Date(r.dueAt).toLocaleString('en-AU', { timeZone: tz });
         return `#${r.id} | Due: ${due} | "${r.reminderText}" (set by ${r.requester})`;
@@ -102,34 +97,31 @@ export const reminderServer: McpServerDefinition = {
     },
 
     cancel_reminder(args) {
-      const reminderId = args.reminderId as number;
-      const groupId = process.env.MCP_GROUP_ID || '';
+      const reminderId = requireNumber(args, 'reminderId');
+      if (reminderId.error) return reminderId.error;
+      const groupErr = requireGroupId(groupId);
+      if (groupErr) return groupErr;
 
-      if (!reminderId || typeof reminderId !== 'number') {
-        return error('Missing or invalid reminderId parameter.');
-      }
-      if (!groupId) {
-        return error('No group context available.');
-      }
-
-      const success = storage.cancelReminder(reminderId, groupId);
+      const success = store.cancel(reminderId.value, groupId);
       if (success) {
-        return ok(`Reminder #${reminderId} has been cancelled.`);
+        return ok(`Reminder #${reminderId.value} has been cancelled.`);
       }
       return ok(
-        `Could not cancel reminder #${reminderId}. It may not exist, belong to a different group, or already be sent/cancelled.`,
+        `Could not cancel reminder #${reminderId.value}. It may not exist, belong to a different group, or already be sent/cancelled.`,
       );
     },
   },
   onInit() {
-    const dbPath = process.env.DB_PATH || './data/bot.db';
-    const groupId = process.env.MCP_GROUP_ID || '';
-    const sender = process.env.MCP_SENDER || '';
-    storage = new Storage(dbPath);
+    const env = readStorageEnv();
+    conn = new DatabaseConnection(env.dbPath);
+    store = new ReminderStore(conn);
+    groupId = env.groupId;
+    sender = env.sender;
+    tz = readTimezone();
     console.error(`Reminder MCP server started (group: ${groupId || 'none'}, sender: ${sender || 'none'})`);
   },
   onClose() {
-    storage.close();
+    conn.close();
   },
 };
 

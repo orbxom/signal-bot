@@ -248,7 +248,8 @@ describe('ContextBuilder', () => {
       ];
 
       const result = builder.fitToTokenBudget(messages);
-      expect(result).toHaveLength(2);
+      expect(result.messages).toHaveLength(2);
+      expect(result.formatted).toHaveLength(2);
     });
 
     it('should trim oldest messages when over budget', () => {
@@ -262,14 +263,28 @@ describe('ContextBuilder', () => {
 
       const result = builder.fitToTokenBudget(messages);
       // Should keep only the newest message that fits
-      expect(result).toHaveLength(1);
-      expect(result[0].sender).toBe('Bob');
+      expect(result.messages).toHaveLength(1);
+      expect(result.messages[0].sender).toBe('Bob');
+      expect(result.formatted).toHaveLength(1);
     });
 
     it('should handle empty messages', () => {
       const builder = new ContextBuilder(defaultConfig);
       const result = builder.fitToTokenBudget([]);
-      expect(result).toHaveLength(0);
+      expect(result.messages).toHaveLength(0);
+      expect(result.formatted).toHaveLength(0);
+    });
+
+    it('should return pre-formatted strings matching the returned messages', () => {
+      const builder = new ContextBuilder({ ...defaultConfig, contextTokenBudget: 4000 });
+      const messages: Message[] = [
+        { id: 1, groupId: 'g1', sender: 'Alice', content: 'Hello', timestamp: 1000, isBot: false },
+        { id: 2, groupId: 'g1', sender: 'Bob', content: 'World', timestamp: 2000, isBot: false },
+      ];
+
+      const result = builder.fitToTokenBudget(messages);
+      expect(result.formatted[0]).toBe(builder.formatMessageForContext(messages[0]));
+      expect(result.formatted[1]).toBe(builder.formatMessageForContext(messages[1]));
     });
   });
 

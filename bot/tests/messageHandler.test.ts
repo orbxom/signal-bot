@@ -3,7 +3,23 @@ import type { ClaudeCLIClient } from '../src/claudeClient';
 import { MessageHandler } from '../src/messageHandler';
 import type { SignalClient } from '../src/signalClient';
 import type { Storage } from '../src/storage';
-import type { Message } from '../src/types';
+import type { Message, MessageContext } from '../src/types';
+
+function makeContext(overrides?: Partial<MessageContext>): MessageContext {
+  return {
+    groupId: '',
+    sender: '',
+    dbPath: './data/bot.db',
+    timezone: 'Australia/Sydney',
+    githubRepo: '',
+    sourceRoot: '',
+    signalCliUrl: '',
+    botPhoneNumber: '',
+    attachmentsDir: './data/signal-attachments',
+    whisperModelPath: './models/ggml-base.en.bin',
+    ...overrides,
+  };
+}
 
 describe('MessageHandler', () => {
   describe('Constructor', () => {
@@ -18,7 +34,7 @@ describe('MessageHandler', () => {
         llmClient: {} as ClaudeCLIClient,
         signalClient: {} as SignalClient,
         contextWindowSize: 10,
-        botPhoneNumber: '+1234567890',
+        messageContext: makeContext({ botPhoneNumber: '+1234567890' }),
         systemPrompt: 'Custom prompt',
       });
       expect(handler).toBeDefined();
@@ -80,7 +96,7 @@ describe('MessageHandler', () => {
         storage: mockStorage,
         llmClient: mockLLM,
         signalClient: mockSignal,
-        botPhoneNumber: '+1234567890',
+        messageContext: makeContext({ botPhoneNumber: '+1234567890' }),
       });
 
       await handler.handleMessage('g1', '+1234567890', '@bot hello', 1000);
@@ -95,7 +111,7 @@ describe('MessageHandler', () => {
         storage: mockStorage,
         llmClient: mockLLM,
         signalClient: mockSignal,
-        botPhoneNumber: '+1234567890',
+        messageContext: makeContext({ botPhoneNumber: '+1234567890' }),
       });
 
       await handler.handleMessage('g1', '+9876543210', '@bot hello', 1000);
@@ -479,8 +495,7 @@ describe('MessageHandler', () => {
           storage: mockStorage,
           llmClient: mockLLM as any,
           signalClient: mockSignal,
-          botPhoneNumber: '+61000',
-          signalCliUrl: 'http://localhost:8080',
+          messageContext: makeContext({ botPhoneNumber: '+61000', signalCliUrl: 'http://localhost:8080' }),
         });
 
         await handler.handleMessage('g1', '+61111', '@bot test', Date.now());
@@ -502,8 +517,7 @@ describe('MessageHandler', () => {
           storage: mockStorage,
           llmClient: mockLLM as any,
           signalClient: mockSignal,
-          botPhoneNumber: '+61000',
-          signalCliUrl: 'http://localhost:8080',
+          messageContext: makeContext({ botPhoneNumber: '+61000', signalCliUrl: 'http://localhost:8080' }),
         });
 
         await handler.handleMessage('g1', '+61111', '@bot test', Date.now());
@@ -525,8 +539,7 @@ describe('MessageHandler', () => {
           storage: mockStorage,
           llmClient: mockLLM as any,
           signalClient: mockSignal,
-          botPhoneNumber: '+61000',
-          signalCliUrl: 'http://localhost:8080',
+          messageContext: makeContext({ botPhoneNumber: '+61000', signalCliUrl: 'http://localhost:8080' }),
         });
 
         await handler.handleMessage('g1', '+61111', '@bot test', Date.now());
@@ -543,8 +556,7 @@ describe('MessageHandler', () => {
           storage: mockStorage,
           llmClient: mockLLM,
           signalClient: mockSignal,
-          botPhoneNumber: '+61000',
-          signalCliUrl: 'http://localhost:8080',
+          messageContext: makeContext({ botPhoneNumber: '+61000', signalCliUrl: 'http://localhost:8080' }),
         });
 
         await handler.handleMessage('g1', '+61111', '@bot hello', Date.now());
@@ -629,7 +641,7 @@ describe('MessageHandler', () => {
           storage: mockStorage,
           llmClient: mockLLM,
           signalClient: mockSignal,
-          attachmentsDir: '/data/attachments',
+          messageContext: makeContext({ attachmentsDir: '/data/attachments' }),
         });
 
         await handler.handleMessage('g1', 'Bob', '@bot transcribe that', 1000);
@@ -718,7 +730,7 @@ describe('MessageHandler', () => {
           storage: mockStorage,
           llmClient: mockLLM,
           signalClient: mockSignal,
-          attachmentsDir: '/data/attachments',
+          messageContext: makeContext({ attachmentsDir: '/data/attachments' }),
         });
 
         await handler.handleMessage('g1', 'Alice', '@bot what is this', 1000, [
@@ -749,7 +761,7 @@ describe('MessageHandler', () => {
           storage: mockStorage,
           llmClient: mockLLM,
           signalClient: mockSignal,
-          attachmentsDir: '/data/attachments',
+          messageContext: makeContext({ attachmentsDir: '/data/attachments' }),
         });
 
         await handler.handleMessage('g1', 'Bob', '@bot what was that image', 1000);

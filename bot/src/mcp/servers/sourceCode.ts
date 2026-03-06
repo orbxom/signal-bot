@@ -3,6 +3,7 @@ import * as path from 'node:path';
 import { error as errorResult, ok } from '../result';
 import { runServer } from '../runServer';
 import type { McpServerDefinition } from '../types';
+import { requireString } from '../validate';
 
 const SKIP_DIRS = new Set(['.git', 'node_modules', 'data', 'dist', '.claude']);
 const MAX_FILE_SIZE = 50 * 1024; // 50KB
@@ -69,12 +70,9 @@ const TOOLS = [
   },
 ];
 
-function getSourceRoot(): string {
-  return process.env.SOURCE_ROOT || '';
-}
+let sourceRoot: string;
 
 function resolveSafePath(relativePath: string): string | null {
-  const sourceRoot = getSourceRoot();
   if (!sourceRoot) return null;
   const resolved = path.resolve(sourceRoot, relativePath);
   if (!resolved.startsWith(sourceRoot)) return null;
@@ -178,7 +176,6 @@ export const sourceCodeServer: McpServerDefinition = {
   envMapping: { SOURCE_ROOT: 'sourceRoot' },
   handlers: {
     list_files(args) {
-      const sourceRoot = getSourceRoot();
       if (!sourceRoot) {
         return errorResult('SOURCE_ROOT not configured.');
       }
@@ -208,17 +205,14 @@ export const sourceCodeServer: McpServerDefinition = {
     },
 
     read_file(args) {
-      const sourceRoot = getSourceRoot();
       if (!sourceRoot) {
         return errorResult('SOURCE_ROOT not configured.');
       }
 
-      const filePath = args.path as string;
-      if (!filePath || typeof filePath !== 'string') {
-        return errorResult('Missing required parameter: path');
-      }
+      const filePath = requireString(args, 'path');
+      if (filePath.error) return filePath.error;
 
-      const resolved = resolveSafePath(filePath);
+      const resolved = resolveSafePath(filePath.value);
       if (!resolved) {
         return errorResult('Invalid path.');
       }
@@ -227,10 +221,10 @@ export const sourceCodeServer: McpServerDefinition = {
       try {
         stat = fs.statSync(resolved);
       } catch {
-        return errorResult(`File not found: ${filePath}`);
+        return errorResult(`File not found: ${filePath.value}`);
       }
       if (!stat.isFile()) {
-        return errorResult(`File not found: ${filePath}`);
+        return errorResult(`File not found: ${filePath.value}`);
       }
 
       if (stat.size > MAX_FILE_SIZE) {
@@ -243,21 +237,18 @@ export const sourceCodeServer: McpServerDefinition = {
     },
 
     search_code(args) {
-      const sourceRoot = getSourceRoot();
       if (!sourceRoot) {
         return errorResult('SOURCE_ROOT not configured.');
       }
 
-      const pattern = args.pattern as string;
-      if (!pattern || typeof pattern !== 'string') {
-        return errorResult('Missing required parameter: pattern');
-      }
+      const pattern = requireString(args, 'pattern');
+      if (pattern.error) return pattern.error;
 
       let regex: RegExp;
       try {
-        regex = new RegExp(pattern, 'i');
+        regex = new RegExp(pattern.value, 'i');
       } catch {
-        return errorResult(`Invalid regex pattern: ${pattern}`);
+        return errorResult(`Invalid regex pattern: ${pattern.value}`);
       }
 
       const relativePath = (args.path as string) || '.';
@@ -276,7 +267,7 @@ export const sourceCodeServer: McpServerDefinition = {
       searchRecursive(resolved, regex, sourceRoot, extFilter, results);
 
       if (results.length === 0) {
-        return ok(`No matches found for pattern: ${pattern}`);
+        return ok(`No matches found for pattern: ${pattern.value}`);
       }
 
       const lines = results.map(r => `${r.file}:${r.line}: ${r.text.trim()}`);
@@ -289,7 +280,7 @@ export const sourceCodeServer: McpServerDefinition = {
     },
   },
   onInit() {
-    const sourceRoot = getSourceRoot();
+    sourceRoot = process.env.SOURCE_ROOT || '';
     if (!sourceRoot) {
       console.error('Warning: SOURCE_ROOT not set, source code tools will not function.');
     } else {

@@ -3,6 +3,13 @@ import type { DatabaseConnection } from '../db';
 import { wrapSqliteError } from '../db';
 import type { Reminder, ReminderStatus } from '../types';
 
+const STATUS = {
+  pending: 'pending',
+  sent: 'sent',
+  failed: 'failed',
+  cancelled: 'cancelled',
+} as const satisfies Record<string, ReminderStatus>;
+
 type ReminderRow = Omit<Reminder, 'status'> & { status: string };
 
 function mapReminderRow(row: ReminderRow): Reminder {
@@ -29,39 +36,39 @@ export class ReminderStore {
     this.stmts = {
       insert: conn.db.prepare(`
         INSERT INTO reminders (groupId, requester, reminderText, dueAt, status, retryCount, createdAt)
-        VALUES (?, ?, ?, ?, 'pending', 0, ?)
+        VALUES (?, ?, ?, ?, '${STATUS.pending}', 0, ?)
       `),
       getDueByGroup: conn.db.prepare(`
         SELECT * FROM reminders
-        WHERE groupId = ? AND status = 'pending' AND dueAt <= ?
+        WHERE groupId = ? AND status = '${STATUS.pending}' AND dueAt <= ?
         ORDER BY dueAt ASC
         LIMIT ?
       `),
       getGroupsWithDueReminders: conn.db.prepare(`
         SELECT DISTINCT groupId FROM reminders
-        WHERE status = 'pending' AND dueAt <= ?
+        WHERE status = '${STATUS.pending}' AND dueAt <= ?
       `),
       markSent: conn.db.prepare(`
-        UPDATE reminders SET status = 'sent', sentAt = ? WHERE id = ? AND status = 'pending'
+        UPDATE reminders SET status = '${STATUS.sent}', sentAt = ? WHERE id = ? AND status = '${STATUS.pending}'
       `),
       markFailed: conn.db.prepare(`
-        UPDATE reminders SET status = 'failed', failureReason = ? WHERE id = ? AND status = 'pending'
+        UPDATE reminders SET status = '${STATUS.failed}', failureReason = ? WHERE id = ? AND status = '${STATUS.pending}'
       `),
       recordAttempt: conn.db.prepare(`
         UPDATE reminders SET lastAttemptAt = ?, retryCount = retryCount + 1 WHERE id = ?
       `),
       cancel: conn.db.prepare(`
-        UPDATE reminders SET status = 'cancelled' WHERE id = ? AND groupId = ? AND status = 'pending'
+        UPDATE reminders SET status = '${STATUS.cancelled}' WHERE id = ? AND groupId = ? AND status = '${STATUS.pending}'
       `),
       listPending: conn.db.prepare(`
         SELECT * FROM reminders
-        WHERE groupId = ? AND status = 'pending'
+        WHERE groupId = ? AND status = '${STATUS.pending}'
         ORDER BY dueAt ASC
       `),
       // Legacy compat: due reminders without group filter
       selectDueReminders: conn.db.prepare(`
         SELECT * FROM reminders
-        WHERE status = 'pending' AND dueAt <= ?
+        WHERE status = '${STATUS.pending}' AND dueAt <= ?
         ORDER BY dueAt ASC
         LIMIT ?
       `),

@@ -1,7 +1,10 @@
-import { Storage } from '../../storage';
-import { error, estimateTokens, getErrorMessage, ok } from '../result';
+import { DatabaseConnection } from '../../db';
+import { DossierStore } from '../../stores/dossierStore';
+import { readStorageEnv } from '../env';
+import { catchErrors, estimateTokens, ok } from '../result';
 import { runServer } from '../runServer';
 import type { McpServerDefinition } from '../types';
+import { requireGroupId, requireString } from '../validate';
 
 const TOOLS = [
   {
@@ -42,7 +45,9 @@ const TOOLS = [
   },
 ];
 
-let storage: Storage;
+let conn: DatabaseConnection;
+let store: DossierStore;
+let groupId: string;
 
 export const dossierServer: McpServerDefinition = {
   serverName: 'signal-bot-dossiers',
@@ -52,43 +57,31 @@ export const dossierServer: McpServerDefinition = {
   envMapping: { DB_PATH: 'dbPath', MCP_GROUP_ID: 'groupId', MCP_SENDER: 'sender' },
   handlers: {
     update_dossier(args) {
-      const personId = args.personId as string;
-      const displayName = args.displayName as string;
+      const personId = requireString(args, 'personId');
+      if (personId.error) return personId.error;
+      const displayName = requireString(args, 'displayName');
+      if (displayName.error) return displayName.error;
       const notes = (args.notes as string) ?? '';
-      const groupId = process.env.MCP_GROUP_ID || '';
+      const groupErr = requireGroupId(groupId);
+      if (groupErr) return groupErr;
 
-      if (!personId || typeof personId !== 'string') {
-        return error('Missing or invalid personId parameter.');
-      }
-      if (!displayName || typeof displayName !== 'string') {
-        return error('Missing or invalid displayName parameter.');
-      }
-      if (!groupId) {
-        return error('No group context available.');
-      }
-
-      try {
-        storage.upsertDossier(groupId, personId, displayName, notes);
-        return ok(`Updated dossier for ${displayName} (${personId}). Notes: ~${estimateTokens(notes)} tokens used.`);
-      } catch (err) {
-        return error(`Failed to update dossier: ${getErrorMessage(err)}`);
-      }
+      return catchErrors(() => {
+        store.upsert(groupId, personId.value, displayName.value, notes);
+        return ok(
+          `Updated dossier for ${displayName.value} (${personId.value}). Notes: ~${estimateTokens(notes)} tokens used.`,
+        );
+      }, 'Failed to update dossier');
     },
 
     get_dossier(args) {
-      const personId = args.personId as string;
-      const groupId = process.env.MCP_GROUP_ID || '';
+      const personId = requireString(args, 'personId');
+      if (personId.error) return personId.error;
+      const groupErr = requireGroupId(groupId);
+      if (groupErr) return groupErr;
 
-      if (!personId || typeof personId !== 'string') {
-        return error('Missing or invalid personId parameter.');
-      }
-      if (!groupId) {
-        return error('No group context available.');
-      }
-
-      const dossier = storage.getDossier(groupId, personId);
+      const dossier = store.get(groupId, personId.value);
       if (!dossier) {
-        return ok(`No dossier found for ${personId} in this group.`);
+        return ok(`No dossier found for ${personId.value} in this group.`);
       }
 
       const tokenCount = estimateTokens(dossier.notes);
@@ -98,12 +91,10 @@ export const dossierServer: McpServerDefinition = {
     },
 
     list_dossiers() {
-      const groupId = process.env.MCP_GROUP_ID || '';
-      if (!groupId) {
-        return error('No group context available.');
-      }
+      const groupErr = requireGroupId(groupId);
+      if (groupErr) return groupErr;
 
-      const dossiers = storage.getDossiersByGroup(groupId);
+      const dossiers = store.getByGroup(groupId);
       if (dossiers.length === 0) {
         return ok('No dossiers found for this group.');
       }
@@ -113,14 +104,14 @@ export const dossierServer: McpServerDefinition = {
     },
   },
   onInit() {
-    const dbPath = process.env.DB_PATH || './data/bot.db';
-    const groupId = process.env.MCP_GROUP_ID || '';
-    const sender = process.env.MCP_SENDER || '';
-    storage = new Storage(dbPath);
-    console.error(`Dossier MCP server started (group: ${groupId || 'none'}, sender: ${sender || 'none'})`);
+    const env = readStorageEnv();
+    conn = new DatabaseConnection(env.dbPath);
+    store = new DossierStore(conn);
+    groupId = env.groupId;
+    console.error(`Dossier MCP server started (group: ${groupId || 'none'}, sender: ${env.sender || 'none'})`);
   },
   onClose() {
-    storage.close();
+    conn.close();
   },
 };
 

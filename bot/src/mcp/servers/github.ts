@@ -1,8 +1,9 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { error, getErrorMessage, ok } from '../result';
+import { catchErrors, error, ok } from '../result';
 import { runServer } from '../runServer';
 import type { McpServerDefinition } from '../types';
+import { requireString } from '../validate';
 
 const execFileAsync = promisify(execFile);
 
@@ -35,6 +36,9 @@ const TOOLS = [
   },
 ];
 
+let githubRepo: string;
+let sender: string;
+
 export const githubServer: McpServerDefinition = {
   serverName: 'signal-bot-github',
   configKey: 'github',
@@ -43,31 +47,23 @@ export const githubServer: McpServerDefinition = {
   envMapping: { GITHUB_REPO: 'githubRepo', MCP_SENDER: 'sender' },
   handlers: {
     async create_feature_request(args) {
-      const title = args.title as string;
-      const body = args.body as string;
+      const title = requireString(args, 'title');
+      if (title.error) return title.error;
+      const body = requireString(args, 'body');
+      if (body.error) return body.error;
       const labels = (args.labels as string[]) || ['feature-request'];
 
-      if (!title || typeof title !== 'string') {
-        return error('Missing or invalid title.');
-      }
-      if (!body || typeof body !== 'string') {
-        return error('Missing or invalid body.');
-      }
-
-      const GITHUB_REPO = process.env.GITHUB_REPO || '';
-      const MCP_SENDER = process.env.MCP_SENDER || '';
-
-      if (!GITHUB_REPO) {
+      if (!githubRepo) {
         return error('GITHUB_REPO environment variable is not configured.');
       }
-      if (!/^[\w.-]+\/[\w.-]+$/.test(GITHUB_REPO)) {
-        return error(`Invalid GITHUB_REPO format: "${GITHUB_REPO}". Expected "owner/repo".`);
+      if (!/^[\w.-]+\/[\w.-]+$/.test(githubRepo)) {
+        return error(`Invalid GITHUB_REPO format: "${githubRepo}". Expected "owner/repo".`);
       }
 
-      const fullBody = MCP_SENDER ? `${body}\n\n---\n_Requested via Signal by ${MCP_SENDER}_` : body;
+      const fullBody = sender ? `${body.value}\n\n---\n_Requested via Signal by ${sender}_` : body.value;
 
-      try {
-        const ghArgs = ['issue', 'create', '--repo', GITHUB_REPO, '--title', title, '--body', fullBody];
+      return catchErrors(async () => {
+        const ghArgs = ['issue', 'create', '--repo', githubRepo, '--title', title.value, '--body', fullBody];
         for (const label of labels) {
           ghArgs.push('--label', label);
         }
@@ -76,16 +72,12 @@ export const githubServer: McpServerDefinition = {
         const issueUrl = stdout.trim();
 
         return ok(`Feature request created: ${issueUrl}`);
-      } catch (err) {
-        const msg = getErrorMessage(err);
-        if (msg.includes('ENOENT')) {
-          return error('GitHub CLI (gh) is not installed.');
-        }
-        return error(`Failed to create issue: ${msg}`);
-      }
+      }, 'Failed to create issue');
     },
   },
   onInit() {
+    githubRepo = process.env.GITHUB_REPO || '';
+    sender = process.env.MCP_SENDER || '';
     console.error('GitHub MCP server started');
   },
 };

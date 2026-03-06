@@ -2,7 +2,8 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { DOSSIER_TOKEN_LIMIT, Storage } from '../src/storage';
+import { Storage } from '../src/storage';
+import { DOSSIER_TOKEN_LIMIT } from '../src/stores/dossierStore';
 
 describe('Storage - Dossiers', () => {
   let testDir: string;

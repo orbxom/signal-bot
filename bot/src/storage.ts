@@ -1,16 +1,9 @@
 import { DatabaseConnection } from './db';
-import { DOSSIER_TOKEN_LIMIT as _DOSSIER_TOKEN_LIMIT, DossierStore } from './stores/dossierStore';
+import { DossierStore } from './stores/dossierStore';
 import { MessageStore } from './stores/messageStore';
-import {
-  PERSONA_DESCRIPTION_TOKEN_LIMIT as _PERSONA_DESCRIPTION_TOKEN_LIMIT,
-  PersonaStore,
-} from './stores/personaStore';
+import { PersonaStore } from './stores/personaStore';
 import { ReminderStore } from './stores/reminderStore';
 import type { Dossier, Message, Persona, Reminder } from './types';
-
-// Re-export constants for backward compatibility
-export const DOSSIER_TOKEN_LIMIT = _DOSSIER_TOKEN_LIMIT;
-export const PERSONA_DESCRIPTION_TOKEN_LIMIT = _PERSONA_DESCRIPTION_TOKEN_LIMIT;
 
 export class Storage {
   private conn: DatabaseConnection;

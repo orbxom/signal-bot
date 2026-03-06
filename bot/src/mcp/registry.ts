@@ -91,7 +91,7 @@ export function buildMcpConfig(context: MessageContext): { mcpServers: Record<st
     const resolved = resolveMcpServerPath(`servers/${server.entrypoint.replace('mcp/servers/', '')}`);
     const env: Record<string, string> = {};
     for (const [envKey, contextField] of Object.entries(server.envMapping)) {
-      const value = context[contextField as keyof MessageContext];
+      const value = context[contextField];
       if (value !== undefined) env[envKey] = String(value);
     }
     mcpServers[server.configKey] = {

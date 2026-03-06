@@ -1,6 +1,8 @@
-import { error, getErrorMessage, ok } from '../result';
+import { readTimezone } from '../env';
+import { catchErrors, error, ok } from '../result';
 import { runServer } from '../runServer';
 import type { McpServerDefinition } from '../types';
+import { requireString } from '../validate';
 
 const BOM_BASE_URL = 'https://api.weather.bom.gov.au/v1';
 
@@ -86,6 +88,15 @@ function trimGeohash(geohash: string): string {
   return geohash.substring(0, 6);
 }
 
+function requireGeohash(args: Record<string, unknown>) {
+  const geohash = requireString(args, 'geohash');
+  if (geohash.error) return geohash;
+  if (geohash.value.length < 6) {
+    return { error: error('Missing or invalid geohash (need at least 6 characters).'), value: undefined as never };
+  }
+  return geohash;
+}
+
 export const weatherServer: McpServerDefinition = {
   serverName: 'signal-bot-weather',
   configKey: 'weather',
@@ -94,21 +105,19 @@ export const weatherServer: McpServerDefinition = {
   envMapping: { TZ: 'timezone' },
   handlers: {
     async search_location(args) {
-      const query = args.query as string;
-      if (!query || typeof query !== 'string') {
-        return error('Missing or invalid query parameter.');
-      }
-      if (query.length < 3) {
+      const query = requireString(args, 'query');
+      if (query.error) return query.error;
+      if (query.value.length < 3) {
         return error('Query must be at least 3 characters.');
       }
 
-      try {
-        const result = (await bomFetch(`/locations?search=${encodeURIComponent(query)}`)) as {
+      return catchErrors(async () => {
+        const result = (await bomFetch(`/locations?search=${encodeURIComponent(query.value)}`)) as {
           data: Array<{ geohash: string; name: string; state: string; postcode: string | null }>;
         };
 
         if (!result.data || result.data.length === 0) {
-          return ok(`No locations found for "${query}".`);
+          return ok(`No locations found for "${query.value}".`);
         }
 
         const lines = result.data.slice(0, 10).map(loc => {
@@ -119,19 +128,15 @@ export const weatherServer: McpServerDefinition = {
         });
 
         return ok(`Locations found:\n${lines.join('\n')}`);
-      } catch (err) {
-        return error(`Weather API error: ${getErrorMessage(err)}`);
-      }
+      }, 'Weather API error');
     },
 
     async get_observations(args) {
-      const geohash = args.geohash as string;
-      if (!geohash || typeof geohash !== 'string' || geohash.length < 6) {
-        return error('Missing or invalid geohash (need at least 6 characters).');
-      }
+      const geohash = requireGeohash(args);
+      if (geohash.error) return geohash.error;
 
-      try {
-        const geo6 = trimGeohash(geohash);
+      return catchErrors(async () => {
+        const geo6 = trimGeohash(geohash.value);
         const result = (await bomFetch(`/locations/${geo6}/observations`)) as {
           data: {
             temp: number | null;
@@ -174,19 +179,15 @@ export const weatherServer: McpServerDefinition = {
         }
 
         return ok(`Current observations:\n${lines.join('\n')}`);
-      } catch (err) {
-        return error(`Weather API error: ${getErrorMessage(err)}`);
-      }
+      }, 'Weather API error');
     },
 
     async get_forecast(args) {
-      const geohash = args.geohash as string;
-      if (!geohash || typeof geohash !== 'string' || geohash.length < 6) {
-        return error('Missing or invalid geohash (need at least 6 characters).');
-      }
+      const geohash = requireGeohash(args);
+      if (geohash.error) return geohash.error;
 
-      try {
-        const result = (await bomFetch(`/locations/${geohash}/forecasts/daily`)) as {
+      return catchErrors(async () => {
+        const result = (await bomFetch(`/locations/${geohash.value}/forecasts/daily`)) as {
           data: Array<{
             date: string;
             temp_max: number | null;
@@ -203,7 +204,7 @@ export const weatherServer: McpServerDefinition = {
           return ok('No forecast data available for this location.');
         }
 
-        const tz = process.env.TZ || 'Australia/Sydney';
+        const tz = readTimezone();
         const lines = result.data.map(day => {
           const date = new Date(day.date);
           const dateStr = date.toLocaleDateString('en-AU', {
@@ -242,19 +243,15 @@ export const weatherServer: McpServerDefinition = {
         });
 
         return ok(`7-day forecast:\n${lines.join('\n')}`);
-      } catch (err) {
-        return error(`Weather API error: ${getErrorMessage(err)}`);
-      }
+      }, 'Weather API error');
     },
 
     async get_warnings(args) {
-      const geohash = args.geohash as string;
-      if (!geohash || typeof geohash !== 'string' || geohash.length < 6) {
-        return error('Missing or invalid geohash (need at least 6 characters).');
-      }
+      const geohash = requireGeohash(args);
+      if (geohash.error) return geohash.error;
 
-      try {
-        const result = (await bomFetch(`/locations/${geohash}/warnings`)) as {
+      return catchErrors(async () => {
+        const result = (await bomFetch(`/locations/${geohash.value}/warnings`)) as {
           data: Array<{
             id: string;
             type: string;
@@ -272,7 +269,7 @@ export const weatherServer: McpServerDefinition = {
           return ok('No active weather warnings for this location.');
         }
 
-        const tz = process.env.TZ || 'Australia/Sydney';
+        const tz = readTimezone();
         const lines = result.data.map(w => {
           const parts: string[] = [`- ${w.title || w.short_title || w.type}`];
           if (w.warning_group_type) parts.push(`(${w.warning_group_type})`);
@@ -285,9 +282,7 @@ export const weatherServer: McpServerDefinition = {
         });
 
         return ok(`Active warnings:\n${lines.join('\n')}`);
-      } catch (err) {
-        return error(`Weather API error: ${getErrorMessage(err)}`);
-      }
+      }, 'Weather API error');
     },
   },
   onInit() {

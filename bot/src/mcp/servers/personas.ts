@@ -1,7 +1,10 @@
-import { Storage } from '../../storage';
-import { error, getErrorMessage, ok } from '../result';
+import { DatabaseConnection } from '../../db';
+import { PersonaStore } from '../../stores/personaStore';
+import { readStorageEnv } from '../env';
+import { catchErrors, error, ok } from '../result';
 import { runServer } from '../runServer';
 import type { McpServerDefinition } from '../types';
+import { requireGroupId, requireNumber, requireString } from '../validate';
 
 const TOOLS = [
   {
@@ -89,14 +92,16 @@ const TOOLS = [
   },
 ];
 
-let storage: Storage;
+let conn: DatabaseConnection;
+let store: PersonaStore;
+let groupId: string;
 
 function resolvePersona(identifier: string) {
   const idNum = Number(identifier);
   if (!Number.isNaN(idNum) && Number.isInteger(idNum) && idNum > 0) {
-    return storage.getPersona(idNum);
+    return store.getById(idNum);
   }
-  return storage.getPersonaByName(identifier);
+  return store.getByName(identifier);
 }
 
 export const personaServer: McpServerDefinition = {
@@ -107,35 +112,25 @@ export const personaServer: McpServerDefinition = {
   envMapping: { DB_PATH: 'dbPath', MCP_GROUP_ID: 'groupId', MCP_SENDER: 'sender' },
   handlers: {
     create_persona(args) {
-      const name = args.name as string;
-      const description = args.description as string;
+      const name = requireString(args, 'name');
+      if (name.error) return name.error;
+      const description = requireString(args, 'description');
+      if (description.error) return description.error;
       const tags = (args.tags as string) ?? '';
 
-      if (!name || typeof name !== 'string') {
-        return error('Missing or invalid name parameter.');
-      }
-      if (!description || typeof description !== 'string') {
-        return error('Missing or invalid description parameter.');
-      }
-
-      try {
-        const persona = storage.createPersona(name, description, tags);
+      return catchErrors(() => {
+        const persona = store.create(name.value, description.value, tags);
         return ok(`Persona "${persona.name}" created (ID: ${persona.id}). ${tags ? `Tags: ${tags}` : ''}`);
-      } catch (err) {
-        return error(`Failed to create persona: ${getErrorMessage(err)}`);
-      }
+      }, 'Failed to create persona');
     },
 
     get_persona(args) {
-      const identifier = args.identifier as string;
+      const identifier = requireString(args, 'identifier');
+      if (identifier.error) return identifier.error;
 
-      if (!identifier || typeof identifier !== 'string') {
-        return error('Missing or invalid identifier parameter.');
-      }
-
-      const persona = resolvePersona(identifier);
+      const persona = resolvePersona(identifier.value);
       if (!persona) {
-        return error(`Persona "${identifier}" not found.`);
+        return error(`Persona "${identifier.value}" not found.`);
       }
 
       const lines = [
@@ -148,13 +143,12 @@ export const personaServer: McpServerDefinition = {
     },
 
     list_personas() {
-      const groupId = process.env.MCP_GROUP_ID || '';
-      const personas = storage.listPersonas();
+      const personas = store.list();
       if (personas.length === 0) {
         return ok('No personas found.');
       }
 
-      const active = groupId ? storage.getActivePersonaForGroup(groupId) : null;
+      const active = groupId ? store.getActiveForGroup(groupId) : null;
 
       const lines = personas.map(p => {
         const isActive = active && active.id === p.id;
@@ -168,87 +162,69 @@ export const personaServer: McpServerDefinition = {
     },
 
     update_persona(args) {
-      const id = args.id as number;
-      const name = args.name as string;
-      const description = args.description as string;
+      const id = requireNumber(args, 'id');
+      if (id.error) return id.error;
+      const name = requireString(args, 'name');
+      if (name.error) return name.error;
+      const description = requireString(args, 'description');
+      if (description.error) return description.error;
       const tags = (args.tags as string) ?? '';
 
-      if (!id || typeof id !== 'number') {
-        return error('Missing or invalid id parameter.');
-      }
-      if (!name || typeof name !== 'string') {
-        return error('Missing or invalid name parameter.');
-      }
-      if (!description || typeof description !== 'string') {
-        return error('Missing or invalid description parameter.');
-      }
-
-      try {
-        const result = storage.updatePersona(id, name, description, tags);
+      return catchErrors(() => {
+        const result = store.update(id.value, name.value, description.value, tags);
         if (!result) {
-          return error(`Persona with ID ${id} not found.`);
+          return error(`Persona with ID ${id.value} not found.`);
         }
-        return ok(`Persona "${name}" (ID: ${id}) updated.`);
-      } catch (err) {
-        return error(`Failed to update persona: ${getErrorMessage(err)}`);
-      }
+        return ok(`Persona "${name.value}" (ID: ${id.value}) updated.`);
+      }, 'Failed to update persona');
     },
 
     delete_persona(args) {
-      const id = args.id as number;
+      const id = requireNumber(args, 'id');
+      if (id.error) return id.error;
 
-      if (!id || typeof id !== 'number') {
-        return error('Missing or invalid id parameter.');
-      }
-
-      try {
-        const result = storage.deletePersona(id);
+      return catchErrors(() => {
+        const result = store.delete(id.value);
         if (!result) {
-          return error(`Cannot delete persona with ID ${id}. It may be the default persona or does not exist.`);
+          return error(`Cannot delete persona with ID ${id.value}. It may be the default persona or does not exist.`);
         }
-        return ok(`Persona with ID ${id} deleted.`);
-      } catch (err) {
-        return error(`Failed to delete persona: ${getErrorMessage(err)}`);
-      }
+        return ok(`Persona with ID ${id.value} deleted.`);
+      }, 'Failed to delete persona');
     },
 
     switch_persona(args) {
-      const identifier = args.identifier as string;
-      const groupId = process.env.MCP_GROUP_ID || '';
+      const identifier = requireString(args, 'identifier');
+      if (identifier.error) return identifier.error;
+      const groupErr = requireGroupId(groupId);
+      if (groupErr) return groupErr;
 
-      if (!identifier || typeof identifier !== 'string') {
-        return error('Missing or invalid identifier parameter.');
-      }
-      if (!groupId) {
-        return error('No group context available.');
-      }
-
-      const lowerIdent = identifier.toLowerCase();
+      const lowerIdent = identifier.value.toLowerCase();
       if (lowerIdent === 'default' || lowerIdent === 'reset') {
-        storage.clearActivePersona(groupId);
-        const defaultPersona = storage.getDefaultPersona();
+        store.clearActive(groupId);
+        const defaultPersona = store.getDefault();
         const name = defaultPersona?.name ?? 'Default Assistant';
         return ok(`Persona switched to "${name}". I'll use this personality starting from the next message.`);
       }
 
-      const persona = resolvePersona(identifier);
+      const persona = resolvePersona(identifier.value);
       if (!persona) {
-        return error(`Persona "${identifier}" not found.`);
+        return error(`Persona "${identifier.value}" not found.`);
       }
 
-      storage.setActivePersona(groupId, persona.id);
+      store.setActive(groupId, persona.id);
       return ok(`Persona switched to "${persona.name}". I'll use this personality starting from the next message.`);
     },
   },
   onInit() {
-    const dbPath = process.env.DB_PATH || './data/bot.db';
-    const groupId = process.env.MCP_GROUP_ID || '';
-    const sender = process.env.MCP_SENDER || '';
-    storage = new Storage(dbPath);
-    console.error(`Persona MCP server started (group: ${groupId || 'none'}, sender: ${sender || 'none'})`);
+    const env = readStorageEnv();
+    conn = new DatabaseConnection(env.dbPath);
+    store = new PersonaStore(conn);
+    store.seedDefault();
+    groupId = env.groupId;
+    console.error(`Persona MCP server started (group: ${groupId || 'none'}, sender: ${env.sender || 'none'})`);
   },
   onClose() {
-    storage.close();
+    conn.close();
   },
 };
 

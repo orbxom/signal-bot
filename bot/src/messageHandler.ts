@@ -4,7 +4,7 @@ import { MentionDetector } from './mentionDetector';
 import { MessageDeduplicator } from './messageDeduplicator';
 import type { SignalClient } from './signalClient';
 import type { Storage } from './storage';
-import type { Message, SignalAttachment } from './types';
+import type { Message, MessageContext, SignalAttachment } from './types';
 import { TypingIndicatorManager } from './typingIndicator';
 
 export class MessageHandler {
@@ -12,24 +12,17 @@ export class MessageHandler {
   private contextBuilder: ContextBuilder;
   private deduplicator: MessageDeduplicator;
   private typingManager: TypingIndicatorManager;
-  private botPhoneNumber: string;
+  private messageContext: MessageContext;
   private storage?: Storage;
   private llmClient?: ClaudeCLIClient;
   private signalClient?: SignalClient;
   private contextWindowSize: number;
   private messageRetentionCount: number;
-  private dbPath: string;
-  private timezone: string;
-  private githubRepo: string;
-  private sourceRoot: string;
-  private signalCliUrl: string;
-  private attachmentsDir: string;
-  private whisperModelPath: string;
 
   constructor(
     mentionTriggers: string[],
     options?: {
-      botPhoneNumber?: string;
+      messageContext?: MessageContext;
       systemPrompt?: string;
       storage?: Storage;
       llmClient?: ClaudeCLIClient;
@@ -37,35 +30,32 @@ export class MessageHandler {
       contextWindowSize?: number;
       contextTokenBudget?: number;
       messageRetentionCount?: number;
-      timezone?: string;
-      dbPath?: string;
-      githubRepo?: string;
-      sourceRoot?: string;
-      signalCliUrl?: string;
-      attachmentsDir?: string;
-      whisperModelPath?: string;
     },
   ) {
-    this.botPhoneNumber = options?.botPhoneNumber || '';
+    this.messageContext = options?.messageContext || {
+      groupId: '',
+      sender: '',
+      dbPath: './data/bot.db',
+      timezone: 'Australia/Sydney',
+      githubRepo: '',
+      sourceRoot: '',
+      signalCliUrl: '',
+      botPhoneNumber: '',
+      attachmentsDir: './data/signal-attachments',
+      whisperModelPath: './models/ggml-base.en.bin',
+    };
     this.storage = options?.storage;
     this.llmClient = options?.llmClient;
     this.signalClient = options?.signalClient;
     this.contextWindowSize = options?.contextWindowSize || 200;
     this.messageRetentionCount = options?.messageRetentionCount || 1000;
-    this.timezone = options?.timezone || 'Australia/Sydney';
-    this.dbPath = options?.dbPath || './data/bot.db';
-    this.githubRepo = options?.githubRepo || '';
-    this.sourceRoot = options?.sourceRoot || '';
-    this.signalCliUrl = options?.signalCliUrl || '';
-    this.attachmentsDir = options?.attachmentsDir || './data/signal-attachments';
-    this.whisperModelPath = options?.whisperModelPath || './models/ggml-base.en.bin';
 
     this.mentionDetector = new MentionDetector(mentionTriggers);
     this.contextBuilder = new ContextBuilder({
       systemPrompt: options?.systemPrompt || '',
-      timezone: this.timezone,
+      timezone: this.messageContext.timezone,
       contextTokenBudget: options?.contextTokenBudget || 4000,
-      attachmentsDir: this.attachmentsDir,
+      attachmentsDir: this.messageContext.attachmentsDir,
     });
     this.deduplicator = new MessageDeduplicator();
     // TypingIndicatorManager is only used when signalClient is provided
@@ -87,7 +77,7 @@ export class MessageHandler {
     }
 
     // Skip messages from the bot itself
-    if (this.botPhoneNumber && sender === this.botPhoneNumber) {
+    if (this.messageContext.botPhoneNumber && sender === this.messageContext.botPhoneNumber) {
       return;
     }
 
@@ -101,9 +91,12 @@ export class MessageHandler {
 
     // Get conversation history before storing current message (avoids duplication in context)
     let history: Message[] = [];
+    let historyFormatted: string[] | undefined;
     if (mentioned) {
       const batch = this.storage.getRecentMessages(groupId, this.contextWindowSize);
-      history = this.contextBuilder.fitToTokenBudget(batch);
+      const fitted = this.contextBuilder.fitToTokenBudget(batch);
+      history = fitted.messages;
+      historyFormatted = fitted.formatted;
     }
 
     // Store incoming message (including any attachments for later context)
@@ -121,7 +114,7 @@ export class MessageHandler {
     }
 
     await this.typingManager.withTyping(groupId, () =>
-      this.processLlmRequest(groupId, sender, content, attachments, history),
+      this.processLlmRequest(groupId, sender, content, attachments, history, historyFormatted),
     );
   }
 
@@ -131,6 +124,7 @@ export class MessageHandler {
     content: string,
     attachments: SignalAttachment[],
     history: Message[],
+    historyFormatted?: string[],
   ): Promise<void> {
     // These are guaranteed non-null by the guard in handleMessage
     const storage = this.storage as Storage;
@@ -186,23 +180,17 @@ export class MessageHandler {
         dossierContext: additionalContext,
         personaDescription: personaPrompt,
         nameMap,
+        preFormatted: historyFormatted,
       });
 
       // Get LLM response
       const response = await llmClient.generateResponse(messages, {
+        ...this.messageContext,
         groupId,
         sender,
-        dbPath: this.dbPath,
-        timezone: this.timezone,
-        githubRepo: this.githubRepo,
-        sourceRoot: this.sourceRoot,
-        signalCliUrl: this.signalCliUrl,
-        botPhoneNumber: this.botPhoneNumber,
-        attachmentsDir: this.attachmentsDir,
-        whisperModelPath: this.whisperModelPath,
       });
 
-      const botSender = this.botPhoneNumber || 'bot';
+      const botSender = this.messageContext.botPhoneNumber || 'bot';
       if (response.sentViaMcp) {
         // Claude sent messages directly — store each one
         for (const mcpMsg of response.mcpMessages) {

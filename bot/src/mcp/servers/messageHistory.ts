@@ -1,8 +1,11 @@
-import { Storage } from '../../storage';
+import { DatabaseConnection } from '../../db';
+import { MessageStore } from '../../stores/messageStore';
 import type { Message } from '../../types';
-import { error, getErrorMessage, ok } from '../result';
+import { readStorageEnv, readTimezone } from '../env';
+import { catchErrors, error, ok } from '../result';
 import { runServer } from '../runServer';
 import type { McpServerDefinition } from '../types';
+import { requireGroupId, requireString } from '../validate';
 
 const TOOLS = [
   {
@@ -48,7 +51,9 @@ const TOOLS = [
   },
 ];
 
-let storage: Storage;
+let conn: DatabaseConnection;
+let store: MessageStore;
+let groupId: string;
 let timestampFormatter: Intl.DateTimeFormat;
 
 function formatTimestamp(timestamp: number): string {
@@ -78,17 +83,12 @@ export const messageHistoryServer: McpServerDefinition = {
   envMapping: { DB_PATH: 'dbPath', MCP_GROUP_ID: 'groupId', TZ: 'timezone' },
   handlers: {
     search_messages(args) {
-      const keyword = args.keyword as string;
-      const groupId = process.env.MCP_GROUP_ID || '';
+      const keyword = requireString(args, 'keyword');
+      if (keyword.error) return keyword.error;
+      const groupErr = requireGroupId(groupId);
+      if (groupErr) return groupErr;
 
-      if (!keyword || typeof keyword !== 'string') {
-        return error('Missing or invalid keyword parameter.');
-      }
-      if (!groupId) {
-        return error('No group context available.');
-      }
-
-      try {
+      return catchErrors(() => {
         const options: { sender?: string; startTimestamp?: number; endTimestamp?: number } = {};
 
         if (args.sender && typeof args.sender === 'string') {
@@ -109,26 +109,19 @@ export const messageHistoryServer: McpServerDefinition = {
           options.endTimestamp = parsed.getTime();
         }
 
-        const messages = storage.searchMessages(groupId, keyword, options);
+        const messages = store.search(groupId, keyword.value, options);
         return ok(formatMessages(messages));
-      } catch (err) {
-        return error(`Search failed: ${getErrorMessage(err)}`);
-      }
+      }, 'Search failed');
     },
 
     get_messages_by_date(args) {
-      const startDate = args.startDate as string;
-      const groupId = process.env.MCP_GROUP_ID || '';
+      const startDate = requireString(args, 'startDate');
+      if (startDate.error) return startDate.error;
+      const groupErr = requireGroupId(groupId);
+      if (groupErr) return groupErr;
 
-      if (!startDate || typeof startDate !== 'string') {
-        return error('Missing or invalid startDate parameter.');
-      }
-      if (!groupId) {
-        return error('No group context available.');
-      }
-
-      try {
-        const startParsed = new Date(startDate);
+      return catchErrors(() => {
+        const startParsed = new Date(startDate.value);
         if (Number.isNaN(startParsed.getTime())) {
           return error('Invalid startDate format.');
         }
@@ -143,18 +136,17 @@ export const messageHistoryServer: McpServerDefinition = {
           endTs = endParsed.getTime();
         }
 
-        const messages = storage.getMessagesByDateRange(groupId, startTs, endTs);
+        const messages = store.getByDateRange(groupId, startTs, endTs);
         return ok(formatMessages(messages));
-      } catch (err) {
-        return error(`Failed to get messages: ${getErrorMessage(err)}`);
-      }
+      }, 'Failed to get messages');
     },
   },
   onInit() {
-    const dbPath = process.env.DB_PATH || './data/bot.db';
-    const groupId = process.env.MCP_GROUP_ID || '';
-    const tz = process.env.TZ || 'Australia/Sydney';
-    storage = new Storage(dbPath);
+    const env = readStorageEnv();
+    const tz = readTimezone();
+    conn = new DatabaseConnection(env.dbPath);
+    store = new MessageStore(conn);
+    groupId = env.groupId;
     timestampFormatter = new Intl.DateTimeFormat('en-CA', {
       timeZone: tz,
       year: 'numeric',
@@ -167,7 +159,7 @@ export const messageHistoryServer: McpServerDefinition = {
     console.error(`Message History MCP server started (group: ${groupId || 'none'})`);
   },
   onClose() {
-    storage.close();
+    conn.close();
   },
 };
 

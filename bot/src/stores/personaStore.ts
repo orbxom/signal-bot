@@ -77,9 +77,7 @@ export class PersonaStore {
     this.conn.ensureOpen();
 
     try {
-      const existing = this.conn.db
-        .prepare('SELECT id FROM personas WHERE name = ? COLLATE NOCASE')
-        .get(DEFAULT_PERSONA_NAME);
+      const existing = this.stmts.getByName.get(DEFAULT_PERSONA_NAME);
       if (!existing) {
         const now = Date.now();
         this.conn.db

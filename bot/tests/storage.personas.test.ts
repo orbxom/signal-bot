@@ -2,7 +2,8 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { PERSONA_DESCRIPTION_TOKEN_LIMIT, Storage } from '../src/storage';
+import { Storage } from '../src/storage';
+import { PERSONA_DESCRIPTION_TOKEN_LIMIT } from '../src/stores/personaStore';
 
 describe('Storage - Personas', () => {
   let testDir: string;

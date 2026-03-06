@@ -3,6 +3,31 @@ import type { DatabaseConnection } from '../db';
 import { wrapSqliteError } from '../db';
 import type { Message, SignalAttachment } from '../types';
 
+type MessageRow = {
+  id: number;
+  groupId: string;
+  sender: string;
+  content: string;
+  timestamp: number;
+  isBot: number;
+  attachments: string | null;
+};
+
+function mapMessageRow(row: MessageRow): Message {
+  const msg: Message = {
+    id: row.id,
+    groupId: row.groupId,
+    sender: row.sender,
+    content: row.content,
+    timestamp: row.timestamp,
+    isBot: row.isBot === 1,
+  };
+  if (row.attachments) {
+    msg.attachments = JSON.parse(row.attachments) as SignalAttachment[];
+  }
+  return msg;
+}
+
 export class MessageStore {
   private conn: DatabaseConnection;
   private stmts: {
@@ -102,29 +127,8 @@ export class MessageStore {
     }
 
     try {
-      const rows = this.stmts.selectRecent.all(groupId, limit) as Array<{
-        id: number;
-        groupId: string;
-        sender: string;
-        content: string;
-        timestamp: number;
-        isBot: number;
-        attachments: string | null;
-      }>;
-      return rows.reverse().map(row => {
-        const msg: Message = {
-          id: row.id,
-          groupId: row.groupId,
-          sender: row.sender,
-          content: row.content,
-          timestamp: row.timestamp,
-          isBot: row.isBot === 1,
-        };
-        if (row.attachments) {
-          msg.attachments = JSON.parse(row.attachments) as SignalAttachment[];
-        }
-        return msg;
-      });
+      const rows = this.stmts.selectRecent.all(groupId, limit) as MessageRow[];
+      return rows.reverse().map(mapMessageRow);
     } catch (error) {
       wrapSqliteError(error, 'retrieve messages');
     }
@@ -177,22 +181,8 @@ export class MessageStore {
         ? [groupId, pattern, options.sender, startTimestamp, endTimestamp, limit]
         : [groupId, pattern, startTimestamp, endTimestamp, limit];
 
-      const rows = stmt.all(...params) as Array<{
-        id: number;
-        groupId: string;
-        sender: string;
-        content: string;
-        timestamp: number;
-        isBot: number;
-      }>;
-      return rows.map(row => ({
-        id: row.id,
-        groupId: row.groupId,
-        sender: row.sender,
-        content: row.content,
-        timestamp: row.timestamp,
-        isBot: row.isBot === 1,
-      }));
+      const rows = stmt.all(...params) as MessageRow[];
+      return rows.map(mapMessageRow);
     } catch (error) {
       wrapSqliteError(error, 'search messages');
     }
@@ -210,22 +200,8 @@ export class MessageStore {
     }
 
     try {
-      const rows = this.stmts.getMessagesByDateRange.all(groupId, startTs, endTs, effectiveLimit) as Array<{
-        id: number;
-        groupId: string;
-        sender: string;
-        content: string;
-        timestamp: number;
-        isBot: number;
-      }>;
-      return rows.map(row => ({
-        id: row.id,
-        groupId: row.groupId,
-        sender: row.sender,
-        content: row.content,
-        timestamp: row.timestamp,
-        isBot: row.isBot === 1,
-      }));
+      const rows = this.stmts.getMessagesByDateRange.all(groupId, startTs, endTs, effectiveLimit) as MessageRow[];
+      return rows.map(mapMessageRow);
     } catch (error) {
       wrapSqliteError(error, 'get messages by date range');
     }
