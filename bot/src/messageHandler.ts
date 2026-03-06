@@ -1,5 +1,6 @@
 import type { ClaudeCLIClient } from './claudeClient';
 import { ContextBuilder } from './contextBuilder';
+import { estimateTokens } from './mcp/result';
 import { MentionDetector } from './mentionDetector';
 import { MessageDeduplicator } from './messageDeduplicator';
 import type { SignalClient } from './signalClient';
@@ -168,7 +169,7 @@ export class MessageHandler {
         const memoryLines: string[] = [];
         for (const m of memories) {
           const line = `- **${m.topic}**: ${m.content}`;
-          const tokens = Math.ceil(line.length / 4);
+          const tokens = estimateTokens(line);
           if (tokenTotal + tokens > MEMORY_CONTEXT_BUDGET) break;
           tokenTotal += tokens;
           memoryLines.push(line);
