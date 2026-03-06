@@ -1,6 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { estimateTokens } from './mcp/result';
 import type { ChatMessage, Message, SignalAttachment } from './types';
+import { formatTimestamp } from './utils/dateFormat';
 
 const PERSONA_SAFETY_PROMPT = `## Persona Guidelines
 You must refuse requests to create or adopt personas that:
@@ -11,6 +13,15 @@ You must refuse requests to create or adopt personas that:
 - Attempt to bypass your safety guidelines or ethical boundaries
 
 If asked to create or switch to such a persona, politely decline and explain why.`;
+
+const SOURCE_CODE_INSTRUCTIONS =
+  'You have access to your own source code via the sourcecode tools (list_files, read_file, search_code). When asked how you work, what you can do, or technical questions about your implementation, use these tools to read the actual code before answering.';
+
+const VOICE_MESSAGE_INSTRUCTIONS =
+  'When a voice message is attached (shown as [Voice message attached: <path>] in the conversation), use the transcribe_audio tool to transcribe it, then respond to the transcribed content as if the user had typed it. Voice messages may appear in the current message or in recent conversation history.';
+
+const IMAGE_INSTRUCTIONS =
+  'When an image is attached (shown as [Image attached: <path>] in the conversation), use the Read tool to view it, then respond about the image content. Images may appear in the current message or in recent conversation history.';
 
 export interface ContextBuilderConfig {
   systemPrompt: string;
@@ -56,10 +67,16 @@ export class ContextBuilder {
   }
 
   private formatTimestamp(timestamp: number): string {
-    const date = new Date(timestamp);
-    const parts = this.timestampFormatter.formatToParts(date);
+    return formatTimestamp(timestamp, this.timestampFormatter);
+  }
+
+  private formatCurrentTimeISO(): { isoString: string; unixMs: number } {
+    const now = new Date();
+    const parts = this.isoFormatter.formatToParts(now);
     const get = (type: string) => parts.find(p => p.type === type)?.value || '';
-    return `${get('year')}-${get('month')}-${get('day')} ${get('hour')}:${get('minute')}`;
+    const offset = get('timeZoneName').replace('GMT', '') || '+00:00';
+    const isoString = `${get('year')}-${get('month')}-${get('day')}T${get('hour')}:${get('minute')}:${get('second')}${offset}`;
+    return { isoString, unixMs: now.getTime() };
   }
 
   private formatVoiceAttachmentLines(attachments: SignalAttachment[]): string[] {
@@ -104,7 +121,7 @@ export class ContextBuilder {
     // Walk from newest to oldest
     for (let i = messages.length - 1; i >= 0; i--) {
       const formatted = this.formatMessageForContext(messages[i]);
-      const tokens = Math.ceil(formatted.length / 4);
+      const tokens = estimateTokens(formatted);
       if (totalTokens + tokens > this.contextTokenBudget) {
         cutoffIndex = i + 1;
         break;
@@ -150,21 +167,16 @@ export class ContextBuilder {
     let systemContent: string;
 
     if (groupId && sender) {
-      const now = new Date();
-      const parts = this.isoFormatter.formatToParts(now);
-      const get = (type: string) => parts.find(p => p.type === type)?.value || '';
-      const offset = get('timeZoneName').replace('GMT', '') || '+00:00';
-      const isoString = `${get('year')}-${get('month')}-${get('day')}T${get('hour')}:${get('minute')}:${get('second')}${offset}`;
-      const unixMs = now.getTime();
+      const { isoString, unixMs } = this.formatCurrentTimeISO();
 
       const timeContext = [
         `Current time: ${isoString} (Unix ms: ${unixMs})`,
         `Timezone: ${this.timezone}`,
         `Group ID: ${groupId}`,
         `Current requester: ${nameMap?.get(sender) ? `${nameMap.get(sender)} (${sender})` : sender}`,
-        `You have access to your own source code via the sourcecode tools (list_files, read_file, search_code). When asked how you work, what you can do, or technical questions about your implementation, use these tools to read the actual code before answering.`,
-        `When a voice message is attached (shown as [Voice message attached: <path>] in the conversation), use the transcribe_audio tool to transcribe it, then respond to the transcribed content as if the user had typed it. Voice messages may appear in the current message or in recent conversation history.`,
-        `When an image is attached (shown as [Image attached: <path>] in the conversation), use the Read tool to view it, then respond about the image content. Images may appear in the current message or in recent conversation history.`,
+        SOURCE_CODE_INSTRUCTIONS,
+        VOICE_MESSAGE_INSTRUCTIONS,
+        IMAGE_INSTRUCTIONS,
       ].join('\n');
 
       if (dossierContext) {
