@@ -21,7 +21,7 @@ describe('Persona MCP Server', () => {
   });
 
   function spawnMcpServer(env: Record<string, string> = {}): ChildProcess {
-    return spawnServer('personaMcpServer.ts', {
+    return spawnServer('mcp/servers/personas.ts', {
       DB_PATH: dbPath,
       MCP_GROUP_ID: 'test-group-1',
       MCP_SENDER: '+61400000000',

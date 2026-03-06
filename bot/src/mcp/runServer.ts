@@ -1,28 +1,11 @@
 import * as readline from 'node:readline';
+import { error } from './result';
+import type { McpServerDefinition } from './types';
 
-export const MCP_PROTOCOL_VERSION = '2025-03-26';
+const MCP_PROTOCOL_VERSION = '2025-03-26';
 
-export type ToolResult = {
-  content: Array<{ type: 'text'; text: string }>;
-  isError?: boolean;
-};
-
-export function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : 'Unknown error';
-}
-
-export function estimateTokens(text: string): number {
-  return Math.ceil(text.length / 4);
-}
-
-export function runMcpServer(config: {
-  name: string;
-  tools: unknown[];
-  handleToolCall: (name: string, args: Record<string, unknown>) => ToolResult | Promise<ToolResult>;
-  onInit?: () => void;
-  onClose?: () => void;
-}): void {
-  const { name, tools, handleToolCall, onInit, onClose } = config;
+export function runServer(definition: McpServerDefinition): void {
+  const { serverName, tools, handlers, onInit, onClose } = definition;
 
   async function handleMessage(msg: {
     id?: number | string;
@@ -39,7 +22,7 @@ export function runMcpServer(config: {
           result: {
             protocolVersion: MCP_PROTOCOL_VERSION,
             capabilities: { tools: {} },
-            serverInfo: { name, version: '1.0.0' },
+            serverInfo: { name: serverName, version: '1.0.0' },
           },
         };
 
@@ -56,7 +39,11 @@ export function runMcpServer(config: {
       case 'tools/call': {
         const toolName = (params?.name as string) || '';
         const toolArgs = (params?.arguments as Record<string, unknown>) || {};
-        const result = await handleToolCall(toolName, toolArgs);
+        const handler = handlers[toolName];
+        if (!handler) {
+          return { jsonrpc: '2.0', id, result: error(`Unknown tool: ${toolName}`) };
+        }
+        const result = await handler(toolArgs);
         return { jsonrpc: '2.0', id, result };
       }
 
@@ -85,8 +72,8 @@ export function runMcpServer(config: {
       if (response) {
         process.stdout.write(`${JSON.stringify(response)}\n`);
       }
-    } catch (error) {
-      console.error('Error processing message:', error);
+    } catch (err) {
+      console.error('Error processing message:', err);
       process.stdout.write(
         `${JSON.stringify({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Parse error' } })}\n`,
       );

@@ -22,7 +22,7 @@ describe('Message History MCP Server', () => {
   });
 
   function spawnMcpServer(env: Record<string, string> = {}): ChildProcess {
-    return spawnServer('messageHistoryMcpServer.ts', {
+    return spawnServer('mcp/servers/messageHistory.ts', {
       DB_PATH: dbPath,
       MCP_GROUP_ID: 'test-group-1',
       TZ: 'Australia/Sydney',

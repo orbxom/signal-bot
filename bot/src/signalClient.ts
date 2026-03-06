@@ -61,7 +61,7 @@ export class SignalClient {
   }
 
   async receiveMessages(): Promise<SignalMessage[]> {
-    return (await this.rpc<SignalMessage[]>('receive', {})) ?? [];
+    return (await this.rpc<SignalMessage[]>('receive', { timeout: 5 })) ?? [];
   }
 
   async waitForReady(maxRetries: number = 10, baseDelay: number = 2000): Promise<void> {

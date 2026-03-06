@@ -32,6 +32,8 @@ export interface Reminder {
   retryCount: number;
   createdAt: number;
   sentAt: number | null;
+  lastAttemptAt: number | null;
+  failureReason: string | null;
 }
 
 export interface Dossier {

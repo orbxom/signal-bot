@@ -13,7 +13,7 @@ describe('GitHub MCP Server', () => {
   });
 
   function spawnMcpServer(env?: Record<string, string>): ChildProcess {
-    proc = spawnServer('githubMcpServer.ts', env);
+    proc = spawnServer('mcp/servers/github.ts', env);
     return proc;
   }
 

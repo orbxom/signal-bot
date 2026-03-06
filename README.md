@@ -71,7 +71,6 @@ npm start          # Run built application
 ## Documentation
 
 - [Setup Guide](docs/setup.md)
-- [Deployment Guide](docs/deployment.md)
 - [Architecture Design](docs/plans/2025-12-20-signal-family-bot-design.md)
 
 ## License
