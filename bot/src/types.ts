@@ -120,3 +120,11 @@ export interface SignalMessage {
     };
   };
 }
+
+export interface ExtractedMessage {
+  sender: string;
+  content: string;
+  groupId: string;
+  timestamp: number;
+  attachments: SignalAttachment[];
+}

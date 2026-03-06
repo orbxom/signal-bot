@@ -5,8 +5,10 @@ import { MentionDetector } from './mentionDetector';
 import { MessageDeduplicator } from './messageDeduplicator';
 import type { SignalClient } from './signalClient';
 import type { Storage } from './storage';
-import type { AppConfig, LLMClient, Message, SignalAttachment } from './types';
+import type { AppConfig, ExtractedMessage, LLMClient, Message, SignalAttachment } from './types';
 import { TypingIndicatorManager } from './typingIndicator';
+
+export const REALTIME_THRESHOLD_MS = 5000;
 
 export interface MessageHandlerOptions {
   systemPrompt?: string;
@@ -121,6 +123,107 @@ export class MessageHandler {
     );
   }
 
+  async handleMessageBatch(
+    groupId: string,
+    messages: ExtractedMessage[],
+    options?: { storeOnly?: boolean },
+  ): Promise<void> {
+    const validMessages: ExtractedMessage[] = [];
+    for (const msg of messages) {
+      if (this.appConfig.botPhoneNumber && msg.sender === this.appConfig.botPhoneNumber) {
+        continue;
+      }
+      if (this.deduplicator.isDuplicate(groupId, msg.sender, msg.timestamp)) {
+        continue;
+      }
+      validMessages.push(msg);
+    }
+
+    const mentionMessages = validMessages.filter(msg => this.mentionDetector.isMentioned(msg.content));
+
+    let history: Message[] = [];
+    let historyFormatted: string[] | undefined;
+    if (mentionMessages.length > 0 && !options?.storeOnly) {
+      const batch = this.storage.getRecentMessages(groupId, this.contextWindowSize);
+      const fitted = this.contextBuilder.fitToTokenBudget(batch);
+      history = fitted.messages;
+      historyFormatted = fitted.formatted;
+    }
+
+    for (const msg of validMessages) {
+      this.storage.addMessage({
+        groupId,
+        sender: msg.sender,
+        content: msg.content,
+        timestamp: msg.timestamp,
+        isBot: false,
+        attachments: msg.attachments.length > 0 ? msg.attachments : undefined,
+      });
+    }
+
+    if (options?.storeOnly || mentionMessages.length === 0) {
+      return;
+    }
+
+    // Classify mentions as missed vs real-time
+    const now = Date.now();
+    const missed = mentionMessages.filter(m => now - m.timestamp > REALTIME_THRESHOLD_MS);
+    const realtime = mentionMessages.filter(m => now - m.timestamp <= REALTIME_THRESHOLD_MS);
+
+    // Missed mentions: batch into a single LLM call if multiple, or process individually
+    if (missed.length > 1) {
+      const latest = missed[missed.length - 1];
+      await this.typingManager.withTyping(groupId, () =>
+        this.processLlmRequest(
+          groupId,
+          latest.sender,
+          latest.content,
+          latest.attachments,
+          history,
+          historyFormatted,
+          this.buildMissedMessageFraming(missed, now),
+        ),
+      );
+    } else if (missed.length === 1) {
+      const msg = missed[0];
+      await this.typingManager.withTyping(groupId, () =>
+        this.processLlmRequest(groupId, msg.sender, msg.content, msg.attachments, history, historyFormatted),
+      );
+    }
+
+    // Real-time mentions: process individually with fresh history each time
+    for (const msg of realtime) {
+      const freshBatch = this.storage.getRecentMessages(groupId, this.contextWindowSize);
+      const freshFitted = this.contextBuilder.fitToTokenBudget(freshBatch);
+      await this.typingManager.withTyping(groupId, () =>
+        this.processLlmRequest(
+          groupId,
+          msg.sender,
+          msg.content,
+          msg.attachments,
+          freshFitted.messages,
+          freshFitted.formatted,
+        ),
+      );
+    }
+  }
+
+  private buildMissedMessageFraming(missed: ExtractedMessage[], now: number): string {
+    const lines = missed.map(m => {
+      const agoSeconds = Math.round((now - m.timestamp) / 1000);
+      let agoStr: string;
+      if (agoSeconds < 60) {
+        agoStr = `${agoSeconds}s ago`;
+      } else if (agoSeconds < 3600) {
+        agoStr = `${Math.round(agoSeconds / 60)} min ago`;
+      } else {
+        agoStr = `${Math.round(agoSeconds / 3600)}h ago`;
+      }
+      return `- [${m.sender}] (${agoStr}): "${m.content}"`;
+    });
+    return `You were offline and missed the following messages:\n${lines.join('\n')}\n\nRespond to all of these in a single message.`;
+  }
+
   /** Assemble additional context (dossiers, memories, skills, persona) for the LLM request. */
   private assembleAdditionalContext(groupId: string): {
     additionalContext: string | undefined;
@@ -177,6 +280,7 @@ export class MessageHandler {
     attachments: SignalAttachment[],
     history: Message[],
     historyFormatted?: string[],
+    missedFraming?: string,
   ): Promise<void> {
     try {
       // Extract query
@@ -198,6 +302,10 @@ export class MessageHandler {
       if (allAttachmentLines.length > 0) {
         const attachmentBlock = allAttachmentLines.join('\n');
         queryWithAttachments = query ? `${query}\n\n${attachmentBlock}` : attachmentBlock;
+      }
+
+      if (missedFraming) {
+        queryWithAttachments = missedFraming + (queryWithAttachments ? `\n\n${queryWithAttachments}` : '');
       }
 
       // Build additional system context (dossiers + memories + skills + persona)

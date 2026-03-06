@@ -86,9 +86,10 @@ async function main() {
         messagesSinceHeartbeat = 0;
       }
 
+      // Extract and group messages by groupId
+      const byGroup = new Map<string, import('./types').ExtractedMessage[]>();
       for (const signalMsg of messages) {
         const data = signalClient.extractMessageData(signalMsg);
-
         if (!data) {
           logger.compact('SKIP', `(no data): ${JSON.stringify(signalMsg).substring(0, 200)}`);
           continue;
@@ -100,9 +101,17 @@ async function main() {
         } else {
           logger.compact('RECV', `[${data.groupId}] ${data.sender}: ${data.content.substring(0, 80)}`);
         }
-        await messageHandler.handleMessage(data.groupId, data.sender, data.content, data.timestamp, data.attachments, {
-          storeOnly,
-        });
+
+        if (!byGroup.has(data.groupId)) {
+          byGroup.set(data.groupId, []);
+        }
+        byGroup.get(data.groupId)?.push(data);
+      }
+
+      // Process each group's messages as a batch
+      for (const [groupId, batch] of byGroup) {
+        const storeOnly = config.testChannelOnly && groupId !== config.testGroupId;
+        await messageHandler.handleMessageBatch(groupId, batch, { storeOnly });
       }
 
       // Check for due reminders periodically
