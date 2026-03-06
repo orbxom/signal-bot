@@ -707,7 +707,7 @@ describe('MessageHandler', () => {
         const callArgs = (mockLLM.generateResponse as ReturnType<typeof vi.fn>).mock.calls[0];
         const messages = callArgs[0];
         const lastUserMsg = messages[messages.length - 1];
-        expect(lastUserMsg.content).toContain('[Image attached: /data/attachments/img-abc]');
+        expect(lastUserMsg.content).toContain('[Image: attachment://img-abc]');
       });
 
       it('should include image attachment paths from history messages in context', async () => {
@@ -738,7 +738,7 @@ describe('MessageHandler', () => {
         const historyMsg = messages.find(
           (m: { role: string; content: string }) => m.role === 'user' && m.content.includes('Alice'),
         );
-        expect(historyMsg.content).toContain('[Image attached: /data/attachments/img-123]');
+        expect(historyMsg.content).toContain('[Image: attachment://img-123]');
       });
 
       it('should not include non-image non-audio attachments', async () => {
@@ -755,7 +755,7 @@ describe('MessageHandler', () => {
         const callArgs = (mockLLM.generateResponse as ReturnType<typeof vi.fn>).mock.calls[0];
         const messages = callArgs[0];
         const lastUserMsg = messages[messages.length - 1];
-        expect(lastUserMsg.content).not.toContain('[Image attached:');
+        expect(lastUserMsg.content).not.toContain('[Image:');
         expect(lastUserMsg.content).not.toContain('[Voice message attached:');
       });
     });
