@@ -152,9 +152,9 @@ describe('DatabaseConnection', () => {
     it('should create memories indexes in v2 migration', () => {
       const conn = new DatabaseConnection(createTestDb());
       try {
-        const indexes = conn.db
-          .prepare("SELECT name FROM sqlite_master WHERE type='index'")
-          .all() as Array<{ name: string }>;
+        const indexes = conn.db.prepare("SELECT name FROM sqlite_master WHERE type='index'").all() as Array<{
+          name: string;
+        }>;
         const indexNames = indexes.map(i => i.name);
         expect(indexNames).toContain('idx_memories_group_topic');
         expect(indexNames).toContain('idx_memories_group');
