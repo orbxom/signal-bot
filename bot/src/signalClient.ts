@@ -1,5 +1,5 @@
 import { logger } from './logger';
-import type { SignalAttachment, SignalMessage } from './types';
+import type { ExtractedMessage, SignalMessage } from './types';
 
 export class SignalClient {
   private baseUrl: string;
@@ -85,13 +85,7 @@ export class SignalClient {
     throw new Error(`signal-cli not reachable at ${this.baseUrl} after ${maxRetries} attempts`);
   }
 
-  extractMessageData(signalMsg: SignalMessage): {
-    sender: string;
-    content: string;
-    groupId: string;
-    timestamp: number;
-    attachments: SignalAttachment[];
-  } | null {
+  extractMessageData(signalMsg: SignalMessage): ExtractedMessage | null {
     const envelope = signalMsg.envelope;
     const dataMessage = envelope.dataMessage;
     const attachments = dataMessage?.attachments ?? [];
