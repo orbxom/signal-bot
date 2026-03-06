@@ -122,7 +122,9 @@ export class ClaudeCLIClient {
     const systemChars = systemPrompt?.length || 0;
     const promptChars = prompt.length;
     logger.step(`llm: spawning claude -p (max turns: ${this.maxTurns})`);
-    logger.step(`llm: system prompt ${(systemChars / 1024).toFixed(1)}k chars, conversation ${(promptChars / 1024).toFixed(1)}k chars`);
+    logger.step(
+      `llm: system prompt ${(systemChars / 1024).toFixed(1)}k chars, conversation ${(promptChars / 1024).toFixed(1)}k chars`,
+    );
 
     try {
       const { stdout } = await spawnPromise('claude', args, {
@@ -223,7 +225,9 @@ export class ClaudeCLIClient {
       }
 
       if (resultLine.usage) {
-        logger.step(`llm: ${resultLine.usage.input_tokens || 0} input / ${resultLine.usage.output_tokens || 0} output tokens`);
+        logger.step(
+          `llm: ${resultLine.usage.input_tokens || 0} input / ${resultLine.usage.output_tokens || 0} output tokens`,
+        );
       }
       logger.step(`llm: result via ${mcpMessages.length > 0 ? 'MCP send_message' : 'result field'}`);
 

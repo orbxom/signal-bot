@@ -97,14 +97,9 @@ async function main() {
         } else {
           logger.compact('RECV', `[${data.groupId}] ${data.sender}: ${data.content.substring(0, 80)}`);
         }
-        await messageHandler.handleMessage(
-          data.groupId,
-          data.sender,
-          data.content,
-          data.timestamp,
-          data.attachments,
-          { storeOnly },
-        );
+        await messageHandler.handleMessage(data.groupId, data.sender, data.content, data.timestamp, data.attachments, {
+          storeOnly,
+        });
       }
 
       // Check for due reminders periodically
