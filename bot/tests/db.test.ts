@@ -136,6 +136,44 @@ describe('DatabaseConnection', () => {
         conn.close();
       }
     });
+
+    it('should create memories table in v2 migration', () => {
+      const conn = new DatabaseConnection(createTestDb());
+      try {
+        const tables = conn.db
+          .prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
+          .all() as Array<{ name: string }>;
+        expect(tables.map(t => t.name)).toContain('memories');
+      } finally {
+        conn.close();
+      }
+    });
+
+    it('should create memories indexes in v2 migration', () => {
+      const conn = new DatabaseConnection(createTestDb());
+      try {
+        const indexes = conn.db
+          .prepare("SELECT name FROM sqlite_master WHERE type='index'")
+          .all() as Array<{ name: string }>;
+        const indexNames = indexes.map(i => i.name);
+        expect(indexNames).toContain('idx_memories_group_topic');
+        expect(indexNames).toContain('idx_memories_group');
+      } finally {
+        conn.close();
+      }
+    });
+
+    it('should set schema version to 2 after migrations', () => {
+      const conn = new DatabaseConnection(createTestDb());
+      try {
+        const row = conn.db.prepare("SELECT value FROM schema_meta WHERE key = 'schema_version'").get() as {
+          value: string;
+        };
+        expect(Number.parseInt(row.value, 10)).toBe(2);
+      } finally {
+        conn.close();
+      }
+    });
   });
 
   describe('transaction', () => {
