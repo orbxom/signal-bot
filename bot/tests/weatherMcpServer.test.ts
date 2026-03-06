@@ -295,4 +295,48 @@ describe('Weather MCP Server', () => {
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toContain('location');
   });
+
+  it('should fetch radar image with explicit range parameter', async () => {
+    const server = spawnMcpServer();
+    await initializeServer(server);
+
+    const response = await sendAndReceive(
+      server,
+      {
+        jsonrpc: '2.0',
+        id: 16,
+        method: 'tools/call',
+        params: { name: 'get_radar_image', arguments: { location: 'Sydney', range: '256km' } },
+      },
+      30000,
+    );
+
+    const result = response.result as { content: Array<{ text: string }>; isError?: boolean };
+    expect(result.isError).toBeFalsy();
+    const text = result.content[0].text;
+    // Product ID should use suffix '2' for 256km (IDR712)
+    expect(text).toContain('IDR712');
+    expect(text).toContain('256km');
+
+    // Clean up temp file
+    const match = text.match(/(\/\S+\.gif)/);
+    if (match) fs.unlinkSync(match[1]);
+  }, 30000);
+
+  it('should return error for invalid range parameter', async () => {
+    const server = spawnMcpServer();
+    await initializeServer(server);
+
+    const response = await sendAndReceive(server, {
+      jsonrpc: '2.0',
+      id: 17,
+      method: 'tools/call',
+      params: { name: 'get_radar_image', arguments: { location: 'Sydney', range: '999km' } },
+    });
+
+    const result = response.result as { content: Array<{ text: string }>; isError?: boolean };
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('Invalid range');
+    expect(result.content[0].text).toContain('128km');
+  });
 });

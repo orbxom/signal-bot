@@ -376,7 +376,10 @@ export const weatherServer: McpServerDefinition = {
       }
 
       const range = optionalString(args, 'range', '128km');
-      const suffix = RANGE_MAP[range] ?? '3';
+      const suffix = RANGE_MAP[range];
+      if (!suffix) {
+        return error(`Invalid range "${range}". Valid ranges: ${Object.keys(RANGE_MAP).join(', ')}`);
+      }
 
       return catchErrors(async () => {
         const productId = `IDR${station.code}${suffix}`;
