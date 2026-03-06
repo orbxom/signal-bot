@@ -23,27 +23,30 @@ async function main() {
   const reminderScheduler = new ReminderScheduler(storage.reminders, signalClient);
   console.log('Reminder scheduler initialized');
 
-  const messageHandler = new MessageHandler(config.mentionTriggers, {
-    messageContext: {
-      groupId: '',
-      sender: '',
-      dbPath: config.dbPath,
-      timezone: config.timezone,
-      githubRepo: config.githubRepo,
-      sourceRoot: config.sourceRoot,
-      signalCliUrl: config.signalCliUrl,
-      botPhoneNumber: config.botPhoneNumber,
-      attachmentsDir: config.attachmentsDir,
-      whisperModelPath: config.whisperModelPath,
+  const messageHandler = new MessageHandler(
+    config.mentionTriggers,
+    {
+      storage,
+      llmClient,
+      signalClient,
+      appConfig: {
+        dbPath: config.dbPath,
+        timezone: config.timezone,
+        githubRepo: config.githubRepo,
+        sourceRoot: config.sourceRoot,
+        signalCliUrl: config.signalCliUrl,
+        botPhoneNumber: config.botPhoneNumber,
+        attachmentsDir: config.attachmentsDir,
+        whisperModelPath: config.whisperModelPath,
+      },
     },
-    systemPrompt: config.systemPrompt,
-    storage,
-    llmClient,
-    signalClient,
-    contextWindowSize: config.contextWindowSize,
-    contextTokenBudget: config.contextTokenBudget,
-    messageRetentionCount: config.messageRetentionCount,
-  });
+    {
+      systemPrompt: config.systemPrompt,
+      contextWindowSize: config.contextWindowSize,
+      contextTokenBudget: config.contextTokenBudget,
+      messageRetentionCount: config.messageRetentionCount,
+    },
+  );
   console.log(`Message handler initialized (triggers: ${config.mentionTriggers.join(', ')})`);
 
   if (config.testChannelOnly) {

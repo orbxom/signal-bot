@@ -15,7 +15,7 @@ vi.mock('child_process', async importOriginal => {
   };
 });
 
-import { ClaudeCLIClient } from '../src/claudeClient';
+import { ClaudeCLIClient, parseClaudeOutput } from '../src/claudeClient';
 
 function makeResultOutput(result: string, isError = false, usage?: { output_tokens: number }) {
   const initLine = JSON.stringify({ type: 'system', subtype: 'init', session_id: 'test' });
@@ -778,6 +778,59 @@ describe('ClaudeCLIClient', () => {
       expect(mcpConfig.mcpServers.playwright).toBeDefined();
       expect(mcpConfig.mcpServers.playwright.command).toBe('npx');
       expect(mcpConfig.mcpServers.playwright.args).toContain('--headless');
+    });
+  });
+
+  describe('parseClaudeOutput', () => {
+    it('should parse NDJSON output with result line', () => {
+      const output = makeResultOutput('Hello!', false, { output_tokens: 10 });
+      const result = parseClaudeOutput(output);
+      expect(result.content).toBe('Hello!');
+      expect(result.tokensUsed).toBe(10);
+      expect(result.sentViaMcp).toBe(false);
+    });
+
+    it('should parse JSON array output', () => {
+      const output = JSON.stringify([
+        { type: 'system', subtype: 'init', session_id: 'test' },
+        { type: 'result', is_error: false, result: 'Array!', usage: { output_tokens: 5 } },
+      ]);
+      const result = parseClaudeOutput(output);
+      expect(result.content).toBe('Array!');
+    });
+
+    it('should throw when no result line found', () => {
+      const output = JSON.stringify({ type: 'system', subtype: 'init' });
+      expect(() => parseClaudeOutput(output)).toThrow('No result found in Claude CLI output');
+    });
+
+    it('should detect MCP send_message tool calls', () => {
+      const output = [
+        JSON.stringify({ type: 'system', subtype: 'init', session_id: 'test' }),
+        JSON.stringify({
+          type: 'assistant',
+          message: {
+            content: [{ type: 'tool_use', name: 'mcp__signal__send_message', input: { message: 'Hi there' } }],
+          },
+        }),
+        JSON.stringify({ type: 'result', is_error: false, result: 'Hi there', usage: { output_tokens: 5 } }),
+      ].join('\n');
+      const result = parseClaudeOutput(output);
+      expect(result.sentViaMcp).toBe(true);
+      expect(result.mcpMessages).toEqual(['Hi there']);
+    });
+
+    it('should fall back to assistant text when result has is_error', () => {
+      const output = [
+        JSON.stringify({ type: 'system', subtype: 'init', session_id: 'test' }),
+        JSON.stringify({
+          type: 'assistant',
+          message: { content: [{ type: 'text', text: 'Fallback text' }] },
+        }),
+        JSON.stringify({ type: 'result', is_error: true, result: 'Rate limited', subtype: 'error' }),
+      ].join('\n');
+      const result = parseClaudeOutput(output);
+      expect(result.content).toBe('Fallback text');
     });
   });
 });

@@ -14,7 +14,7 @@ export interface ToolDefinition {
 
 export type ToolHandler = (args: Record<string, unknown>) => ToolResult | Promise<ToolResult>;
 
-/** Maps env var names to MessageContext field names */
+/** Maps env var names to MessageContext (AppConfig & RequestContext) field names */
 export type EnvMapping = Record<string, keyof MessageContext>;
 
 export interface McpServerDefinition {
