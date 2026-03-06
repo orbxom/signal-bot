@@ -10,37 +10,31 @@ import { optionalString, requireString, type StringResult } from '../validate';
 const BOM_BASE_URL = 'https://api.weather.bom.gov.au/v1';
 const BOM_RADAR_BASE = 'https://reg.bom.gov.au/radar';
 
-// Hardcoded mapping of location names/aliases to BOM radar station codes.
-// BOM has no discovery API; adding new stations requires a code change.
-const RADAR_STATIONS: Record<string, { code: string; name: string }> = {
-  sydney: { code: '71', name: 'Sydney (Terrey Hills)' },
-  'terrey hills': { code: '71', name: 'Sydney (Terrey Hills)' },
-  melbourne: { code: '02', name: 'Melbourne' },
-  brisbane: { code: '66', name: 'Brisbane (Mt Stapylton)' },
-  'mt stapylton': { code: '66', name: 'Brisbane (Mt Stapylton)' },
-  adelaide: { code: '64', name: 'Adelaide (Buckland Park)' },
-  'buckland park': { code: '64', name: 'Adelaide (Buckland Park)' },
-  perth: { code: '70', name: 'Perth (Serpentine)' },
-  serpentine: { code: '70', name: 'Perth (Serpentine)' },
-  hobart: { code: '37', name: 'Hobart' },
-  darwin: { code: '63', name: 'Darwin (Berrimah)' },
-  berrimah: { code: '63', name: 'Darwin (Berrimah)' },
-  canberra: { code: '40', name: 'Canberra (Captains Flat)' },
-  'captains flat': { code: '40', name: 'Canberra (Captains Flat)' },
-  newcastle: { code: '04', name: 'Newcastle (Lemon Tree Passage)' },
-  'lemon tree passage': { code: '04', name: 'Newcastle (Lemon Tree Passage)' },
-  cairns: { code: '19', name: 'Cairns' },
-  townsville: { code: '73', name: 'Townsville (Hervey Range)' },
-  'hervey range': { code: '73', name: 'Townsville (Hervey Range)' },
-  'gold coast': { code: '28', name: 'Gold Coast (Mt Tamborine)' },
-  'mt tamborine': { code: '28', name: 'Gold Coast (Mt Tamborine)' },
-  wollongong: { code: '03', name: 'Wollongong (Appin)' },
-  appin: { code: '03', name: 'Wollongong (Appin)' },
-  'alice springs': { code: '25', name: 'Alice Springs' },
-  gladstone: { code: '23', name: 'Gladstone' },
-  mackay: { code: '22', name: 'Mackay' },
-  rockhampton: { code: '72', name: 'Rockhampton' },
-};
+// Hardcoded BOM radar station data. BOM has no discovery API;
+// adding new stations requires a code change.
+const RADAR_STATION_LIST = [
+  { code: '71', name: 'Sydney (Terrey Hills)', aliases: ['sydney', 'terrey hills'] },
+  { code: '02', name: 'Melbourne', aliases: ['melbourne'] },
+  { code: '66', name: 'Brisbane (Mt Stapylton)', aliases: ['brisbane', 'mt stapylton'] },
+  { code: '64', name: 'Adelaide (Buckland Park)', aliases: ['adelaide', 'buckland park'] },
+  { code: '70', name: 'Perth (Serpentine)', aliases: ['perth', 'serpentine'] },
+  { code: '37', name: 'Hobart', aliases: ['hobart'] },
+  { code: '63', name: 'Darwin (Berrimah)', aliases: ['darwin', 'berrimah'] },
+  { code: '40', name: 'Canberra (Captains Flat)', aliases: ['canberra', 'captains flat'] },
+  { code: '04', name: 'Newcastle (Lemon Tree Passage)', aliases: ['newcastle', 'lemon tree passage'] },
+  { code: '19', name: 'Cairns', aliases: ['cairns'] },
+  { code: '73', name: 'Townsville (Hervey Range)', aliases: ['townsville', 'hervey range'] },
+  { code: '28', name: 'Gold Coast (Mt Tamborine)', aliases: ['gold coast', 'mt tamborine'] },
+  { code: '03', name: 'Wollongong (Appin)', aliases: ['wollongong', 'appin'] },
+  { code: '25', name: 'Alice Springs', aliases: ['alice springs'] },
+  { code: '23', name: 'Gladstone', aliases: ['gladstone'] },
+  { code: '22', name: 'Mackay', aliases: ['mackay'] },
+  { code: '72', name: 'Rockhampton', aliases: ['rockhampton'] },
+] as const;
+
+const RADAR_STATIONS: Record<string, { code: string; name: string }> = Object.fromEntries(
+  RADAR_STATION_LIST.flatMap(s => s.aliases.map(a => [a, s])),
+);
 
 const RANGE_MAP: Record<string, string> = {
   '512km': '1',
@@ -49,17 +43,9 @@ const RANGE_MAP: Record<string, string> = {
   '64km': '4',
 };
 
-function getAvailableStations(): string {
-  const seen = new Set<string>();
-  const names: string[] = [];
-  for (const station of Object.values(RADAR_STATIONS)) {
-    if (!seen.has(station.code)) {
-      seen.add(station.code);
-      names.push(station.name);
-    }
-  }
-  return names.sort().join(', ');
-}
+const AVAILABLE_STATIONS = RADAR_STATION_LIST.map(s => s.name)
+  .sort()
+  .join(', ');
 
 function cleanupOldRadarFiles(): void {
   const tmpDir = os.tmpdir();
@@ -386,7 +372,7 @@ export const weatherServer: McpServerDefinition = {
       const key = location.value.toLowerCase();
       const station = RADAR_STATIONS[key];
       if (!station) {
-        return error(`Unknown location "${location.value}". Available stations: ${getAvailableStations()}`);
+        return error(`Unknown location "${location.value}". Available stations: ${AVAILABLE_STATIONS}`);
       }
 
       const range = optionalString(args, 'range', '128km');
@@ -409,7 +395,7 @@ export const weatherServer: McpServerDefinition = {
         cleanupOldRadarFiles();
 
         const filePath = path.join(os.tmpdir(), `radar-${productId}-${Date.now()}.gif`);
-        fs.writeFileSync(filePath, buffer);
+        await fs.promises.writeFile(filePath, buffer);
 
         return ok(`Radar image saved: ${filePath}\nStation: ${station.name} (${range} range)`);
       }, 'Radar fetch error');
