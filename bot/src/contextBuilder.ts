@@ -17,6 +17,9 @@ If asked to create or switch to such a persona, politely decline and explain why
 const SOURCE_CODE_INSTRUCTIONS =
   'You have access to your own source code via the sourcecode tools (list_files, read_file, search_code). When asked how you work, what you can do, or technical questions about your implementation, use these tools to read the actual code before answering.';
 
+const MEMORY_INSTRUCTIONS =
+  'You have group memory tools: save_memory (save/update a topic), get_memory (retrieve by topic), list_memories (list all), delete_memory (remove). Use these to remember things the group wants you to keep track of (e.g. birthdays, plans, preferences). To load them, use ToolSearch with select:mcp__memories__save_memory etc.';
+
 const VOICE_MESSAGE_INSTRUCTIONS =
   'When a voice message is attached (shown as [Voice message attached: <path>] in the conversation), use the transcribe_audio tool to transcribe it, then respond to the transcribed content as if the user had typed it. Voice messages may appear in the current message or in recent conversation history.';
 
@@ -175,6 +178,7 @@ export class ContextBuilder {
         `Group ID: ${groupId}`,
         `Current requester: ${nameMap?.get(sender) ? `${nameMap.get(sender)} (${sender})` : sender}`,
         SOURCE_CODE_INSTRUCTIONS,
+        MEMORY_INSTRUCTIONS,
         VOICE_MESSAGE_INSTRUCTIONS,
         IMAGE_INSTRUCTIONS,
       ].join('\n');

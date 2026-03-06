@@ -20,6 +20,7 @@ export type EnvMapping = Record<string, keyof MessageContext>;
 export interface McpServerDefinition {
   serverName: string;
   configKey: string;
+  /** Filename only, e.g. 'memories' — registry resolves to servers/{entrypoint}.ts */
   entrypoint: string;
   tools: ToolDefinition[];
   handlers: Record<string, ToolHandler>;

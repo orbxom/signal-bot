@@ -69,7 +69,7 @@ let groupId: string;
 export const memoryServer: McpServerDefinition = {
   serverName: 'signal-bot-memories',
   configKey: 'memories',
-  entrypoint: 'mcp/servers/memories',
+  entrypoint: 'memories',
   tools: TOOLS,
   envMapping: { DB_PATH: 'dbPath', MCP_GROUP_ID: 'groupId', MCP_SENDER: 'sender' },
   handlers: {

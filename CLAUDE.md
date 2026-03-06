@@ -45,7 +45,8 @@ Claude-powered Signal bot for family group chat. Responds to mention triggers in
 
 ### Adding a New MCP Server
 1. Create `bot/src/mcp/servers/newThing.ts` using shared `ok()`, `error()`, `requireString()`, etc.
-2. Add one import line to `bot/src/mcp/servers/index.ts`
+2. Set `entrypoint` to just the filename without path: `entrypoint: 'newThing'` (NOT `'mcp/servers/newThing'`). The registry prepends `servers/` and resolves relative to `bot/src/mcp/`.
+3. Add one import line to `bot/src/mcp/servers/index.ts`
 No other files need to change.
 
 ## Running Locally for Testing
