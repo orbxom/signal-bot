@@ -1,27 +1,19 @@
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { DatabaseConnection } from '../../src/db';
 import { ReminderStore } from '../../src/stores/reminderStore';
+import { createTestDb, type TestDb } from '../helpers/testDb';
 
 describe('ReminderStore', () => {
-  let testDir: string;
-  let conn: DatabaseConnection;
+  let db: TestDb;
   let store: ReminderStore;
 
   const setup = () => {
-    testDir = mkdtempSync(join(tmpdir(), 'signal-bot-reminder-store-test-'));
-    conn = new DatabaseConnection(join(testDir, 'test.db'));
-    store = new ReminderStore(conn);
+    db = createTestDb('signal-bot-reminder-store-test-');
+    store = new ReminderStore(db.conn);
     return store;
   };
 
   afterEach(() => {
-    conn?.close();
-    if (testDir) {
-      rmSync(testDir, { recursive: true, force: true });
-    }
+    db?.cleanup();
   });
 
   describe('create', () => {

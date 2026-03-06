@@ -4,81 +4,69 @@ import { join } from 'node:path';
 import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
 import { DatabaseConnection } from '../src/db';
+import { createTestDb, type TestDb } from './helpers/testDb';
 
 describe('DatabaseConnection', () => {
-  let testDir: string;
-  let testDbPath: string;
+  let db: TestDb | undefined;
+  let manualTestDir: string | undefined;
 
-  const createTestDb = () => {
-    testDir = mkdtempSync(join(tmpdir(), 'signal-bot-db-test-'));
-    testDbPath = join(testDir, 'test.db');
-    return testDbPath;
+  /** For tests that need to control DatabaseConnection lifecycle manually */
+  const createManualTestDbPath = () => {
+    manualTestDir = mkdtempSync(join(tmpdir(), 'signal-bot-db-test-'));
+    return join(manualTestDir, 'test.db');
   };
 
   afterEach(() => {
-    if (testDir) {
-      rmSync(testDir, { recursive: true, force: true });
+    db?.cleanup();
+    db = undefined;
+    if (manualTestDir) {
+      rmSync(manualTestDir, { recursive: true, force: true });
+      manualTestDir = undefined;
     }
   });
 
   describe('table creation', () => {
     it('should create all tables on fresh database', () => {
-      const conn = new DatabaseConnection(createTestDb());
-      try {
-        const tables = conn.db
-          .prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
-          .all() as Array<{ name: string }>;
-        const tableNames = tables.map(t => t.name);
-        expect(tableNames).toContain('messages');
-        expect(tableNames).toContain('reminders');
-        expect(tableNames).toContain('dossiers');
-        expect(tableNames).toContain('personas');
-        expect(tableNames).toContain('active_personas');
-        expect(tableNames).toContain('schema_meta');
-      } finally {
-        conn.close();
-      }
+      db = createTestDb('signal-bot-db-test-');
+      const tables = db.conn.db
+        .prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
+        .all() as Array<{ name: string }>;
+      const tableNames = tables.map(t => t.name);
+      expect(tableNames).toContain('messages');
+      expect(tableNames).toContain('reminders');
+      expect(tableNames).toContain('dossiers');
+      expect(tableNames).toContain('personas');
+      expect(tableNames).toContain('active_personas');
+      expect(tableNames).toContain('schema_meta');
     });
 
     it('should set WAL journal mode', () => {
-      const conn = new DatabaseConnection(createTestDb());
-      try {
-        const result = conn.db.pragma('journal_mode') as Array<{ journal_mode: string }>;
-        expect(result[0].journal_mode).toBe('wal');
-      } finally {
-        conn.close();
-      }
+      db = createTestDb('signal-bot-db-test-');
+      const result = db.conn.db.pragma('journal_mode') as Array<{ journal_mode: string }>;
+      expect(result[0].journal_mode).toBe('wal');
     });
   });
 
   describe('migrations', () => {
     it('should add lastAttemptAt and failureReason columns to reminders', () => {
-      const conn = new DatabaseConnection(createTestDb());
-      try {
-        const cols = conn.db.pragma('table_info(reminders)') as Array<{ name: string }>;
-        const colNames = cols.map(c => c.name);
-        expect(colNames).toContain('lastAttemptAt');
-        expect(colNames).toContain('failureReason');
-      } finally {
-        conn.close();
-      }
+      db = createTestDb('signal-bot-db-test-');
+      const cols = db.conn.db.pragma('table_info(reminders)') as Array<{ name: string }>;
+      const colNames = cols.map(c => c.name);
+      expect(colNames).toContain('lastAttemptAt');
+      expect(colNames).toContain('failureReason');
     });
 
     it('should add idx_reminders_group_status index', () => {
-      const conn = new DatabaseConnection(createTestDb());
-      try {
-        const indexes = conn.db
-          .prepare("SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='reminders'")
-          .all() as Array<{ name: string }>;
-        const indexNames = indexes.map(i => i.name);
-        expect(indexNames).toContain('idx_reminders_group_status');
-      } finally {
-        conn.close();
-      }
+      db = createTestDb('signal-bot-db-test-');
+      const indexes = db.conn.db
+        .prepare("SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='reminders'")
+        .all() as Array<{ name: string }>;
+      const indexNames = indexes.map(i => i.name);
+      expect(indexNames).toContain('idx_reminders_group_status');
     });
 
     it('should be idempotent (running twice does not error)', () => {
-      const dbPath = createTestDb();
+      const dbPath = createManualTestDbPath();
       const conn1 = new DatabaseConnection(dbPath);
       conn1.close();
       expect(() => {
@@ -88,7 +76,7 @@ describe('DatabaseConnection', () => {
     });
 
     it('should preserve existing reminder data through migration', () => {
-      const dbPath = createTestDb();
+      const dbPath = createManualTestDbPath();
       // Create a pre-migration database manually
       const rawDb = new Database(dbPath);
       rawDb.pragma('journal_mode = WAL');
@@ -126,7 +114,7 @@ describe('DatabaseConnection', () => {
     });
 
     it('should add attachments column to messages via migration for old databases', () => {
-      const dbPath = createTestDb();
+      const dbPath = createManualTestDbPath();
       // Create a pre-migration database without the attachments column
       const rawDb = new Database(dbPath);
       rawDb.pragma('journal_mode = WAL');
@@ -178,110 +166,87 @@ describe('DatabaseConnection', () => {
     });
 
     it('should track schema version in schema_meta table', () => {
-      const conn = new DatabaseConnection(createTestDb());
-      try {
-        const row = conn.db.prepare("SELECT value FROM schema_meta WHERE key = 'schema_version'").get() as {
-          value: string;
-        };
-        expect(Number.parseInt(row.value, 10)).toBeGreaterThanOrEqual(2);
-      } finally {
-        conn.close();
-      }
+      db = createTestDb('signal-bot-db-test-');
+      const row = db.conn.db.prepare("SELECT value FROM schema_meta WHERE key = 'schema_version'").get() as {
+        value: string;
+      };
+      expect(Number.parseInt(row.value, 10)).toBeGreaterThanOrEqual(2);
     });
 
     it('should create memories table in v2 migration', () => {
-      const conn = new DatabaseConnection(createTestDb());
-      try {
-        const tables = conn.db
-          .prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
-          .all() as Array<{ name: string }>;
-        expect(tables.map(t => t.name)).toContain('memories');
-      } finally {
-        conn.close();
-      }
+      db = createTestDb('signal-bot-db-test-');
+      const tables = db.conn.db
+        .prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
+        .all() as Array<{ name: string }>;
+      expect(tables.map(t => t.name)).toContain('memories');
     });
 
     it('should create memories indexes in v2 migration', () => {
-      const conn = new DatabaseConnection(createTestDb());
-      try {
-        const indexes = conn.db.prepare("SELECT name FROM sqlite_master WHERE type='index'").all() as Array<{
-          name: string;
-        }>;
-        const indexNames = indexes.map(i => i.name);
-        expect(indexNames).toContain('idx_memories_group_topic');
-        expect(indexNames).toContain('idx_memories_group');
-      } finally {
-        conn.close();
-      }
+      db = createTestDb('signal-bot-db-test-');
+      const indexes = db.conn.db.prepare("SELECT name FROM sqlite_master WHERE type='index'").all() as Array<{
+        name: string;
+      }>;
+      const indexNames = indexes.map(i => i.name);
+      expect(indexNames).toContain('idx_memories_group_topic');
+      expect(indexNames).toContain('idx_memories_group');
     });
 
     it('should set schema version to 3 after migrations', () => {
-      const conn = new DatabaseConnection(createTestDb());
-      try {
-        const row = conn.db.prepare("SELECT value FROM schema_meta WHERE key = 'schema_version'").get() as {
-          value: string;
-        };
-        expect(Number.parseInt(row.value, 10)).toBe(3);
-      } finally {
-        conn.close();
-      }
+      db = createTestDb('signal-bot-db-test-');
+      const row = db.conn.db.prepare("SELECT value FROM schema_meta WHERE key = 'schema_version'").get() as {
+        value: string;
+      };
+      expect(Number.parseInt(row.value, 10)).toBe(3);
     });
   });
 
   describe('transaction', () => {
     it('should commit on success', () => {
-      const conn = new DatabaseConnection(createTestDb());
-      try {
-        conn.transaction(() => {
-          conn.db.prepare("INSERT INTO schema_meta (key, value) VALUES ('test_key', 'test_value')").run();
-        });
-        const row = conn.db.prepare("SELECT value FROM schema_meta WHERE key = 'test_key'").get() as {
-          value: string;
-        };
-        expect(row.value).toBe('test_value');
-      } finally {
-        conn.close();
-      }
+      db = createTestDb('signal-bot-db-test-');
+      const { conn } = db;
+      conn.transaction(() => {
+        conn.db.prepare("INSERT INTO schema_meta (key, value) VALUES ('test_key', 'test_value')").run();
+      });
+      const row = conn.db.prepare("SELECT value FROM schema_meta WHERE key = 'test_key'").get() as {
+        value: string;
+      };
+      expect(row.value).toBe('test_value');
     });
 
     it('should roll back on error', () => {
-      const conn = new DatabaseConnection(createTestDb());
-      try {
-        expect(() => {
-          conn.transaction(() => {
-            conn.db.prepare("INSERT INTO schema_meta (key, value) VALUES ('rollback_key', 'rollback_value')").run();
-            throw new Error('Intentional error');
-          });
-        }).toThrow('Intentional error');
+      db = createTestDb('signal-bot-db-test-');
+      const { conn } = db;
+      expect(() => {
+        conn.transaction(() => {
+          conn.db.prepare("INSERT INTO schema_meta (key, value) VALUES ('rollback_key', 'rollback_value')").run();
+          throw new Error('Intentional error');
+        });
+      }).toThrow('Intentional error');
 
-        const row = conn.db.prepare("SELECT value FROM schema_meta WHERE key = 'rollback_key'").get();
-        expect(row).toBeUndefined();
-      } finally {
-        conn.close();
-      }
+      const row = conn.db.prepare("SELECT value FROM schema_meta WHERE key = 'rollback_key'").get();
+      expect(row).toBeUndefined();
     });
   });
 
   describe('ensureOpen', () => {
     it('should throw after close()', () => {
-      const conn = new DatabaseConnection(createTestDb());
+      const dbPath = createManualTestDbPath();
+      const conn = new DatabaseConnection(dbPath);
       conn.close();
       expect(() => conn.ensureOpen()).toThrow('Database is closed');
     });
 
     it('should not throw while open', () => {
-      const conn = new DatabaseConnection(createTestDb());
-      try {
-        expect(() => conn.ensureOpen()).not.toThrow();
-      } finally {
-        conn.close();
-      }
+      db = createTestDb('signal-bot-db-test-');
+      const { conn } = db;
+      expect(() => conn.ensureOpen()).not.toThrow();
     });
   });
 
   describe('close', () => {
     it('should be idempotent', () => {
-      const conn = new DatabaseConnection(createTestDb());
+      const dbPath = createManualTestDbPath();
+      const conn = new DatabaseConnection(dbPath);
       conn.close();
       expect(() => conn.close()).not.toThrow();
     });

@@ -934,7 +934,7 @@ describe('MessageHandler', () => {
           name: 'Pirate',
           description: 'Ye be a pirate captain! Speak in pirate dialect.',
           tags: 'fun,pirate',
-          isDefault: 0,
+          isDefault: false,
           createdAt: 1000,
           updatedAt: 1000,
         });

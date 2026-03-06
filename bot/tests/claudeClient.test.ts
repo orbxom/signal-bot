@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChatMessage } from '../src/types';
+import { makeMessageContext } from './helpers/fixtures';
 
 const { mockSpawn } = vi.hoisted(() => {
   const mockSpawn = vi.fn();
@@ -257,16 +258,15 @@ describe('ClaudeCLIClient', () => {
 
       const client = new ClaudeCLIClient();
       const messages: ChatMessage[] = [{ role: 'user', content: 'Remind me' }];
-      const context = {
+      const context = makeMessageContext({
         groupId: 'test-group',
         sender: '+61400000000',
         dbPath: '/tmp/test.db',
-        timezone: 'Australia/Sydney',
         githubRepo: 'owner/repo',
         sourceRoot: '/tmp/src',
         signalCliUrl: 'http://localhost:8080',
         botPhoneNumber: '+61400000000',
-      };
+      });
 
       await client.generateResponse(messages, context);
 
@@ -294,16 +294,15 @@ describe('ClaudeCLIClient', () => {
 
       const client = new ClaudeCLIClient();
       const messages: ChatMessage[] = [{ role: 'user', content: 'Hello' }];
-      const context = {
+      const context = makeMessageContext({
         groupId: 'test-group',
         sender: '+61400000000',
         dbPath: '/tmp/test.db',
-        timezone: 'Australia/Sydney',
         githubRepo: 'owner/repo',
         sourceRoot: '/tmp/src',
         signalCliUrl: 'http://localhost:8080',
         botPhoneNumber: '+61400000000',
-      };
+      });
 
       await client.generateResponse(messages, context);
 
@@ -376,16 +375,15 @@ describe('ClaudeCLIClient', () => {
 
       const client = new ClaudeCLIClient();
       const messages: ChatMessage[] = [{ role: 'user', content: 'What did we talk about yesterday?' }];
-      const context = {
+      const context = makeMessageContext({
         groupId: 'test-group',
         sender: '+61400000000',
         dbPath: '/tmp/test.db',
-        timezone: 'Australia/Sydney',
         githubRepo: 'owner/repo',
         sourceRoot: '/tmp/src',
         signalCliUrl: 'http://localhost:8080',
         botPhoneNumber: '+61400000000',
-      };
+      });
 
       await client.generateResponse(messages, context);
 
@@ -416,16 +414,15 @@ describe('ClaudeCLIClient', () => {
 
       const client = new ClaudeCLIClient();
       const messages: ChatMessage[] = [{ role: 'user', content: 'Search history' }];
-      const context = {
+      const context = makeMessageContext({
         groupId: 'test-group',
         sender: '+61400000000',
         dbPath: '/tmp/test.db',
-        timezone: 'Australia/Sydney',
         githubRepo: 'owner/repo',
         sourceRoot: '/tmp/src',
         signalCliUrl: 'http://localhost:8080',
         botPhoneNumber: '+61400000000',
-      };
+      });
 
       await client.generateResponse(messages, context);
 
@@ -445,16 +442,15 @@ describe('ClaudeCLIClient', () => {
 
       const client = new ClaudeCLIClient();
       const messages: ChatMessage[] = [{ role: 'user', content: 'Remember this' }];
-      const context = {
+      const context = makeMessageContext({
         groupId: 'test-group',
         sender: '+61400000000',
         dbPath: '/tmp/test.db',
-        timezone: 'Australia/Sydney',
         githubRepo: 'owner/repo',
         sourceRoot: '/tmp/src',
         signalCliUrl: 'http://localhost:8080',
         botPhoneNumber: '+61400000000',
-      };
+      });
 
       await client.generateResponse(messages, context);
 
@@ -559,18 +555,17 @@ describe('ClaudeCLIClient', () => {
 
       const client = new ClaudeCLIClient();
       const messages: ChatMessage[] = [{ role: 'user', content: 'Transcribe this' }];
-      const context = {
+      const context = makeMessageContext({
         groupId: 'test-group',
         sender: '+61400000000',
         dbPath: '/tmp/test.db',
-        timezone: 'Australia/Sydney',
         githubRepo: 'owner/repo',
         sourceRoot: '/app/source',
         signalCliUrl: 'http://localhost:8080',
         botPhoneNumber: '+61400000000',
         attachmentsDir: '/app/signal-attachments',
         whisperModelPath: '/models/ggml-large.bin',
-      };
+      });
 
       await client.generateResponse(messages, context);
 
@@ -632,18 +627,17 @@ describe('ClaudeCLIClient', () => {
 
       const client = new ClaudeCLIClient();
       const messages: ChatMessage[] = [{ role: 'user', content: 'Switch persona' }];
-      const context = {
+      const context = makeMessageContext({
         groupId: 'test-group',
         sender: '+61400000000',
         dbPath: '/tmp/test.db',
-        timezone: 'Australia/Sydney',
         githubRepo: 'owner/repo',
         sourceRoot: '/tmp/src',
         signalCliUrl: 'http://localhost:8080',
         botPhoneNumber: '+61400000000',
         attachmentsDir: '/app/signal-attachments',
         whisperModelPath: '/models/ggml-large.bin',
-      };
+      });
 
       await client.generateResponse(messages, context);
 
@@ -756,18 +750,17 @@ describe('ClaudeCLIClient', () => {
 
       const client = new ClaudeCLIClient();
       const messages: ChatMessage[] = [{ role: 'user', content: 'Browse web' }];
-      const context = {
+      const context = makeMessageContext({
         groupId: 'test-group',
         sender: '+61400000000',
         dbPath: '/tmp/test.db',
-        timezone: 'Australia/Sydney',
         githubRepo: 'owner/repo',
         sourceRoot: '/tmp/src',
         signalCliUrl: 'http://localhost:8080',
         botPhoneNumber: '+61400000000',
         attachmentsDir: '/app/signal-attachments',
         whisperModelPath: '/models/ggml-large.bin',
-      };
+      });
 
       await client.generateResponse(messages, context);
 
