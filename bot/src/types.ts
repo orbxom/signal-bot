@@ -128,3 +128,14 @@ export interface ExtractedMessage {
   timestamp: number;
   attachments: SignalAttachment[];
 }
+
+export interface Attachment {
+  id: string;
+  groupId: string;
+  sender: string;
+  contentType: string;
+  size: number;
+  filename: string | null;
+  data: Buffer; // raw binary, stored as BLOB in SQLite
+  timestamp: number;
+}

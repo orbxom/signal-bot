@@ -191,12 +191,25 @@ describe('DatabaseConnection', () => {
       expect(indexNames).toContain('idx_memories_group');
     });
 
-    it('should set schema version to 3 after migrations', () => {
+    it('should create attachment_data table in v4 migration', () => {
+      db = createTestDb('signal-bot-db-test-');
+      const tables = db.conn.db
+        .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='attachment_data'")
+        .all() as Array<{ name: string }>;
+      expect(tables).toHaveLength(1);
+
+      const indexNames = (
+        db.conn.db.prepare("SELECT name FROM sqlite_master WHERE type='index'").all() as Array<{ name: string }>
+      ).map(r => r.name);
+      expect(indexNames).toContain('idx_attachment_data_group');
+    });
+
+    it('should set schema version to 4 after migrations', () => {
       db = createTestDb('signal-bot-db-test-');
       const row = db.conn.db.prepare("SELECT value FROM schema_meta WHERE key = 'schema_version'").get() as {
         value: string;
       };
-      expect(Number.parseInt(row.value, 10)).toBe(3);
+      expect(Number.parseInt(row.value, 10)).toBe(4);
     });
   });
 
