@@ -78,7 +78,7 @@ function formatMessages(messages: Message[]): string {
 export const messageHistoryServer: McpServerDefinition = {
   serverName: 'signal-bot-message-history',
   configKey: 'history',
-  entrypoint: 'mcp/servers/messageHistory',
+  entrypoint: 'messageHistory',
   tools: TOOLS,
   envMapping: { DB_PATH: 'dbPath', MCP_GROUP_ID: 'groupId', TZ: 'timezone' },
   handlers: {

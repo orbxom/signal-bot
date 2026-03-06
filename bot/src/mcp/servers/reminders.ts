@@ -56,7 +56,7 @@ let tz: string;
 export const reminderServer: McpServerDefinition = {
   serverName: 'signal-bot-reminders',
   configKey: 'reminders',
-  entrypoint: 'mcp/servers/reminders',
+  entrypoint: 'reminders',
   tools: TOOLS,
   envMapping: { DB_PATH: 'dbPath', MCP_GROUP_ID: 'groupId', MCP_SENDER: 'sender', TZ: 'timezone' },
   handlers: {
@@ -80,9 +80,8 @@ export const reminderServer: McpServerDefinition = {
     },
 
     list_reminders() {
-      if (!groupId) {
-        return ok('No group context available.');
-      }
+      const groupErr = requireGroupId(groupId);
+      if (groupErr) return groupErr;
 
       const reminders = store.listPending(groupId);
       if (reminders.length === 0) {

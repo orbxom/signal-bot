@@ -466,7 +466,7 @@ describe('ClaudeCLIClient', () => {
       expect(['node', 'npx']).toContain(mcpConfig.mcpServers.dossiers.command);
       expect(mcpConfig.mcpServers.dossiers.env.DB_PATH).toBe('/tmp/test.db');
       expect(mcpConfig.mcpServers.dossiers.env.MCP_GROUP_ID).toBe('test-group');
-      expect(mcpConfig.mcpServers.dossiers.env.MCP_SENDER).toBe('+61400000000');
+      expect(mcpConfig.mcpServers.dossiers.env.MCP_SENDER).toBeUndefined();
     });
 
     it('should detect when messages were sent via MCP signal tool', async () => {

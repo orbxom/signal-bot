@@ -2,7 +2,7 @@ import { readTimezone } from '../env';
 import { catchErrors, error, ok } from '../result';
 import { runServer } from '../runServer';
 import type { McpServerDefinition } from '../types';
-import { requireString } from '../validate';
+import { requireString, type StringResult } from '../validate';
 
 const BOM_BASE_URL = 'https://api.weather.bom.gov.au/v1';
 
@@ -88,11 +88,11 @@ function trimGeohash(geohash: string): string {
   return geohash.substring(0, 6);
 }
 
-function requireGeohash(args: Record<string, unknown>) {
+function requireGeohash(args: Record<string, unknown>): StringResult {
   const geohash = requireString(args, 'geohash');
   if (geohash.error) return geohash;
   if (geohash.value.length < 6) {
-    return { error: error('Missing or invalid geohash (need at least 6 characters).'), value: undefined as never };
+    return { error: error('Missing or invalid geohash (need at least 6 characters).') };
   }
   return geohash;
 }
@@ -100,7 +100,7 @@ function requireGeohash(args: Record<string, unknown>) {
 export const weatherServer: McpServerDefinition = {
   serverName: 'signal-bot-weather',
   configKey: 'weather',
-  entrypoint: 'mcp/servers/weather',
+  entrypoint: 'weather',
   tools: TOOLS,
   envMapping: { TZ: 'timezone' },
   handlers: {
