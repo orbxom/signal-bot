@@ -14,11 +14,12 @@ const YELLOW = '\x1b[33m';
 const CYAN = '\x1b[36m';
 
 // Box-drawing characters
-const BOX_TOP = '\u250c';    // ┌
-const BOX_SIDE = '\u2502';   // │
+const BOX_TOP = '\u250c'; // ┌
+const BOX_SIDE = '\u2502'; // │
 const BOX_BOTTOM = '\u2514'; // └
-const DASH = '\u2500';       // ─
+const DASH = '\u2500'; // ─
 
+// biome-ignore lint/suspicious/noControlCharactersInRegex: ANSI escape sequence stripping requires matching ESC character
 const ANSI_STRIP_RE = /\x1b\[[0-9;]*m/g;
 
 export class Logger {
@@ -26,7 +27,10 @@ export class Logger {
 
   constructor(options: LoggerOptions) {
     mkdirSync(options.logDir, { recursive: true });
-    const timestamp = new Date().toISOString().replace(/:/g, '-').replace(/\.\d+Z$/, '');
+    const timestamp = new Date()
+      .toISOString()
+      .replace(/:/g, '-')
+      .replace(/\.\d+Z$/, '');
     this.logFile = path.join(options.logDir, `bot-${timestamp}.log`);
   }
 
@@ -56,19 +60,19 @@ export class Logger {
   }
 
   group(label: string): void {
-    this.write(`${CYAN}${BOX_TOP}${RESET} ${label}\n`);
+    this.write(`${this.formatTimestamp()} ${CYAN}${BOX_TOP}${RESET} ${label}\n`);
   }
 
   step(message: string): void {
-    this.write(`${CYAN}${BOX_SIDE}${RESET} ${message}\n`);
+    this.write(`${this.formatTimestamp()} ${CYAN}${BOX_SIDE}${RESET} ${message}\n`);
   }
 
   groupEnd(): void {
-    this.write(`${CYAN}${BOX_BOTTOM}${RESET} COMPLETE\n`);
+    this.write(`${this.formatTimestamp()} ${CYAN}${BOX_BOTTOM}${RESET} COMPLETE\n`);
   }
 
   compact(tag: string, detail: string): void {
-    this.write(`${DASH} ${tag}  ${detail}\n`);
+    this.write(`${this.formatTimestamp()} ${DASH} ${tag}  ${detail}\n`);
   }
 
   private formatTimestamp(): string {

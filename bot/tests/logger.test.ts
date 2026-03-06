@@ -42,7 +42,7 @@ describe('Logger', () => {
     it('writes to stdout', () => {
       logger.info('hello world');
       expect(stdoutSpy).toHaveBeenCalled();
-      const output = (stdoutSpy.mock.calls[0][0] as string);
+      const output = stdoutSpy.mock.calls[0][0] as string;
       expect(output).toContain('hello world');
     });
 
@@ -57,7 +57,7 @@ describe('Logger', () => {
   describe('success', () => {
     it('writes to stdout with green color', () => {
       logger.success('done');
-      const output = (stdoutSpy.mock.calls[0][0] as string);
+      const output = stdoutSpy.mock.calls[0][0] as string;
       expect(output).toContain('done');
       // Should contain green ANSI code
       expect(output).toContain('\x1b[32m');
@@ -67,7 +67,7 @@ describe('Logger', () => {
   describe('warn', () => {
     it('writes to stdout with yellow color', () => {
       logger.warn('careful');
-      const output = (stdoutSpy.mock.calls[0][0] as string);
+      const output = stdoutSpy.mock.calls[0][0] as string;
       expect(output).toContain('careful');
       expect(output).toContain('\x1b[33m');
     });
@@ -76,7 +76,7 @@ describe('Logger', () => {
   describe('error', () => {
     it('writes to stdout with red color', () => {
       logger.error('failed');
-      const output = (stdoutSpy.mock.calls[0][0] as string);
+      const output = stdoutSpy.mock.calls[0][0] as string;
       expect(output).toContain('failed');
       expect(output).toContain('\x1b[31m');
     });
@@ -84,14 +84,14 @@ describe('Logger', () => {
     it('includes error object details when provided', () => {
       const err = new Error('something broke');
       logger.error('operation failed', err);
-      const output = (stdoutSpy.mock.calls[0][0] as string);
+      const output = stdoutSpy.mock.calls[0][0] as string;
       expect(output).toContain('operation failed');
       expect(output).toContain('something broke');
     });
 
     it('handles non-Error objects', () => {
       logger.error('operation failed', 'string error');
-      const output = (stdoutSpy.mock.calls[0][0] as string);
+      const output = stdoutSpy.mock.calls[0][0] as string;
       expect(output).toContain('string error');
     });
   });
@@ -99,42 +99,46 @@ describe('Logger', () => {
   describe('debug', () => {
     it('writes to stdout with dim/gray color', () => {
       logger.debug('trace info');
-      const output = (stdoutSpy.mock.calls[0][0] as string);
+      const output = stdoutSpy.mock.calls[0][0] as string;
       expect(output).toContain('trace info');
       expect(output).toContain('\x1b[2m');
     });
   });
 
   describe('group/step/groupEnd', () => {
-    it('outputs group start with label', () => {
+    it('outputs group start with label and timestamp', () => {
       logger.group('STARTUP');
-      const output = (stdoutSpy.mock.calls[0][0] as string);
+      const output = stdoutSpy.mock.calls[0][0] as string;
       expect(output).toContain('\u250c');
       expect(output).toContain('STARTUP');
+      expect(output).toMatch(/\d{2}:\d{2}:\d{2}/);
     });
 
-    it('outputs step with border', () => {
+    it('outputs step with border and timestamp', () => {
       logger.step('loading config');
-      const output = (stdoutSpy.mock.calls[0][0] as string);
+      const output = stdoutSpy.mock.calls[0][0] as string;
       expect(output).toContain('\u2502');
       expect(output).toContain('loading config');
+      expect(output).toMatch(/\d{2}:\d{2}:\d{2}/);
     });
 
-    it('outputs groupEnd with border', () => {
+    it('outputs groupEnd with border and timestamp', () => {
       logger.groupEnd();
-      const output = (stdoutSpy.mock.calls[0][0] as string);
+      const output = stdoutSpy.mock.calls[0][0] as string;
       expect(output).toContain('\u2514');
       expect(output).toContain('COMPLETE');
+      expect(output).toMatch(/\d{2}:\d{2}:\d{2}/);
     });
   });
 
   describe('compact', () => {
-    it('outputs tag and detail with dash prefix', () => {
+    it('outputs tag and detail with dash prefix and timestamp', () => {
       logger.compact('MCP', 'loaded 5 tools');
-      const output = (stdoutSpy.mock.calls[0][0] as string);
+      const output = stdoutSpy.mock.calls[0][0] as string;
       expect(output).toContain('\u2500');
       expect(output).toContain('MCP');
       expect(output).toContain('loaded 5 tools');
+      expect(output).toMatch(/\d{2}:\d{2}:\d{2}/);
     });
   });
 
@@ -143,6 +147,7 @@ describe('Logger', () => {
       logger.success('green text');
       const fileContent = vi.mocked(appendFileSync).mock.calls[0][1] as string;
       // File content should not contain ANSI escape codes
+      // biome-ignore lint/suspicious/noControlCharactersInRegex: ANSI escape sequence stripping requires matching ESC character
       expect(fileContent).not.toMatch(/\x1b\[[0-9;]*m/);
       // But should still contain the text
       expect(fileContent).toContain('green text');
@@ -150,7 +155,7 @@ describe('Logger', () => {
 
     it('includes timestamp in output', () => {
       logger.info('timestamped');
-      const output = (stdoutSpy.mock.calls[0][0] as string);
+      const output = stdoutSpy.mock.calls[0][0] as string;
       // Should contain a HH:MM:SS timestamp pattern
       expect(output).toMatch(/\d{2}:\d{2}:\d{2}/);
     });
