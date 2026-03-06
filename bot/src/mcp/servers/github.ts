@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { readStorageEnv } from '../env';
 import { catchErrors, error, ok } from '../result';
 import { runServer } from '../runServer';
 import type { McpServerDefinition } from '../types';
@@ -42,7 +43,7 @@ let sender: string;
 export const githubServer: McpServerDefinition = {
   serverName: 'signal-bot-github',
   configKey: 'github',
-  entrypoint: 'mcp/servers/github',
+  entrypoint: 'github',
   tools: TOOLS,
   envMapping: { GITHUB_REPO: 'githubRepo', MCP_SENDER: 'sender' },
   handlers: {
@@ -51,7 +52,7 @@ export const githubServer: McpServerDefinition = {
       if (title.error) return title.error;
       const body = requireString(args, 'body');
       if (body.error) return body.error;
-      const labels = (args.labels as string[]) || ['feature-request'];
+      const labels = Array.isArray(args.labels) ? (args.labels as string[]) : ['feature-request'];
 
       if (!githubRepo) {
         return error('GITHUB_REPO environment variable is not configured.');
@@ -76,8 +77,9 @@ export const githubServer: McpServerDefinition = {
     },
   },
   onInit() {
+    const env = readStorageEnv();
     githubRepo = process.env.GITHUB_REPO || '';
-    sender = process.env.MCP_SENDER || '';
+    sender = env.sender;
     console.error('GitHub MCP server started');
   },
 };

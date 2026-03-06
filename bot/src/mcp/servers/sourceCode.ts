@@ -1,6 +1,6 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { error as errorResult, ok } from '../result';
+import { catchErrors, error, ok } from '../result';
 import { runServer } from '../runServer';
 import type { McpServerDefinition } from '../types';
 import { requireString } from '../validate';
@@ -171,13 +171,13 @@ function searchRecursive(
 export const sourceCodeServer: McpServerDefinition = {
   serverName: 'signal-bot-sourcecode',
   configKey: 'sourcecode',
-  entrypoint: 'mcp/servers/sourceCode',
+  entrypoint: 'sourceCode',
   tools: TOOLS,
   envMapping: { SOURCE_ROOT: 'sourceRoot' },
   handlers: {
     list_files(args) {
       if (!sourceRoot) {
-        return errorResult('SOURCE_ROOT not configured.');
+        return error('SOURCE_ROOT not configured.');
       }
 
       const relativePath = (args.path as string) || '.';
@@ -185,28 +185,30 @@ export const sourceCodeServer: McpServerDefinition = {
 
       const resolved = resolveSafePath(relativePath);
       if (!resolved) {
-        return errorResult('Invalid path.');
+        return error('Invalid path.');
       }
 
-      try {
-        if (!fs.statSync(resolved).isDirectory()) {
-          return errorResult(`Directory not found: ${relativePath}`);
+      return catchErrors(() => {
+        try {
+          if (!fs.statSync(resolved).isDirectory()) {
+            return error(`Directory not found: ${relativePath}`);
+          }
+        } catch {
+          return error(`Directory not found: ${relativePath}`);
         }
-      } catch {
-        return errorResult(`Directory not found: ${relativePath}`);
-      }
 
-      const files = listFilesInDir(resolved, recursive, sourceRoot);
-      if (files.length === 0) {
-        return ok('No files found.');
-      }
+        const files = listFilesInDir(resolved, recursive, sourceRoot);
+        if (files.length === 0) {
+          return ok('No files found.');
+        }
 
-      return ok(files.join('\n'));
+        return ok(files.join('\n'));
+      }, 'Failed to list files');
     },
 
     read_file(args) {
       if (!sourceRoot) {
-        return errorResult('SOURCE_ROOT not configured.');
+        return error('SOURCE_ROOT not configured.');
       }
 
       const filePath = requireString(args, 'path');
@@ -214,31 +216,33 @@ export const sourceCodeServer: McpServerDefinition = {
 
       const resolved = resolveSafePath(filePath.value);
       if (!resolved) {
-        return errorResult('Invalid path.');
+        return error('Invalid path.');
       }
 
-      let stat: fs.Stats;
-      try {
-        stat = fs.statSync(resolved);
-      } catch {
-        return errorResult(`File not found: ${filePath.value}`);
-      }
-      if (!stat.isFile()) {
-        return errorResult(`File not found: ${filePath.value}`);
-      }
+      return catchErrors(() => {
+        let stat: fs.Stats;
+        try {
+          stat = fs.statSync(resolved);
+        } catch {
+          return error(`File not found: ${filePath.value}`);
+        }
+        if (!stat.isFile()) {
+          return error(`File not found: ${filePath.value}`);
+        }
 
-      if (stat.size > MAX_FILE_SIZE) {
-        const content = fs.readFileSync(resolved, 'utf-8').substring(0, MAX_FILE_SIZE);
-        return ok(`${content}\n\n[Truncated — file is ${stat.size} bytes, showing first ${MAX_FILE_SIZE} bytes]`);
-      }
+        if (stat.size > MAX_FILE_SIZE) {
+          const content = fs.readFileSync(resolved, 'utf-8').substring(0, MAX_FILE_SIZE);
+          return ok(`${content}\n\n[Truncated — file is ${stat.size} bytes, showing first ${MAX_FILE_SIZE} bytes]`);
+        }
 
-      const content = fs.readFileSync(resolved, 'utf-8');
-      return ok(content);
+        const content = fs.readFileSync(resolved, 'utf-8');
+        return ok(content);
+      }, 'Failed to read file');
     },
 
     search_code(args) {
       if (!sourceRoot) {
-        return errorResult('SOURCE_ROOT not configured.');
+        return error('SOURCE_ROOT not configured.');
       }
 
       const pattern = requireString(args, 'pattern');
@@ -248,35 +252,37 @@ export const sourceCodeServer: McpServerDefinition = {
       try {
         regex = new RegExp(pattern.value, 'i');
       } catch {
-        return errorResult(`Invalid regex pattern: ${pattern.value}`);
+        return error(`Invalid regex pattern: ${pattern.value}`);
       }
 
       const relativePath = (args.path as string) || '.';
       const resolved = resolveSafePath(relativePath);
       if (!resolved) {
-        return errorResult('Invalid path.');
+        return error('Invalid path.');
       }
 
-      let extFilter: string | null = null;
-      if (args.filePattern && typeof args.filePattern === 'string') {
-        const fp = args.filePattern;
-        extFilter = fp.startsWith('*') ? fp.substring(1) : fp;
-      }
+      return catchErrors(() => {
+        let extFilter: string | null = null;
+        if (args.filePattern && typeof args.filePattern === 'string') {
+          const fp = args.filePattern;
+          extFilter = fp.startsWith('*') ? fp.substring(1) : fp;
+        }
 
-      const results: Array<{ file: string; line: number; text: string }> = [];
-      searchRecursive(resolved, regex, sourceRoot, extFilter, results);
+        const results: Array<{ file: string; line: number; text: string }> = [];
+        searchRecursive(resolved, regex, sourceRoot, extFilter, results);
 
-      if (results.length === 0) {
-        return ok(`No matches found for pattern: ${pattern.value}`);
-      }
+        if (results.length === 0) {
+          return ok(`No matches found for pattern: ${pattern.value}`);
+        }
 
-      const lines = results.map(r => `${r.file}:${r.line}: ${r.text.trim()}`);
-      let text = lines.join('\n');
-      if (results.length >= MAX_SEARCH_MATCHES) {
-        text += `\n\n[Results capped at ${MAX_SEARCH_MATCHES} matches]`;
-      }
+        const lines = results.map(r => `${r.file}:${r.line}: ${r.text.trim()}`);
+        let text = lines.join('\n');
+        if (results.length >= MAX_SEARCH_MATCHES) {
+          text += `\n\n[Results capped at ${MAX_SEARCH_MATCHES} matches]`;
+        }
 
-      return ok(text);
+        return ok(text);
+      }, 'Failed to search code');
     },
   },
   onInit() {

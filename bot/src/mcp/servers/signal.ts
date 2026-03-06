@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { readStorageEnv } from '../env';
 import { catchErrors, error, ok } from '../result';
 import { runServer } from '../runServer';
 import type { McpServerDefinition } from '../types';
@@ -70,7 +71,7 @@ const TOOLS = [
 export const signalServer: McpServerDefinition = {
   serverName: 'signal-bot-signal',
   configKey: 'signal',
-  entrypoint: 'mcp/servers/signal',
+  entrypoint: 'signal',
   tools: TOOLS,
   envMapping: { SIGNAL_CLI_URL: 'signalCliUrl', SIGNAL_ACCOUNT: 'botPhoneNumber', MCP_GROUP_ID: 'groupId' },
   handlers: {
@@ -132,9 +133,10 @@ export const signalServer: McpServerDefinition = {
     },
   },
   onInit() {
+    const env = readStorageEnv();
     signalCliUrl = process.env.SIGNAL_CLI_URL || '';
     signalAccount = process.env.SIGNAL_ACCOUNT || '';
-    groupId = process.env.MCP_GROUP_ID || '';
+    groupId = env.groupId;
     console.error(`Signal MCP server started (group: ${groupId})`);
   },
 };

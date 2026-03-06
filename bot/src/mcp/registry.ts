@@ -88,7 +88,7 @@ export function buildMcpConfig(context: MessageContext): { mcpServers: Record<st
   const mcpServers: Record<string, unknown> = {};
 
   for (const server of ALL_SERVERS) {
-    const resolved = resolveMcpServerPath(`servers/${server.entrypoint.replace('mcp/servers/', '')}`);
+    const resolved = resolveMcpServerPath(`servers/${server.entrypoint}`);
     const env: Record<string, string> = {};
     for (const [envKey, contextField] of Object.entries(server.envMapping)) {
       const value = context[contextField];

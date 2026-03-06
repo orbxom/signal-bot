@@ -4,7 +4,7 @@ import { readStorageEnv } from '../env';
 import { catchErrors, estimateTokens, ok } from '../result';
 import { runServer } from '../runServer';
 import type { McpServerDefinition } from '../types';
-import { requireGroupId, requireString } from '../validate';
+import { optionalString, requireGroupId, requireString } from '../validate';
 
 const TOOLS = [
   {
@@ -52,16 +52,16 @@ let groupId: string;
 export const dossierServer: McpServerDefinition = {
   serverName: 'signal-bot-dossiers',
   configKey: 'dossiers',
-  entrypoint: 'mcp/servers/dossiers',
+  entrypoint: 'dossiers',
   tools: TOOLS,
-  envMapping: { DB_PATH: 'dbPath', MCP_GROUP_ID: 'groupId', MCP_SENDER: 'sender' },
+  envMapping: { DB_PATH: 'dbPath', MCP_GROUP_ID: 'groupId' },
   handlers: {
     update_dossier(args) {
       const personId = requireString(args, 'personId');
       if (personId.error) return personId.error;
       const displayName = requireString(args, 'displayName');
       if (displayName.error) return displayName.error;
-      const notes = (args.notes as string) ?? '';
+      const notes = optionalString(args, 'notes', '');
       const groupErr = requireGroupId(groupId);
       if (groupErr) return groupErr;
 
@@ -108,7 +108,7 @@ export const dossierServer: McpServerDefinition = {
     conn = new DatabaseConnection(env.dbPath);
     store = new DossierStore(conn);
     groupId = env.groupId;
-    console.error(`Dossier MCP server started (group: ${groupId || 'none'}, sender: ${env.sender || 'none'})`);
+    console.error(`Dossier MCP server started (group: ${groupId || 'none'})`);
   },
   onClose() {
     conn.close();
