@@ -48,6 +48,7 @@ describe('MessageHandler', () => {
         getDossiersByGroup: vi.fn().mockReturnValue([]),
         getMemoriesByGroup: vi.fn().mockReturnValue([]),
         getActivePersonaForGroup: vi.fn().mockReturnValue(null),
+        saveAttachment: vi.fn(),
       } as any;
 
       mockLLM = {
@@ -63,6 +64,7 @@ describe('MessageHandler', () => {
         sendMessage: vi.fn().mockResolvedValue(undefined),
         sendTyping: vi.fn().mockResolvedValue(undefined),
         stopTyping: vi.fn().mockResolvedValue(undefined),
+        readAttachmentFile: vi.fn().mockReturnValue(null),
       } as any;
     });
 
@@ -918,6 +920,67 @@ describe('MessageHandler', () => {
         expect(mockSignal.stopTyping).toHaveBeenCalledWith('g1');
 
         vi.useRealTimers();
+      });
+    });
+
+    describe('image attachment ingestion', () => {
+      it('should save image attachment data to storage on receive', async () => {
+        const fakeBuffer = Buffer.from('fake image');
+        mockSignal.readAttachmentFile = vi.fn().mockReturnValue({ data: fakeBuffer });
+
+        const handler = new MessageHandler(['@bot'], {
+          storage: mockStorage,
+          llmClient: mockLLM,
+          signalClient: mockSignal,
+          appConfig: makeAppConfig({ attachmentsDir: '/data/attachments' }),
+        });
+
+        await handler.handleMessage('g1', 'Alice', '@bot check this', 1000, [
+          { id: 'img-abc', contentType: 'image/jpeg', size: 50000, filename: 'photo.jpg' },
+        ]);
+
+        expect(mockSignal.readAttachmentFile).toHaveBeenCalledWith('/data/attachments', 'img-abc');
+        expect(mockStorage.saveAttachment).toHaveBeenCalledWith(
+          expect.objectContaining({
+            id: 'img-abc',
+            groupId: 'g1',
+            contentType: 'image/jpeg',
+            data: fakeBuffer,
+          }),
+        );
+      });
+
+      it('should not crash when attachment file is missing', async () => {
+        mockSignal.readAttachmentFile = vi.fn().mockReturnValue(null);
+
+        const handler = new MessageHandler(['@bot'], {
+          storage: mockStorage,
+          llmClient: mockLLM,
+          signalClient: mockSignal,
+        });
+
+        await handler.handleMessage('g1', 'Alice', '@bot check this', 1000, [
+          { id: 'img-missing', contentType: 'image/jpeg', size: 50000, filename: null },
+        ]);
+
+        expect(mockStorage.saveAttachment).not.toHaveBeenCalled();
+      });
+
+      it('should skip non-image attachments during ingestion', async () => {
+        mockSignal.readAttachmentFile = vi.fn();
+
+        const handler = new MessageHandler(['@bot'], {
+          storage: mockStorage,
+          llmClient: mockLLM,
+          signalClient: mockSignal,
+        });
+
+        await handler.handleMessage('g1', 'Alice', '@bot', 1000, [
+          { id: 'voice-abc', contentType: 'audio/aac', size: 5000, filename: null },
+        ]);
+
+        expect(mockSignal.readAttachmentFile).not.toHaveBeenCalled();
+        expect(mockStorage.saveAttachment).not.toHaveBeenCalled();
       });
     });
 
