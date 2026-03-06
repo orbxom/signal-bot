@@ -1,5 +1,7 @@
 import type { ToolResult } from './types';
 
+export { estimateTokens } from '../utils/tokens';
+
 export function ok(text: string): ToolResult {
   return { content: [{ type: 'text', text }] };
 }
@@ -10,10 +12,6 @@ export function error(text: string): ToolResult {
 
 export function getErrorMessage(err: unknown): string {
   return err instanceof Error ? err.message : 'Unknown error';
-}
-
-export function estimateTokens(text: string): number {
-  return Math.ceil(text.length / 4);
 }
 
 export function catchErrors(

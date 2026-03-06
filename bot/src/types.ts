@@ -60,7 +60,7 @@ export interface Persona {
   name: string;
   description: string;
   tags: string;
-  isDefault: number;
+  isDefault: boolean;
   createdAt: number;
   updatedAt: number;
 }

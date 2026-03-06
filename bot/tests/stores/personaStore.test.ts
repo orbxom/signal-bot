@@ -31,7 +31,7 @@ describe('PersonaStore', () => {
       const defaultPersona = store.getDefault();
       expect(defaultPersona).not.toBeNull();
       expect(defaultPersona?.name).toBe('Default Assistant');
-      expect(defaultPersona?.isDefault).toBe(1);
+      expect(defaultPersona?.isDefault).toBe(true);
       expect(defaultPersona?.description).toContain('helpful family assistant');
     });
 
@@ -53,7 +53,7 @@ describe('PersonaStore', () => {
         name: 'Pirate',
         description: 'Ye be a pirate captain!',
         tags: 'fun,pirate',
-        isDefault: 0,
+        isDefault: false,
       });
       expect(persona.id).toBeGreaterThan(0);
       expect(persona.createdAt).toBeGreaterThan(0);
@@ -142,7 +142,7 @@ describe('PersonaStore', () => {
       setup();
       store.seedDefault();
       const personas = store.list();
-      expect(personas.some(p => p.isDefault === 1)).toBe(true);
+      expect(personas.some(p => p.isDefault === true)).toBe(true);
     });
   });
 
@@ -215,7 +215,7 @@ describe('PersonaStore', () => {
       store.setActive('group1', created.id);
       store.delete(created.id);
       const active = store.getActiveForGroup('group1');
-      expect(active?.isDefault).toBe(1);
+      expect(active?.isDefault).toBe(true);
     });
   });
 
@@ -225,7 +225,7 @@ describe('PersonaStore', () => {
       store.seedDefault();
       const persona = store.getDefault();
       expect(persona).not.toBeNull();
-      expect(persona?.isDefault).toBe(1);
+      expect(persona?.isDefault).toBe(true);
       expect(persona?.name).toBe('Default Assistant');
     });
   });
@@ -274,7 +274,7 @@ describe('PersonaStore', () => {
       store.seedDefault();
       const active = store.getActiveForGroup('group1');
       expect(active).not.toBeNull();
-      expect(active?.isDefault).toBe(1);
+      expect(active?.isDefault).toBe(true);
     });
 
     it('should support different personas per group', () => {
@@ -297,7 +297,7 @@ describe('PersonaStore', () => {
       store.setActive('group1', created.id);
       store.clearActive('group1');
       const active = store.getActiveForGroup('group1');
-      expect(active?.isDefault).toBe(1);
+      expect(active?.isDefault).toBe(true);
     });
 
     it('should be a no-op if no active persona set', () => {
