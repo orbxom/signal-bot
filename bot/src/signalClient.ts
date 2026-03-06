@@ -88,7 +88,8 @@ export class SignalClient {
   }
 
   readAttachmentFile(attachmentsDir: string, attachmentId: string): { data: Buffer } | null {
-    const filePath = path.join(attachmentsDir, attachmentId);
+    const filePath = path.resolve(attachmentsDir, attachmentId);
+    if (!filePath.startsWith(path.resolve(attachmentsDir))) return null;
     try {
       const data = fs.readFileSync(filePath);
       return { data };

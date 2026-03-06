@@ -288,18 +288,20 @@ export class MessageHandler {
     for (const att of attachments) {
       if (att.contentType.startsWith('image/')) {
         const file = this.signalClient.readAttachmentFile(this.appConfig.attachmentsDir, att.id);
-        if (file) {
-          this.storage.saveAttachment({
-            id: att.id,
-            groupId,
-            sender,
-            contentType: att.contentType,
-            size: att.size,
-            filename: att.filename,
-            data: file.data,
-            timestamp,
-          });
+        if (!file) {
+          logger.debug(`Attachment file not found on disk: ${att.id}`);
+          continue;
         }
+        this.storage.saveAttachment({
+          id: att.id,
+          groupId,
+          sender,
+          contentType: att.contentType,
+          size: att.size,
+          filename: att.filename,
+          data: file.data,
+          timestamp,
+        });
       }
     }
   }
