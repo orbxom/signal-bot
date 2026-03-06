@@ -111,10 +111,7 @@ export function parseClaudeOutput(stdout: string): LLMResponse {
   }
 
   if (!resultLine) {
-    console.error(
-      '[Claude] No result line in output. Entry types:',
-      entries.map(e => e.type),
-    );
+    logger.error(`No result line in output. Entry types: ${entries.map(e => e.type).join(', ')}`);
     throw new Error('No result found in Claude CLI output');
   }
 
@@ -122,8 +119,8 @@ export function parseClaudeOutput(stdout: string): LLMResponse {
   let content = '';
 
   if (resultLine.is_error) {
-    console.warn(
-      `[Claude] Result has is_error=true, subtype=${(resultLine as unknown as Record<string, unknown>).subtype}. Falling back to assistant text.`,
+    logger.warn(
+      `Result has is_error=true, subtype=${(resultLine as unknown as Record<string, unknown>).subtype}. Falling back to assistant text.`,
     );
   } else {
     content = typeof resultLine.result === 'string' ? resultLine.result.trim() : '';
@@ -137,13 +134,13 @@ export function parseClaudeOutput(stdout: string): LLMResponse {
       .join('')
       .trim();
     if (content) {
-      console.log(`[Claude] Used fallback: extracted ${content.length} chars from assistant message`);
+      logger.debug(`Used fallback: extracted ${content.length} chars from assistant message`);
     }
   }
 
   if (!content) {
     if (mcpMessages.length === 0) {
-      console.error('[Claude] No content found. Full output:', JSON.stringify(entries, null, 2).substring(0, 2000));
+      logger.error(`No content found. Full output: ${JSON.stringify(entries, null, 2).substring(0, 2000)}`);
       throw new Error('No response content from Claude CLI');
     }
     // Response delivered via MCP send_message — use last sent message as content fallback

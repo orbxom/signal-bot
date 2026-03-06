@@ -2,7 +2,7 @@
 import http from 'node:http';
 import readline from 'node:readline';
 
-const PORT = parseInt(process.env.MOCK_SIGNAL_PORT || '8080', 10);
+const PORT = parseInt(process.env.MOCK_SIGNAL_PORT || '9090', 10);
 const GROUP_ID = 'kKWs+FQPBZKe7N7CdxMjNAAjE2uWEmtBij55MOfWFU4=';
 const SENDER = '+61400111222';
 
@@ -77,6 +77,14 @@ const handlers: Record<string, RpcHandler> = {
   },
   listGroups: () => {
     return [{ id: GROUP_ID, name: 'Bot Test', isMember: true }];
+  },
+  // Allows queuing messages via HTTP (useful for headless/background testing)
+  queueMessage: params => {
+    const text = (params.message as string) || '';
+    if (!text) return { error: 'message is required' };
+    messageQueue.push(createEnvelope(text));
+    console.log(`${GREEN}[QUEUED]${RESET} "${text}"`);
+    return { queued: true, queueLength: messageQueue.length };
   },
 };
 

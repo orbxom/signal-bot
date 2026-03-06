@@ -65,15 +65,11 @@ A mock signal-cli HTTP server (`bot/src/mock/signalServer.ts`) implements the JS
 ```bash
 # Terminal 1: Start the mock signal-cli server
 cd bot
-npm run mock-signal                    # Listens on port 8080 by default
-# Or on a custom port:
-MOCK_SIGNAL_PORT=9090 npm run mock-signal
+npm run mock-signal                    # Listens on port 9090 by default
 
 # Terminal 2: Start the bot pointed at the mock server
 cd bot
-npm run dev:test                       # If mock is on default port 8080
-# Or if using a custom port:
-SIGNAL_CLI_URL=http://localhost:9090 npm run dev:test
+npm run dev:test                       # Uses SIGNAL_CLI_URL=http://localhost:9090
 ```
 
 **Sending messages:** Type in the mock server terminal. Prefix with `claude:` to trigger the bot.
@@ -115,7 +111,7 @@ The mock server hardcodes the Bot Test group and sender `+61400111222`. The bot 
 
 - **Bot not receiving messages**: The `extractMessageData` method only processes group messages with `dataMessage.message` and `groupInfo.groupId`. DMs and reactions are silently dropped.
 - **MCP tools not working**: MCP servers run via `npx tsx` on the `.ts` source files. The `resolveMcpServerPath` helper in `mcp/registry.ts` handles path resolution.
-- **Port already in use**: If port 8080 is taken (e.g. real signal-cli is running), use `MOCK_SIGNAL_PORT=9090` for the mock and `SIGNAL_CLI_URL=http://localhost:9090` for the bot.
+- **Port already in use**: The mock server defaults to port 9090 (to avoid conflicts with real signal-cli on 8080). Use `MOCK_SIGNAL_PORT=XXXX` and `SIGNAL_CLI_URL=http://localhost:XXXX` to change it.
 
 ## Testing
 

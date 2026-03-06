@@ -6,7 +6,7 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsx watch src/index.ts",
-    "dev:test": "tsx watch src/index.ts --test-channel-only",
+    "dev:test": "SIGNAL_CLI_URL=${SIGNAL_CLI_URL:-http://localhost:9090} tsx watch src/index.ts --test-channel-only",
     "start": "node dist/index.js",
     "test": "vitest",
     "test:integration": "vitest run tests/integration.test.ts",
