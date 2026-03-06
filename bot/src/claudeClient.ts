@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { logger } from './logger';
 import { buildAllowedTools, buildMcpConfig } from './mcp/registry';
 import { getErrorMessage } from './mcp/result';
 import type { ChatMessage, LLMResponse, MessageContext } from './types';
@@ -118,6 +119,11 @@ export class ClaudeCLIClient {
       args.push('--system-prompt', systemPrompt);
     }
 
+    const systemChars = systemPrompt?.length || 0;
+    const promptChars = prompt.length;
+    logger.step(`llm: spawning claude -p (max turns: ${this.maxTurns})`);
+    logger.step(`llm: system prompt ${(systemChars / 1024).toFixed(1)}k chars, conversation ${(promptChars / 1024).toFixed(1)}k chars`);
+
     try {
       const { stdout } = await spawnPromise('claude', args, {
         timeout: 300000,
@@ -167,11 +173,20 @@ export class ClaudeCLIClient {
         }
       }
 
+      const toolCalls = entries
+        .filter((e): e is Record<string, unknown> => e.type === 'assistant')
+        .flatMap((e: any) => e.message?.content?.filter((b: any) => b.type === 'tool_use') || []);
+
+      if (toolCalls.length > 0) {
+        logger.step('tools called:');
+        for (const tool of toolCalls) {
+          const args = tool.input ? JSON.stringify(tool.input).substring(0, 100) : '';
+          logger.step(`  ${tool.name}  ${args}`);
+        }
+      }
+
       if (!resultLine) {
-        console.error(
-          '[Claude] No result line in output. Entry types:',
-          entries.map(e => e.type),
-        );
+        logger.warn(`[Claude] No result line. Entry types: ${entries.map(e => e.type)}`);
         throw new Error('No result found in Claude CLI output');
       }
 
@@ -179,7 +194,7 @@ export class ClaudeCLIClient {
       let content = '';
 
       if (resultLine.is_error) {
-        console.warn(
+        logger.warn(
           `[Claude] Result has is_error=true, subtype=${(resultLine as unknown as Record<string, unknown>).subtype}. Falling back to assistant text.`,
         );
       } else {
@@ -194,18 +209,23 @@ export class ClaudeCLIClient {
           .join('')
           .trim();
         if (content) {
-          console.log(`[Claude] Used fallback: extracted ${content.length} chars from assistant message`);
+          logger.warn(`[Claude] Used fallback: extracted ${content.length} chars from assistant message`);
         }
       }
 
       if (!content) {
         if (mcpMessages.length === 0) {
-          console.error('[Claude] No content found. Full output:', JSON.stringify(entries, null, 2).substring(0, 2000));
+          logger.error('[Claude] No content found', new Error(JSON.stringify(entries, null, 2).substring(0, 2000)));
           throw new Error('No response content from Claude CLI');
         }
         // Response delivered via MCP send_message — use last sent message as content fallback
         content = mcpMessages[mcpMessages.length - 1];
       }
+
+      if (resultLine.usage) {
+        logger.step(`llm: ${resultLine.usage.input_tokens || 0} input / ${resultLine.usage.output_tokens || 0} output tokens`);
+      }
+      logger.step(`llm: result via ${mcpMessages.length > 0 ? 'MCP send_message' : 'result field'}`);
 
       return {
         content,
