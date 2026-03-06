@@ -161,6 +161,22 @@ export class MessageHandler {
         });
         contextParts.push(`## People in this group\n${entries.join('\n')}`);
       }
+      const MEMORY_CONTEXT_BUDGET = 2000;
+      const memories = storage.getMemoriesByGroup(groupId);
+      if (memories.length > 0) {
+        let tokenTotal = 0;
+        const memoryLines: string[] = [];
+        for (const m of memories) {
+          const line = `- **${m.topic}**: ${m.content}`;
+          const tokens = Math.ceil(line.length / 4);
+          if (tokenTotal + tokens > MEMORY_CONTEXT_BUDGET) break;
+          tokenTotal += tokens;
+          memoryLines.push(line);
+        }
+        if (memoryLines.length > 0) {
+          contextParts.push(`## Group Memory\n${memoryLines.join('\n')}`);
+        }
+      }
       const skillContent = this.contextBuilder.loadSkillContent();
       if (skillContent) {
         contextParts.push(skillContent);
