@@ -83,9 +83,7 @@ export const memoryServer: McpServerDefinition = {
 
       return catchErrors(() => {
         store.upsert(groupId, topic.value, content.value);
-        return ok(
-          `Saved memory "${topic.value}". Content: ~${estimateTokens(content.value)} tokens used.`,
-        );
+        return ok(`Saved memory "${topic.value}". Content: ~${estimateTokens(content.value)} tokens used.`);
       }, 'Failed to save memory');
     },
 
@@ -101,9 +99,7 @@ export const memoryServer: McpServerDefinition = {
       }
 
       const tokenCount = estimateTokens(memory.content);
-      return ok(
-        `Memory: ${memory.topic}\nContent (~${tokenCount} tokens):\n${memory.content}`,
-      );
+      return ok(`Memory: ${memory.topic}\nContent (~${tokenCount} tokens):\n${memory.content}`);
     },
 
     list_memories() {
