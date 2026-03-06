@@ -29,7 +29,7 @@ const TOOLS = [
         labels: {
           type: 'array',
           items: { type: 'string' },
-          description: 'Labels to apply to the issue. Defaults to ["feature-request"].',
+          description: 'Labels to apply to the issue. Defaults to ["feature-request", "claude-work"].',
         },
       },
       required: ['title', 'body'],
@@ -52,7 +52,7 @@ export const githubServer: McpServerDefinition = {
       if (title.error) return title.error;
       const body = requireString(args, 'body');
       if (body.error) return body.error;
-      const labels = Array.isArray(args.labels) ? (args.labels as string[]) : ['feature-request'];
+      const labels = Array.isArray(args.labels) ? (args.labels as string[]) : ['feature-request', 'claude-work'];
 
       if (!githubRepo) {
         return error('GITHUB_REPO environment variable is not configured.');
