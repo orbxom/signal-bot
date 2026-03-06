@@ -1,10 +1,11 @@
 import { DatabaseConnection } from './db';
+import { AttachmentStore } from './stores/attachmentStore';
 import { DossierStore } from './stores/dossierStore';
 import { MemoryStore } from './stores/memoryStore';
 import { MessageStore } from './stores/messageStore';
 import { PersonaStore } from './stores/personaStore';
 import { ReminderStore } from './stores/reminderStore';
-import type { Dossier, Memory, Message, Persona, Reminder } from './types';
+import type { Attachment, Dossier, Memory, Message, Persona, Reminder } from './types';
 
 export class Storage {
   private conn: DatabaseConnection;
@@ -13,6 +14,7 @@ export class Storage {
   readonly dossiers: DossierStore;
   readonly memories: MemoryStore;
   readonly personas: PersonaStore;
+  readonly attachments: AttachmentStore;
 
   constructor(dbPath: string) {
     this.conn = new DatabaseConnection(dbPath);
@@ -21,6 +23,7 @@ export class Storage {
     this.dossiers = new DossierStore(this.conn);
     this.memories = new MemoryStore(this.conn);
     this.personas = new PersonaStore(this.conn);
+    this.attachments = new AttachmentStore(this.conn);
 
     // Seed default persona (previously done in initTables)
     this.personas.seedDefault();
@@ -162,6 +165,20 @@ export class Storage {
 
   clearActivePersona(groupId: string): void {
     this.personas.clearActive(groupId);
+  }
+
+  // === Attachment methods (delegate to AttachmentStore) ===
+
+  saveAttachment(attachment: Attachment): void {
+    this.attachments.save(attachment);
+  }
+
+  getAttachment(id: string): Attachment | null {
+    return this.attachments.get(id);
+  }
+
+  trimAttachments(cutoffTimestamp: number): void {
+    this.attachments.trimOlderThan(cutoffTimestamp);
   }
 
   // === Lifecycle ===
