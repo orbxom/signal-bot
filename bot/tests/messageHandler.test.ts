@@ -65,6 +65,7 @@ describe('MessageHandler', () => {
         trimMessages: vi.fn(),
         getDossiersByGroup: vi.fn().mockReturnValue([]),
         getActivePersonaForGroup: vi.fn().mockReturnValue(null),
+        getMemoriesByGroup: vi.fn().mockReturnValue([]),
       } as any;
 
       mockLLM = {
