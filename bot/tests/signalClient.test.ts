@@ -579,8 +579,8 @@ describe('SignalClient', () => {
       const result = client.readAttachmentFile(tmpDir, attachmentId);
 
       expect(result).not.toBeNull();
-      expect(Buffer.isBuffer(result!.data)).toBe(true);
-      expect(result!.data.toString()).toBe('fake image data');
+      expect(Buffer.isBuffer(result?.data)).toBe(true);
+      expect(result?.data.toString()).toBe('fake image data');
 
       fs.rmSync(tmpDir, { recursive: true });
     });

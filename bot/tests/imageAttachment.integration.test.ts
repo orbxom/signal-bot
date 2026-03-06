@@ -43,13 +43,13 @@ describe('image attachment end-to-end', () => {
     // 3. Verify retrieval from store (as MCP server would do)
     const retrieved = store.get('img-e2e');
     expect(retrieved).not.toBeNull();
-    expect(Buffer.isBuffer(retrieved!.data)).toBe(true);
-    expect(retrieved!.data.toString()).toBe('fake png image data');
-    expect(retrieved!.contentType).toBe('image/png');
-    expect(retrieved!.filename).toBe('test.png');
+    expect(Buffer.isBuffer(retrieved?.data)).toBe(true);
+    expect(retrieved?.data.toString()).toBe('fake png image data');
+    expect(retrieved?.contentType).toBe('image/png');
+    expect(retrieved?.filename).toBe('test.png');
 
     // 4. Verify base64 encoding works (as MCP server returns to Claude)
-    const base64 = retrieved!.data.toString('base64');
+    const base64 = retrieved?.data.toString('base64');
     expect(base64).toBe(Buffer.from('fake png image data').toString('base64'));
   });
 
@@ -67,8 +67,8 @@ describe('image attachment end-to-end', () => {
 
     const retrieved = store.get('img-noname');
     expect(retrieved).not.toBeNull();
-    expect(retrieved!.filename).toBeNull();
-    expect(retrieved!.contentType).toBe('image/jpeg');
+    expect(retrieved?.filename).toBeNull();
+    expect(retrieved?.contentType).toBe('image/jpeg');
   });
 
   it('should trim old attachments', () => {
@@ -77,14 +77,24 @@ describe('image attachment end-to-end', () => {
     const twoDaysAgo = now - 2 * 24 * 60 * 60 * 1000;
 
     store.save({
-      id: 'old-img', groupId: 'g1', sender: 's1',
-      contentType: 'image/png', size: 100, filename: null,
-      data: Buffer.from('old'), timestamp: oneWeekAgo,
+      id: 'old-img',
+      groupId: 'g1',
+      sender: 's1',
+      contentType: 'image/png',
+      size: 100,
+      filename: null,
+      data: Buffer.from('old'),
+      timestamp: oneWeekAgo,
     });
     store.save({
-      id: 'recent-img', groupId: 'g1', sender: 's1',
-      contentType: 'image/png', size: 100, filename: null,
-      data: Buffer.from('recent'), timestamp: twoDaysAgo,
+      id: 'recent-img',
+      groupId: 'g1',
+      sender: 's1',
+      contentType: 'image/png',
+      size: 100,
+      filename: null,
+      data: Buffer.from('recent'),
+      timestamp: twoDaysAgo,
     });
 
     // Trim anything older than 3 days

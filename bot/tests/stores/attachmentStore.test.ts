@@ -31,28 +31,38 @@ describe('AttachmentStore', () => {
 
       const attachment = store.get('abc-123');
       expect(attachment).not.toBeNull();
-      expect(attachment!.id).toBe('abc-123');
-      expect(attachment!.contentType).toBe('image/jpeg');
-      expect(Buffer.isBuffer(attachment!.data)).toBe(true);
-      expect(attachment!.data.toString()).toBe('fake jpeg data');
-      expect(attachment!.filename).toBe('photo.jpg');
+      expect(attachment?.id).toBe('abc-123');
+      expect(attachment?.contentType).toBe('image/jpeg');
+      expect(Buffer.isBuffer(attachment?.data)).toBe(true);
+      expect(attachment?.data.toString()).toBe('fake jpeg data');
+      expect(attachment?.filename).toBe('photo.jpg');
     });
 
     it('should handle duplicate IDs by updating', () => {
       const ts = Date.now();
       store.save({
-        id: 'abc-123', groupId: 'g1', sender: '+61400111222',
-        contentType: 'image/jpeg', size: 5, filename: null,
-        data: Buffer.from('first'), timestamp: ts,
+        id: 'abc-123',
+        groupId: 'g1',
+        sender: '+61400111222',
+        contentType: 'image/jpeg',
+        size: 5,
+        filename: null,
+        data: Buffer.from('first'),
+        timestamp: ts,
       });
       store.save({
-        id: 'abc-123', groupId: 'g1', sender: '+61400111222',
-        contentType: 'image/jpeg', size: 6, filename: null,
-        data: Buffer.from('second'), timestamp: ts,
+        id: 'abc-123',
+        groupId: 'g1',
+        sender: '+61400111222',
+        contentType: 'image/jpeg',
+        size: 6,
+        filename: null,
+        data: Buffer.from('second'),
+        timestamp: ts,
       });
 
       const attachment = store.get('abc-123');
-      expect(attachment!.data.toString()).toBe('second');
+      expect(attachment?.data.toString()).toBe('second');
     });
   });
 
@@ -65,8 +75,26 @@ describe('AttachmentStore', () => {
   describe('trimOlderThan', () => {
     it('should delete attachments older than cutoff', () => {
       const now = Date.now();
-      store.save({ id: 'old', groupId: 'g1', sender: 's1', contentType: 'image/png', size: 100, filename: null, data: Buffer.from('old'), timestamp: now - 100000 });
-      store.save({ id: 'new', groupId: 'g1', sender: 's1', contentType: 'image/png', size: 100, filename: null, data: Buffer.from('new'), timestamp: now });
+      store.save({
+        id: 'old',
+        groupId: 'g1',
+        sender: 's1',
+        contentType: 'image/png',
+        size: 100,
+        filename: null,
+        data: Buffer.from('old'),
+        timestamp: now - 100000,
+      });
+      store.save({
+        id: 'new',
+        groupId: 'g1',
+        sender: 's1',
+        contentType: 'image/png',
+        size: 100,
+        filename: null,
+        data: Buffer.from('new'),
+        timestamp: now,
+      });
 
       store.trimOlderThan(now - 50000);
 
