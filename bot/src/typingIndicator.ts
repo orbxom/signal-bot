@@ -1,3 +1,5 @@
+import { logger } from './logger';
+
 export interface TypingClient {
   sendTyping(groupId: string): Promise<void>;
   stopTyping(groupId: string): Promise<void>;
@@ -10,7 +12,7 @@ export class TypingIndicatorManager {
     try {
       await this.client.sendTyping(groupId);
     } catch (error) {
-      console.error('Failed to start typing indicator:', error);
+      logger.error('Failed to start typing indicator:', error);
     }
 
     const interval = setInterval(() => {
@@ -24,7 +26,7 @@ export class TypingIndicatorManager {
       try {
         await this.client.stopTyping(groupId);
       } catch (error) {
-        console.error('Failed to stop typing indicator:', error);
+        logger.error('Failed to stop typing indicator:', error);
       }
     }
   }
