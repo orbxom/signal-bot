@@ -5,6 +5,20 @@ import type { SignalClient } from '../src/signalClient';
 import type { Storage } from '../src/storage';
 import type { Message, MessageContext } from '../src/types';
 
+vi.mock('../src/logger', () => ({
+  logger: {
+    info: vi.fn(),
+    success: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    debug: vi.fn(),
+    group: vi.fn(),
+    step: vi.fn(),
+    groupEnd: vi.fn(),
+    compact: vi.fn(),
+  },
+}));
+
 function makeContext(overrides?: Partial<MessageContext>): MessageContext {
   return {
     groupId: '',
@@ -225,8 +239,8 @@ describe('MessageHandler', () => {
     });
 
     it('should handle LLM errors gracefully', async () => {
+      const { logger } = await import('../src/logger');
       mockLLM.generateResponse = vi.fn().mockRejectedValue(new Error('LLM API error'));
-      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
       const handler = new MessageHandler(['@bot'], {
         storage: mockStorage,
@@ -236,18 +250,16 @@ describe('MessageHandler', () => {
 
       await handler.handleMessage('g1', 'Alice', '@bot hello', 1000);
 
-      expect(consoleErrorSpy).toHaveBeenCalled();
+      expect(logger.error).toHaveBeenCalled();
       expect(mockSignal.sendMessage).toHaveBeenCalledWith(
         'g1',
         'Sorry, I encountered an error processing your request.',
       );
-
-      consoleErrorSpy.mockRestore();
     });
 
     it('should handle Signal client errors gracefully', async () => {
+      const { logger } = await import('../src/logger');
       mockSignal.sendMessage = vi.fn().mockRejectedValue(new Error('Signal API error'));
-      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
       const handler = new MessageHandler(['@bot'], {
         storage: mockStorage,
@@ -257,9 +269,7 @@ describe('MessageHandler', () => {
 
       await handler.handleMessage('g1', 'Alice', '@bot hello', 1000);
 
-      expect(consoleErrorSpy).toHaveBeenCalled();
-
-      consoleErrorSpy.mockRestore();
+      expect(logger.error).toHaveBeenCalled();
     });
 
     it('should use correct context window size', async () => {
@@ -277,7 +287,7 @@ describe('MessageHandler', () => {
     });
 
     it('should log response with token usage', async () => {
-      const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      const { logger } = await import('../src/logger');
 
       const handler = new MessageHandler(['@bot'], {
         storage: mockStorage,
@@ -287,11 +297,7 @@ describe('MessageHandler', () => {
 
       await handler.handleMessage('g1', 'Alice', '@bot hello', 1000);
 
-      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('[g1]'));
-      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('Alice'));
-      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('25 tokens'));
-
-      consoleLogSpy.mockRestore();
+      expect(logger.step).toHaveBeenCalledWith(expect.stringContaining('25 tokens'));
     });
 
     it('should load dossiers and include them in LLM context', async () => {
@@ -820,7 +826,6 @@ describe('MessageHandler', () => {
 
       it('should stop typing indicator even when LLM call fails', async () => {
         mockLLM.generateResponse = vi.fn().mockRejectedValue(new Error('LLM API error'));
-        const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
         const handler = new MessageHandler(['@bot'], {
           storage: mockStorage,
@@ -831,8 +836,6 @@ describe('MessageHandler', () => {
         await handler.handleMessage('g1', 'Alice', '@bot hello', 1000);
 
         expect(mockSignal.stopTyping).toHaveBeenCalledWith('g1');
-
-        consoleErrorSpy.mockRestore();
       });
 
       it('should not start typing indicator when not mentioned', async () => {
@@ -850,7 +853,6 @@ describe('MessageHandler', () => {
 
       it('should still call LLM when typing indicator start fails', async () => {
         mockSignal.sendTyping = vi.fn().mockRejectedValue(new Error('Typing failed'));
-        const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
         const handler = new MessageHandler(['@bot'], {
           storage: mockStorage,
@@ -862,13 +864,10 @@ describe('MessageHandler', () => {
 
         expect(mockLLM.generateResponse).toHaveBeenCalled();
         expect(mockSignal.sendMessage).toHaveBeenCalledWith('g1', 'Test response');
-
-        consoleErrorSpy.mockRestore();
       });
 
       it('should not throw when typing indicator stop fails', async () => {
         mockSignal.stopTyping = vi.fn().mockRejectedValue(new Error('Stop typing failed'));
-        const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
         const handler = new MessageHandler(['@bot'], {
           storage: mockStorage,
@@ -879,8 +878,6 @@ describe('MessageHandler', () => {
         await handler.handleMessage('g1', 'Alice', '@bot hello', 1000);
 
         expect(mockSignal.sendMessage).toHaveBeenCalledWith('g1', 'Test response');
-
-        consoleErrorSpy.mockRestore();
       });
 
       it('should refresh typing indicator during long-running LLM calls', async () => {
@@ -936,8 +933,6 @@ describe('MessageHandler', () => {
               setTimeout(() => reject(new Error('LLM failed')), 15_000);
             }),
         );
-        const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-
         const handler = new MessageHandler(['@bot'], {
           storage: mockStorage,
           llmClient: mockLLM,
@@ -963,7 +958,6 @@ describe('MessageHandler', () => {
 
         expect(mockSignal.stopTyping).toHaveBeenCalledWith('g1');
 
-        consoleErrorSpy.mockRestore();
         vi.useRealTimers();
       });
     });

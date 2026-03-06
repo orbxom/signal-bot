@@ -2,6 +2,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SignalClient } from '../src/signalClient';
 import type { SignalMessage } from '../src/types';
 
+vi.mock('../src/logger', () => ({
+  logger: {
+    info: vi.fn(),
+    success: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    debug: vi.fn(),
+    group: vi.fn(),
+    step: vi.fn(),
+    groupEnd: vi.fn(),
+    compact: vi.fn(),
+  },
+}));
+
 describe('SignalClient', () => {
   describe('Constructor', () => {
     it('should create client with valid parameters', () => {
@@ -565,19 +579,18 @@ describe('SignalClient', () => {
     });
 
     it('should succeed on first attempt', async () => {
-      const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      const { logger } = await import('../src/logger');
       const client = new SignalClient('http://localhost:8080', '+1234567890');
 
       fetchMock.mockResolvedValueOnce({ ok: true, json: async () => ({ result: [] }) });
 
       await client.waitForReady(3, 1);
 
-      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('attempt 1'));
-      consoleLogSpy.mockRestore();
+      expect(logger.success).toHaveBeenCalledWith(expect.stringContaining('attempt 1'));
     });
 
     it('should succeed after retries', async () => {
-      const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      const { logger } = await import('../src/logger');
       const client = new SignalClient('http://localhost:8080', '+1234567890');
 
       fetchMock
@@ -586,12 +599,10 @@ describe('SignalClient', () => {
 
       await client.waitForReady(3, 1);
 
-      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('attempt 2'));
-      consoleLogSpy.mockRestore();
+      expect(logger.success).toHaveBeenCalledWith(expect.stringContaining('attempt 2'));
     });
 
     it('should throw after max retries exhausted', async () => {
-      const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
       const client = new SignalClient('http://localhost:8080', '+1234567890');
 
       fetchMock.mockRejectedValue(new Error('Connection refused'));
@@ -599,8 +610,6 @@ describe('SignalClient', () => {
       await expect(client.waitForReady(2, 1)).rejects.toThrow(
         'signal-cli not reachable at http://localhost:8080 after 2 attempts',
       );
-
-      consoleLogSpy.mockRestore();
     });
   });
 });
