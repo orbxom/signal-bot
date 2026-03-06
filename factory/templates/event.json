@@ -1,0 +1,13 @@
+{
+  "source": "signal | manual | cli",
+  "issueNumber": 0,
+  "issueUrl": "https://github.com/orbxom/signal-bot/issues/0",
+  "title": "Short descriptive title",
+  "description": "Detailed description of the task",
+  "acceptanceCriteria": [
+    "First criterion",
+    "Second criterion"
+  ],
+  "requestedBy": "source identifier",
+  "createdAt": "2026-01-01T00:00:00Z"
+}
