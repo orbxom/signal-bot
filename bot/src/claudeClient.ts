@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { logger } from './logger';
 import { buildAllowedTools, buildMcpConfig } from './mcp/registry';
 import { getErrorMessage } from './mcp/result';
 import type { ChatMessage, LLMClient, LLMResponse, MessageContext } from './types';
@@ -216,13 +217,56 @@ export class ClaudeCLIClient implements LLMClient {
       args.push('--system-prompt', systemPrompt);
     }
 
+    const systemChars = systemPrompt?.length || 0;
+    const promptChars = prompt.length;
+    logger.step(`llm: spawning claude -p (max turns: ${this.maxTurns})`);
+    logger.step(
+      `llm: system prompt ${(systemChars / 1024).toFixed(1)}k chars, conversation ${(promptChars / 1024).toFixed(1)}k chars`,
+    );
+
     try {
       const { stdout } = await spawnPromise('claude', args, {
         timeout: 300000,
         env: { ...process.env, CLAUDECODE: '' },
       });
 
-      return parseClaudeOutput(stdout);
+      // Log tool calls from raw output before parsing
+      const trimmed = stdout.trim();
+      let rawEntries: Array<Record<string, unknown>> = [];
+      if (trimmed.startsWith('[')) {
+        rawEntries = JSON.parse(trimmed);
+      } else {
+        for (const line of trimmed.split('\n')) {
+          try {
+            rawEntries.push(JSON.parse(line));
+          } catch {
+            /* skip */
+          }
+        }
+      }
+      const toolCalls = rawEntries
+        .filter((e): e is Record<string, unknown> => e.type === 'assistant')
+        .flatMap((e: any) => e.message?.content?.filter((b: any) => b.type === 'tool_use') || []);
+      if (toolCalls.length > 0) {
+        logger.step('tools called:');
+        for (const tool of toolCalls) {
+          const toolArgs = tool.input ? JSON.stringify(tool.input).substring(0, 100) : '';
+          logger.step(`  ${tool.name}  ${toolArgs}`);
+        }
+      }
+
+      const response = parseClaudeOutput(stdout);
+
+      // Log token usage and delivery method
+      const resultEntry = rawEntries.find(e => e.type === 'result') as any;
+      if (resultEntry?.usage) {
+        logger.step(
+          `llm: ${resultEntry.usage.input_tokens || 0} input / ${resultEntry.usage.output_tokens || 0} output tokens`,
+        );
+      }
+      logger.step(`llm: result via ${response.sentViaMcp ? 'MCP send_message' : 'result field'}`);
+
+      return response;
     } catch (error) {
       if (error instanceof Error) {
         // Re-throw our own errors

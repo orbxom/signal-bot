@@ -2,6 +2,20 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ReminderScheduler } from '../src/reminderScheduler';
 import type { Reminder } from '../src/types';
 
+vi.mock('../src/logger', () => ({
+  logger: {
+    info: vi.fn(),
+    success: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    debug: vi.fn(),
+    group: vi.fn(),
+    step: vi.fn(),
+    groupEnd: vi.fn(),
+    compact: vi.fn(),
+  },
+}));
+
 function makeReminder(overrides: Partial<Reminder> = {}): Reminder {
   return {
     id: 1,
@@ -48,9 +62,6 @@ describe('ReminderScheduler', () => {
     mockStore = createMockStore();
     mockSignalClient = createMockSignalClient();
     scheduler = new ReminderScheduler(mockStore as any, mockSignalClient as any);
-    vi.spyOn(console, 'log').mockImplementation(() => {});
-    vi.spyOn(console, 'warn').mockImplementation(() => {});
-    vi.spyOn(console, 'error').mockImplementation(() => {});
   });
 
   describe('per-group processing', () => {
@@ -267,6 +278,7 @@ describe('ReminderScheduler', () => {
     });
 
     it('should catch and log notification failure without throwing', async () => {
+      const { logger } = await import('../src/logger');
       const now = Date.now();
       const reminder = makeReminder({
         dueAt: now - 25 * 60 * 60 * 1000,
@@ -280,7 +292,7 @@ describe('ReminderScheduler', () => {
 
       expect(count).toBe(0);
       expect(mockStore.markFailed).toHaveBeenCalled();
-      expect(console.error).toHaveBeenCalledWith(expect.stringContaining('Failed to send failure notification'));
+      expect(logger.error).toHaveBeenCalledWith(expect.stringContaining('Failed to send failure notification'));
     });
   });
 

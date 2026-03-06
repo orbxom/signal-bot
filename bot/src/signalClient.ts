@@ -1,3 +1,4 @@
+import { logger } from './logger';
 import type { SignalAttachment, SignalMessage } from './types';
 
 export class SignalClient {
@@ -68,7 +69,7 @@ export class SignalClient {
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         await this.rpc('listGroups', {}, 5000);
-        console.log(`signal-cli is ready (attempt ${attempt})`);
+        logger.success(`signal-cli is ready (attempt ${attempt})`);
         return;
       } catch {
         // Expected during startup
@@ -76,7 +77,7 @@ export class SignalClient {
 
       if (attempt < maxRetries) {
         const delay = baseDelay * attempt;
-        console.log(`Waiting for signal-cli... (attempt ${attempt}/${maxRetries}, retry in ${delay}ms)`);
+        logger.debug(`Waiting for signal-cli... (attempt ${attempt}/${maxRetries}, retry in ${delay}ms)`);
         await new Promise(resolve => setTimeout(resolve, delay));
       }
     }

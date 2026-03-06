@@ -1,4 +1,5 @@
 import { ContextBuilder } from './contextBuilder';
+import { logger } from './logger';
 import { estimateTokens } from './mcp/result';
 import { MentionDetector } from './mentionDetector';
 import { MessageDeduplicator } from './messageDeduplicator';
@@ -73,11 +74,13 @@ export class MessageHandler {
   ): Promise<void> {
     // Skip messages from the bot itself
     if (this.appConfig.botPhoneNumber && sender === this.appConfig.botPhoneNumber) {
+      logger.compact('SKIP', `(bot-self) [${groupId}]`);
       return;
     }
 
     // Skip duplicate messages
     if (this.deduplicator.isDuplicate(groupId, sender, timestamp)) {
+      logger.compact('SKIP', `(dedup) [${groupId}] ${sender}`);
       return;
     }
 
@@ -107,6 +110,11 @@ export class MessageHandler {
     if (options?.storeOnly || !mentioned) {
       return;
     }
+
+    logger.group('MESSAGE RECEIVED');
+    logger.step(`group: ${groupId}  sender: ${sender}`);
+    logger.step(`content: "${content.substring(0, 100)}"`);
+    logger.step(`history: ${history.length} messages fetched`);
 
     await this.typingManager.withTyping(groupId, () =>
       this.processLlmRequest(groupId, sender, content, attachments, history, historyFormatted),
@@ -173,6 +181,7 @@ export class MessageHandler {
     try {
       // Extract query
       const query = this.mentionDetector.extractQuery(content);
+      logger.step(`query: "${query.substring(0, 80)}"`);
 
       // Append voice and image attachment info to query
       const voiceLines = attachments
@@ -182,6 +191,9 @@ export class MessageHandler {
         .filter(a => a.contentType.startsWith('image/'))
         .map(a => this.contextBuilder.formatImageAttachment(a.id));
       const allAttachmentLines = [...voiceLines, ...imageLines];
+      if (voiceLines.length > 0 || imageLines.length > 0) {
+        logger.step(`attachments: ${voiceLines.length} voice, ${imageLines.length} image`);
+      }
       let queryWithAttachments = query;
       if (allAttachmentLines.length > 0) {
         const attachmentBlock = allAttachmentLines.join('\n');
@@ -203,12 +215,18 @@ export class MessageHandler {
         preFormatted: historyFormatted,
       });
 
+      logger.step(`context: ${nameMap.size} dossiers${personaPrompt ? ', with persona' : ''}`);
+
       // Get LLM response
+      const startTime = Date.now();
       const response = await this.llmClient.generateResponse(messages, {
         ...this.appConfig,
         groupId,
         sender,
       });
+
+      const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+      logger.step(`llm: response in ${elapsed}s (${response.tokensUsed} tokens)`);
 
       const botSender = this.appConfig.botPhoneNumber || 'bot';
       if (response.sentViaMcp) {
@@ -222,6 +240,7 @@ export class MessageHandler {
             isBot: true,
           });
         }
+        logger.step(`delivery: sent via MCP (${response.mcpMessages.length} message(s))`);
       } else {
         // Fallback: Claude didn't use the MCP tool, send result as before
         await this.signalClient.sendMessage(groupId, response.content);
@@ -232,21 +251,23 @@ export class MessageHandler {
           timestamp: Date.now(),
           isBot: true,
         });
+        logger.step('delivery: sent via fallback');
       }
 
       // Trim old messages
       this.storage.trimMessages(groupId, this.messageRetentionCount);
 
-      console.log(`[${groupId}] Responded to ${sender} (${response.tokensUsed} tokens)`);
+      logger.groupEnd();
     } catch (error) {
-      console.error('Error handling message:', error);
+      logger.error('Error handling message:', error);
+      logger.groupEnd();
 
       // Try to send error message to group
       try {
         const errorMsg = 'Sorry, I encountered an error processing your request.';
         await this.signalClient.sendMessage(groupId, errorMsg);
       } catch (sendError) {
-        console.error('Failed to send error message:', sendError);
+        logger.error('Failed to send error message:', sendError);
       }
     }
   }

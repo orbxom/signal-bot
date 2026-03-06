@@ -1,3 +1,4 @@
+import { logger } from './logger';
 import type { SignalClient } from './signalClient';
 import type { ReminderStore } from './stores/reminderStore';
 import type { Reminder } from './types';
@@ -31,7 +32,7 @@ export class ReminderScheduler {
         const result = await this.processReminder(reminder, now);
         if (result) sentCount++;
       } catch (error) {
-        console.error(`Unexpected error processing reminder ${reminder.id}:`, error);
+        logger.error(`Unexpected error processing reminder ${reminder.id}:`, error);
       }
     }
     return sentCount;
@@ -73,7 +74,7 @@ export class ReminderScheduler {
       this.reminderStore.markSent(reminder.id);
       return true;
     } catch (error) {
-      console.error(`Failed to send reminder ${reminder.id}:`, error);
+      logger.error(`Failed to send reminder ${reminder.id}:`, error);
       // Don't mark failed — recordAttempt already incremented retryCount
       // Will retry on next cycle (with backoff)
       return false;
@@ -85,7 +86,7 @@ export class ReminderScheduler {
       const msg = `\u26A0\uFE0F A reminder could not be delivered: "${reminder.reminderText}". It was set by ${reminder.requester}. Reason: ${reason}.`;
       await this.signalClient.sendMessage(reminder.groupId, msg);
     } catch {
-      console.error(`Failed to send failure notification for reminder ${reminder.id}`);
+      logger.error(`Failed to send failure notification for reminder ${reminder.id}`);
     }
   }
 
