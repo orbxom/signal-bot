@@ -1,5 +1,6 @@
 import type { ClaudeCLIClient } from './claudeClient';
 import { ContextBuilder } from './contextBuilder';
+import { logger } from './logger';
 import { MentionDetector } from './mentionDetector';
 import { MessageDeduplicator } from './messageDeduplicator';
 import type { SignalClient } from './signalClient';
@@ -78,11 +79,13 @@ export class MessageHandler {
 
     // Skip messages from the bot itself
     if (this.messageContext.botPhoneNumber && sender === this.messageContext.botPhoneNumber) {
+      logger.compact('SKIP', `(bot-self) [${groupId}]`);
       return;
     }
 
     // Skip duplicate messages
     if (this.deduplicator.isDuplicate(groupId, sender, timestamp)) {
+      logger.compact('SKIP', `(dedup) [${groupId}] ${sender}`);
       return;
     }
 
@@ -113,6 +116,11 @@ export class MessageHandler {
       return;
     }
 
+    logger.group('MESSAGE RECEIVED');
+    logger.step(`group: ${groupId}  sender: ${sender}`);
+    logger.step(`content: "${content.substring(0, 100)}"`);
+    logger.step(`history: ${history.length} messages fetched`);
+
     await this.typingManager.withTyping(groupId, () =>
       this.processLlmRequest(groupId, sender, content, attachments, history, historyFormatted),
     );
@@ -134,6 +142,7 @@ export class MessageHandler {
     try {
       // Extract query
       const query = this.mentionDetector.extractQuery(content);
+      logger.step(`query: "${query.substring(0, 80)}"`);
 
       // Append voice and image attachment info to query
       const voiceLines = attachments
@@ -143,6 +152,9 @@ export class MessageHandler {
         .filter(a => a.contentType.startsWith('image/'))
         .map(a => this.contextBuilder.formatImageAttachment(a.id));
       const allAttachmentLines = [...voiceLines, ...imageLines];
+      if (voiceLines.length > 0 || imageLines.length > 0) {
+        logger.step(`attachments: ${voiceLines.length} voice, ${imageLines.length} image`);
+      }
       let queryWithAttachments = query;
       if (allAttachmentLines.length > 0) {
         const attachmentBlock = allAttachmentLines.join('\n');
@@ -183,12 +195,18 @@ export class MessageHandler {
         preFormatted: historyFormatted,
       });
 
+      logger.step(`context: ${dossiers.length} dossiers${activePersona ? `, persona "${activePersona.name}"` : ''}`);
+
       // Get LLM response
+      const startTime = Date.now();
       const response = await llmClient.generateResponse(messages, {
         ...this.messageContext,
         groupId,
         sender,
       });
+
+      const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+      logger.step(`llm: response in ${elapsed}s (${response.tokensUsed} tokens)`);
 
       const botSender = this.messageContext.botPhoneNumber || 'bot';
       if (response.sentViaMcp) {
@@ -202,6 +220,7 @@ export class MessageHandler {
             isBot: true,
           });
         }
+        logger.step(`delivery: sent via MCP (${response.mcpMessages.length} message(s))`);
       } else {
         // Fallback: Claude didn't use the MCP tool, send result as before
         await signalClient.sendMessage(groupId, response.content);
@@ -212,21 +231,23 @@ export class MessageHandler {
           timestamp: Date.now(),
           isBot: true,
         });
+        logger.step('delivery: sent via fallback');
       }
 
       // Trim old messages
       storage.trimMessages(groupId, this.messageRetentionCount);
 
-      console.log(`[${groupId}] Responded to ${sender} (${response.tokensUsed} tokens)`);
+      logger.groupEnd();
     } catch (error) {
-      console.error('Error handling message:', error);
+      logger.error('Error handling message:', error);
+      logger.groupEnd();
 
       // Try to send error message to group
       try {
         const errorMsg = 'Sorry, I encountered an error processing your request.';
         await signalClient.sendMessage(groupId, errorMsg);
       } catch (sendError) {
-        console.error('Failed to send error message:', sendError);
+        logger.error('Failed to send error message:', sendError);
       }
     }
   }
