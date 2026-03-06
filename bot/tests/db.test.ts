@@ -125,13 +125,65 @@ describe('DatabaseConnection', () => {
       }
     });
 
+    it('should add attachments column to messages via migration for old databases', () => {
+      const dbPath = createTestDb();
+      // Create a pre-migration database without the attachments column
+      const rawDb = new Database(dbPath);
+      rawDb.pragma('journal_mode = WAL');
+      rawDb.exec(`
+        CREATE TABLE IF NOT EXISTS messages (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          groupId TEXT NOT NULL,
+          sender TEXT NOT NULL,
+          content TEXT NOT NULL,
+          timestamp INTEGER NOT NULL,
+          isBot INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE TABLE IF NOT EXISTS reminders (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          groupId TEXT NOT NULL,
+          requester TEXT NOT NULL,
+          reminderText TEXT NOT NULL,
+          dueAt INTEGER NOT NULL,
+          status TEXT NOT NULL DEFAULT 'pending',
+          retryCount INTEGER NOT NULL DEFAULT 0,
+          createdAt INTEGER NOT NULL,
+          sentAt INTEGER
+        );
+        CREATE TABLE IF NOT EXISTS schema_meta (
+          key TEXT PRIMARY KEY,
+          value TEXT NOT NULL
+        );
+      `);
+      rawDb
+        .prepare('INSERT INTO messages (groupId, sender, content, timestamp, isBot) VALUES (?, ?, ?, ?, ?)')
+        .run('group1', 'Alice', 'Hello', 1000, 0);
+      rawDb.close();
+
+      // Now open with DatabaseConnection which runs migrations
+      const conn = new DatabaseConnection(dbPath);
+      try {
+        const cols = conn.db.pragma('table_info(messages)') as Array<{ name: string }>;
+        const colNames = cols.map(c => c.name);
+        expect(colNames).toContain('attachments');
+
+        // Verify existing data is preserved
+        const row = conn.db.prepare('SELECT * FROM messages WHERE id = 1').get() as any;
+        expect(row.groupId).toBe('group1');
+        expect(row.content).toBe('Hello');
+        expect(row.attachments).toBeNull();
+      } finally {
+        conn.close();
+      }
+    });
+
     it('should track schema version in schema_meta table', () => {
       const conn = new DatabaseConnection(createTestDb());
       try {
         const row = conn.db.prepare("SELECT value FROM schema_meta WHERE key = 'schema_version'").get() as {
           value: string;
         };
-        expect(Number.parseInt(row.value, 10)).toBeGreaterThanOrEqual(1);
+        expect(Number.parseInt(row.value, 10)).toBeGreaterThanOrEqual(2);
       } finally {
         conn.close();
       }
@@ -163,13 +215,13 @@ describe('DatabaseConnection', () => {
       }
     });
 
-    it('should set schema version to 2 after migrations', () => {
+    it('should set schema version to 3 after migrations', () => {
       const conn = new DatabaseConnection(createTestDb());
       try {
         const row = conn.db.prepare("SELECT value FROM schema_meta WHERE key = 'schema_version'").get() as {
           value: string;
         };
-        expect(Number.parseInt(row.value, 10)).toBe(2);
+        expect(Number.parseInt(row.value, 10)).toBe(3);
       } finally {
         conn.close();
       }
