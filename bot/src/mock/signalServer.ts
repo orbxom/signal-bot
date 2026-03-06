@@ -1,5 +1,7 @@
 #!/usr/bin/env node
+import fs from 'node:fs';
 import http from 'node:http';
+import path from 'node:path';
 import readline from 'node:readline';
 
 const PORT = parseInt(process.env.MOCK_SIGNAL_PORT || '9090', 10);
@@ -21,6 +23,12 @@ interface Envelope {
       timestamp: number;
       message: string;
       groupInfo: { groupId: string };
+      attachments?: Array<{
+        id: string;
+        contentType: string;
+        size: number;
+        filename: string | null;
+      }>;
     };
   };
 }
@@ -39,6 +47,26 @@ function createEnvelope(text: string): Envelope {
         timestamp: now,
         message: text,
         groupInfo: { groupId: GROUP_ID },
+      },
+    },
+  };
+}
+
+function createEnvelopeWithAttachments(
+  text: string,
+  attachments: Array<{ id: string; contentType: string; size: number; filename: string | null }>,
+): Envelope {
+  const now = Date.now();
+  return {
+    envelope: {
+      sourceNumber: SENDER,
+      sourceUuid: 'mock-uuid-1234',
+      timestamp: now,
+      dataMessage: {
+        timestamp: now,
+        message: text,
+        groupInfo: { groupId: GROUP_ID },
+        attachments,
       },
     },
   };
@@ -137,11 +165,29 @@ function handleCommand(line: string) {
     rl.close();
     process.exit(0);
   }
-  if (cmd === '/clear') {
+  if (cmd === '/image') {
+    // Create a tiny 10x10 red PNG for testing
+    const fakePng = 'iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAYAAACNMs+9AAAAFklEQVQYV2P8z8BQz0AEYBxVOHIUAgBGWAgE/dLkBAAAAABJRU5ErkJggg==';
+    const attachmentId = `mock-img-${Date.now()}`;
+    const attachDir = process.env.ATTACHMENTS_DIR || './data/signal-attachments';
+    fs.mkdirSync(attachDir, { recursive: true });
+    fs.writeFileSync(path.join(attachDir, attachmentId), Buffer.from(fakePng, 'base64'));
+
+    const envelope = createEnvelopeWithAttachments('claude: what is this image?', [{
+      id: attachmentId,
+      contentType: 'image/png',
+      size: Buffer.from(fakePng, 'base64').length,
+      filename: 'test-image.png',
+    }]);
+    messageQueue.push(envelope);
+    console.log(`${GREEN}[QUEUED]${RESET} image message with attachment ${attachmentId}`);
+    rl.prompt();
+  } else if (cmd === '/clear') {
     messageQueue.length = 0;
     console.log('Queue cleared.');
   } else if (cmd === '/help') {
     console.log(`${DIM}Commands:${RESET}`);
+    console.log(`${DIM}  /image  - Queue a test image message${RESET}`);
     console.log(`${DIM}  /clear  - Clear message queue${RESET}`);
     console.log(`${DIM}  /quit   - Shut down${RESET}`);
     console.log(`${DIM}  /help   - Show this help${RESET}`);
