@@ -109,24 +109,7 @@ export class MessageHandler {
       attachments: attachments.length > 0 ? attachments : undefined,
     });
 
-    // Ingest image attachments into DB
-    for (const att of attachments) {
-      if (att.contentType.startsWith('image/')) {
-        const file = this.signalClient.readAttachmentFile(this.appConfig.attachmentsDir, att.id);
-        if (file) {
-          this.storage.saveAttachment({
-            id: att.id,
-            groupId,
-            sender,
-            contentType: att.contentType,
-            size: att.size,
-            filename: att.filename,
-            data: file.data,
-            timestamp,
-          });
-        }
-      }
-    }
+    this.ingestImageAttachments(groupId, sender, attachments, timestamp);
 
     if (options?.storeOnly || !mentioned) {
       return;
@@ -180,25 +163,8 @@ export class MessageHandler {
       });
     }
 
-    // Ingest image attachments into DB
     for (const msg of validMessages) {
-      for (const att of msg.attachments) {
-        if (att.contentType.startsWith('image/')) {
-          const file = this.signalClient.readAttachmentFile(this.appConfig.attachmentsDir, att.id);
-          if (file) {
-            this.storage.saveAttachment({
-              id: att.id,
-              groupId,
-              sender: msg.sender,
-              contentType: att.contentType,
-              size: att.size,
-              filename: att.filename,
-              data: file.data,
-              timestamp: msg.timestamp,
-            });
-          }
-        }
-      }
+      this.ingestImageAttachments(groupId, msg.sender, msg.attachments, msg.timestamp);
     }
 
     if (options?.storeOnly || mentionMessages.length === 0) {
@@ -311,6 +277,31 @@ export class MessageHandler {
       nameMap,
       personaPrompt,
     };
+  }
+
+  private ingestImageAttachments(
+    groupId: string,
+    sender: string,
+    attachments: SignalAttachment[],
+    timestamp: number,
+  ): void {
+    for (const att of attachments) {
+      if (att.contentType.startsWith('image/')) {
+        const file = this.signalClient.readAttachmentFile(this.appConfig.attachmentsDir, att.id);
+        if (file) {
+          this.storage.saveAttachment({
+            id: att.id,
+            groupId,
+            sender,
+            contentType: att.contentType,
+            size: att.size,
+            filename: att.filename,
+            data: file.data,
+            timestamp,
+          });
+        }
+      }
+    }
   }
 
   private async processLlmRequest(

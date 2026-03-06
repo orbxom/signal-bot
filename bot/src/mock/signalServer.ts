@@ -167,18 +167,22 @@ function handleCommand(line: string) {
   }
   if (cmd === '/image') {
     // Create a tiny 10x10 red PNG for testing
-    const fakePng = 'iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAYAAACNMs+9AAAAFklEQVQYV2P8z8BQz0AEYBxVOHIUAgBGWAgE/dLkBAAAAABJRU5ErkJggg==';
+    const fakePng =
+      'iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAYAAACNMs+9AAAAFklEQVQYV2P8z8BQz0AEYBxVOHIUAgBGWAgE/dLkBAAAAABJRU5ErkJggg==';
     const attachmentId = `mock-img-${Date.now()}`;
     const attachDir = process.env.ATTACHMENTS_DIR || './data/signal-attachments';
     fs.mkdirSync(attachDir, { recursive: true });
-    fs.writeFileSync(path.join(attachDir, attachmentId), Buffer.from(fakePng, 'base64'));
+    const pngBuffer = Buffer.from(fakePng, 'base64');
+    fs.writeFileSync(path.join(attachDir, attachmentId), pngBuffer);
 
-    const envelope = createEnvelopeWithAttachments('claude: what is this image?', [{
-      id: attachmentId,
-      contentType: 'image/png',
-      size: Buffer.from(fakePng, 'base64').length,
-      filename: 'test-image.png',
-    }]);
+    const envelope = createEnvelopeWithAttachments('claude: what is this image?', [
+      {
+        id: attachmentId,
+        contentType: 'image/png',
+        size: pngBuffer.length,
+        filename: 'test-image.png',
+      },
+    ]);
     messageQueue.push(envelope);
     console.log(`${GREEN}[QUEUED]${RESET} image message with attachment ${attachmentId}`);
     rl.prompt();

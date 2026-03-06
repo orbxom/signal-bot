@@ -1,7 +1,7 @@
 import { DatabaseConnection } from '../../db';
 import { AttachmentStore } from '../../stores/attachmentStore';
 import { readStorageEnv } from '../env';
-import { error } from '../result';
+import { catchErrors, error } from '../result';
 import { runServer } from '../runServer';
 import type { McpServerDefinition, ToolResult } from '../types';
 import { requireString } from '../validate';
@@ -41,22 +41,22 @@ export const imagesServer: McpServerDefinition = {
 
       if (!store) return error('Image store not initialized.');
 
-      const attachment = store.get(id.value);
-      if (!attachment) return error(`Attachment not found: ${id.value}`);
+      return catchErrors(() => {
+        const attachment = store.get(id.value);
+        if (!attachment) return error(`Attachment not found: ${id.value}`);
 
-      const base64Data = Buffer.isBuffer(attachment.data)
-        ? attachment.data.toString('base64')
-        : attachment.data;
+        const base64Data = Buffer.isBuffer(attachment.data) ? attachment.data.toString('base64') : attachment.data;
 
-      return {
-        content: [
-          { type: 'image', data: base64Data as string, mimeType: attachment.contentType },
-          {
-            type: 'text',
-            text: `Image: ${attachment.filename || id.value} (${attachment.contentType}, ${Math.round(attachment.size / 1024)}KB)`,
-          },
-        ],
-      };
+        return {
+          content: [
+            { type: 'image', data: base64Data as string, mimeType: attachment.contentType },
+            {
+              type: 'text',
+              text: `Image: ${attachment.filename || id.value} (${attachment.contentType}, ${Math.round(attachment.size / 1024)}KB)`,
+            },
+          ],
+        };
+      }, 'Failed to view image');
     },
   },
   onInit() {
