@@ -1,8 +1,8 @@
 import type Database from 'better-sqlite3';
 import type { DatabaseConnection } from '../db';
 import { wrapSqliteError } from '../db';
-import { estimateTokens } from '../mcp/result';
 import type { Dossier } from '../types';
+import { estimateTokens } from '../utils/tokens';
 
 export const DOSSIER_TOKEN_LIMIT = 1000;
 
@@ -56,25 +56,15 @@ export class DossierStore {
       const row = this.stmts.upsert.get(groupId, personId, displayName, notes, now, now) as Dossier;
       return row;
     } catch (error) {
-      if (
-        error instanceof Error &&
-        (error.message.startsWith('Invalid ') || error.message.startsWith('Notes exceeds'))
-      ) {
-        throw error;
-      }
       wrapSqliteError(error, 'upsert dossier');
     }
   }
 
   get(groupId: string, personId: string): Dossier | null {
-    this.conn.ensureOpen();
-
-    try {
+    return this.conn.runOp('get dossier', () => {
       const row = this.stmts.get.get(groupId, personId) as Dossier | undefined;
       return row ?? null;
-    } catch (error) {
-      wrapSqliteError(error, 'get dossier');
-    }
+    });
   }
 
   getByGroup(groupId: string): Dossier[] {
@@ -91,13 +81,9 @@ export class DossierStore {
   }
 
   delete(groupId: string, personId: string): boolean {
-    this.conn.ensureOpen();
-
-    try {
+    return this.conn.runOp('delete dossier', () => {
       const result = this.stmts.delete.run(groupId, personId);
       return result.changes > 0;
-    } catch (error) {
-      wrapSqliteError(error, 'delete dossier');
-    }
+    });
   }
 }

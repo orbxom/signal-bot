@@ -60,7 +60,7 @@ export interface Persona {
   name: string;
   description: string;
   tags: string;
-  isDefault: number;
+  isDefault: boolean;
   createdAt: number;
   updatedAt: number;
 }
@@ -71,9 +71,8 @@ export interface ActivePersona {
   activatedAt: number;
 }
 
-export interface MessageContext {
-  groupId: string;
-  sender: string;
+/** Static application configuration — does not change per request. */
+export interface AppConfig {
   dbPath: string;
   timezone: string;
   githubRepo: string;
@@ -82,6 +81,20 @@ export interface MessageContext {
   botPhoneNumber: string;
   attachmentsDir: string;
   whisperModelPath: string;
+}
+
+/** Per-message request context. */
+export interface RequestContext {
+  groupId: string;
+  sender: string;
+}
+
+/** Combined context — backward-compatible alias. */
+export type MessageContext = AppConfig & RequestContext;
+
+/** Interface for LLM clients (enables testing without real CLI). */
+export interface LLMClient {
+  generateResponse(messages: ChatMessage[], context?: MessageContext): Promise<LLMResponse>;
 }
 
 export interface SignalAttachment {

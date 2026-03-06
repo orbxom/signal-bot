@@ -1,9 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ClaudeCLIClient } from '../src/claudeClient';
 import { MessageHandler } from '../src/messageHandler';
 import type { SignalClient } from '../src/signalClient';
 import type { Storage } from '../src/storage';
-import type { Message, MessageContext } from '../src/types';
+import type { AppConfig, LLMClient, Message } from '../src/types';
 
 vi.mock('../src/logger', () => ({
   logger: {
@@ -19,10 +18,8 @@ vi.mock('../src/logger', () => ({
   },
 }));
 
-function makeContext(overrides?: Partial<MessageContext>): MessageContext {
+function makeAppConfig(overrides?: Partial<AppConfig>): AppConfig {
   return {
-    groupId: '',
-    sender: '',
     dbPath: './data/bot.db',
     timezone: 'Australia/Sydney',
     githubRepo: '',
@@ -36,38 +33,9 @@ function makeContext(overrides?: Partial<MessageContext>): MessageContext {
 }
 
 describe('MessageHandler', () => {
-  describe('Constructor', () => {
-    it('should create handler with minimal configuration', () => {
-      const handler = new MessageHandler(['@bot']);
-      expect(handler).toBeDefined();
-    });
-
-    it('should create handler with all options', () => {
-      const handler = new MessageHandler(['@bot'], {
-        storage: {} as Storage,
-        llmClient: {} as ClaudeCLIClient,
-        signalClient: {} as SignalClient,
-        contextWindowSize: 10,
-        messageContext: makeContext({ botPhoneNumber: '+1234567890' }),
-        systemPrompt: 'Custom prompt',
-      });
-      expect(handler).toBeDefined();
-    });
-
-    it('should use default context window size of 200', () => {
-      const handler = new MessageHandler(['@bot']);
-      expect(handler).toBeDefined();
-    });
-
-    it('should accept custom context window size', () => {
-      const handler = new MessageHandler(['@bot'], { contextWindowSize: 50 });
-      expect(handler).toBeDefined();
-    });
-  });
-
   describe('handleMessage', () => {
     let mockStorage: Storage;
-    let mockLLM: ClaudeCLIClient;
+    let mockLLM: LLMClient;
     let mockSignal: SignalClient;
 
     beforeEach(() => {
@@ -78,6 +46,7 @@ describe('MessageHandler', () => {
         getRecentMessages: vi.fn().mockReturnValue([]),
         trimMessages: vi.fn(),
         getDossiersByGroup: vi.fn().mockReturnValue([]),
+        getMemoriesByGroup: vi.fn().mockReturnValue([]),
         getActivePersonaForGroup: vi.fn().mockReturnValue(null),
       } as any;
 
@@ -88,7 +57,7 @@ describe('MessageHandler', () => {
           sentViaMcp: false,
           mcpMessages: [],
         }),
-      } as any;
+      };
 
       mockSignal = {
         sendMessage: vi.fn().mockResolvedValue(undefined),
@@ -97,20 +66,12 @@ describe('MessageHandler', () => {
       } as any;
     });
 
-    it('should throw error when handler not fully initialized', async () => {
-      const handler = new MessageHandler(['@bot']);
-
-      await expect(handler.handleMessage('g1', 'Alice', '@bot hello', 1000)).rejects.toThrow(
-        'Handler not fully initialized',
-      );
-    });
-
     it('should skip messages from the bot itself', async () => {
       const handler = new MessageHandler(['@bot'], {
         storage: mockStorage,
         llmClient: mockLLM,
         signalClient: mockSignal,
-        messageContext: makeContext({ botPhoneNumber: '+1234567890' }),
+        appConfig: makeAppConfig({ botPhoneNumber: '+1234567890' }),
       });
 
       await handler.handleMessage('g1', '+1234567890', '@bot hello', 1000);
@@ -125,7 +86,7 @@ describe('MessageHandler', () => {
         storage: mockStorage,
         llmClient: mockLLM,
         signalClient: mockSignal,
-        messageContext: makeContext({ botPhoneNumber: '+1234567890' }),
+        appConfig: makeAppConfig({ botPhoneNumber: '+1234567890' }),
       });
 
       await handler.handleMessage('g1', '+9876543210', '@bot hello', 1000);
@@ -226,12 +187,11 @@ describe('MessageHandler', () => {
     });
 
     it('should trim messages after responding', async () => {
-      const handler = new MessageHandler(['@bot'], {
-        storage: mockStorage,
-        llmClient: mockLLM,
-        signalClient: mockSignal,
-        contextWindowSize: 20,
-      });
+      const handler = new MessageHandler(
+        ['@bot'],
+        { storage: mockStorage, llmClient: mockLLM, signalClient: mockSignal },
+        { contextWindowSize: 20 },
+      );
 
       await handler.handleMessage('g1', 'Alice', '@bot hello', 1000);
 
@@ -273,12 +233,11 @@ describe('MessageHandler', () => {
     });
 
     it('should use correct context window size', async () => {
-      const handler = new MessageHandler(['@bot'], {
-        storage: mockStorage,
-        llmClient: mockLLM,
-        signalClient: mockSignal,
-        contextWindowSize: 10,
-      });
+      const handler = new MessageHandler(
+        ['@bot'],
+        { storage: mockStorage, llmClient: mockLLM, signalClient: mockSignal },
+        { contextWindowSize: 10 },
+      );
 
       await handler.handleMessage('g1', 'Alice', '@bot hello', 1000);
 
@@ -489,7 +448,7 @@ describe('MessageHandler', () => {
 
     describe('MCP-based message sending', () => {
       it('should not auto-send response when Claude sent messages via MCP', async () => {
-        const mockLLM = {
+        const mcpLLM: LLMClient = {
           generateResponse: vi.fn().mockResolvedValue({
             content: 'Final answer',
             tokensUsed: 10,
@@ -499,9 +458,9 @@ describe('MessageHandler', () => {
         };
         const handler = new MessageHandler(['@bot'], {
           storage: mockStorage,
-          llmClient: mockLLM as any,
+          llmClient: mcpLLM,
           signalClient: mockSignal,
-          messageContext: makeContext({ botPhoneNumber: '+61000', signalCliUrl: 'http://localhost:8080' }),
+          appConfig: makeAppConfig({ botPhoneNumber: '+61000', signalCliUrl: 'http://localhost:8080' }),
         });
 
         await handler.handleMessage('g1', '+61111', '@bot test', Date.now());
@@ -511,7 +470,7 @@ describe('MessageHandler', () => {
       });
 
       it('should auto-send response as fallback when Claude did not use MCP', async () => {
-        const mockLLM = {
+        const plainLLM: LLMClient = {
           generateResponse: vi.fn().mockResolvedValue({
             content: 'Simple reply',
             tokensUsed: 10,
@@ -521,9 +480,9 @@ describe('MessageHandler', () => {
         };
         const handler = new MessageHandler(['@bot'], {
           storage: mockStorage,
-          llmClient: mockLLM as any,
+          llmClient: plainLLM,
           signalClient: mockSignal,
-          messageContext: makeContext({ botPhoneNumber: '+61000', signalCliUrl: 'http://localhost:8080' }),
+          appConfig: makeAppConfig({ botPhoneNumber: '+61000', signalCliUrl: 'http://localhost:8080' }),
         });
 
         await handler.handleMessage('g1', '+61111', '@bot test', Date.now());
@@ -533,7 +492,7 @@ describe('MessageHandler', () => {
       });
 
       it('should store each MCP-sent message in the database', async () => {
-        const mockLLM = {
+        const mcpLLM: LLMClient = {
           generateResponse: vi.fn().mockResolvedValue({
             content: 'Final',
             tokensUsed: 10,
@@ -543,9 +502,9 @@ describe('MessageHandler', () => {
         };
         const handler = new MessageHandler(['@bot'], {
           storage: mockStorage,
-          llmClient: mockLLM as any,
+          llmClient: mcpLLM,
           signalClient: mockSignal,
-          messageContext: makeContext({ botPhoneNumber: '+61000', signalCliUrl: 'http://localhost:8080' }),
+          appConfig: makeAppConfig({ botPhoneNumber: '+61000', signalCliUrl: 'http://localhost:8080' }),
         });
 
         await handler.handleMessage('g1', '+61111', '@bot test', Date.now());
@@ -562,7 +521,7 @@ describe('MessageHandler', () => {
           storage: mockStorage,
           llmClient: mockLLM,
           signalClient: mockSignal,
-          messageContext: makeContext({ botPhoneNumber: '+61000', signalCliUrl: 'http://localhost:8080' }),
+          appConfig: makeAppConfig({ botPhoneNumber: '+61000', signalCliUrl: 'http://localhost:8080' }),
         });
 
         await handler.handleMessage('g1', '+61111', '@bot hello', Date.now());
@@ -647,7 +606,7 @@ describe('MessageHandler', () => {
           storage: mockStorage,
           llmClient: mockLLM,
           signalClient: mockSignal,
-          messageContext: makeContext({ attachmentsDir: '/data/attachments' }),
+          appConfig: makeAppConfig({ attachmentsDir: '/data/attachments' }),
         });
 
         await handler.handleMessage('g1', 'Bob', '@bot transcribe that', 1000);
@@ -736,7 +695,7 @@ describe('MessageHandler', () => {
           storage: mockStorage,
           llmClient: mockLLM,
           signalClient: mockSignal,
-          messageContext: makeContext({ attachmentsDir: '/data/attachments' }),
+          appConfig: makeAppConfig({ attachmentsDir: '/data/attachments' }),
         });
 
         await handler.handleMessage('g1', 'Alice', '@bot what is this', 1000, [
@@ -767,7 +726,7 @@ describe('MessageHandler', () => {
           storage: mockStorage,
           llmClient: mockLLM,
           signalClient: mockSignal,
-          messageContext: makeContext({ attachmentsDir: '/data/attachments' }),
+          appConfig: makeAppConfig({ attachmentsDir: '/data/attachments' }),
         });
 
         await handler.handleMessage('g1', 'Bob', '@bot what was that image', 1000);
@@ -969,17 +928,16 @@ describe('MessageHandler', () => {
           name: 'Pirate',
           description: 'Ye be a pirate captain! Speak in pirate dialect.',
           tags: 'fun,pirate',
-          isDefault: 0,
+          isDefault: false,
           createdAt: 1000,
           updatedAt: 1000,
         });
 
-        const handler = new MessageHandler(['@bot'], {
-          storage: mockStorage,
-          llmClient: mockLLM,
-          signalClient: mockSignal,
-          systemPrompt: 'Default assistant prompt.',
-        });
+        const handler = new MessageHandler(
+          ['@bot'],
+          { storage: mockStorage, llmClient: mockLLM, signalClient: mockSignal },
+          { systemPrompt: 'Default assistant prompt.' },
+        );
 
         await handler.handleMessage('g1', 'Alice', '@bot hello', 1000);
 
@@ -993,12 +951,11 @@ describe('MessageHandler', () => {
       it('should fall back to system prompt when no active persona', async () => {
         mockStorage.getActivePersonaForGroup = vi.fn().mockReturnValue(null);
 
-        const handler = new MessageHandler(['@bot'], {
-          storage: mockStorage,
-          llmClient: mockLLM,
-          signalClient: mockSignal,
-          systemPrompt: 'Default assistant prompt.',
-        });
+        const handler = new MessageHandler(
+          ['@bot'],
+          { storage: mockStorage, llmClient: mockLLM, signalClient: mockSignal },
+          { systemPrompt: 'Default assistant prompt.' },
+        );
 
         await handler.handleMessage('g1', 'Alice', '@bot hello', 1000);
 

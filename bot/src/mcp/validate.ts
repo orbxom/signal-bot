@@ -1,7 +1,7 @@
 import { error } from './result';
 import type { ToolResult } from './types';
 
-type StringResult = { value: string; error?: undefined } | { value?: undefined; error: ToolResult };
+export type StringResult = { value: string; error?: undefined } | { value?: undefined; error: ToolResult };
 type NumberResult = { value: number; error?: undefined } | { value?: undefined; error: ToolResult };
 
 export function requireString(args: Record<string, unknown>, name: string): StringResult {

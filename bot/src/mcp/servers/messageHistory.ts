@@ -1,6 +1,7 @@
 import { DatabaseConnection } from '../../db';
 import { MessageStore } from '../../stores/messageStore';
 import type { Message } from '../../types';
+import { formatTimestamp as sharedFormatTimestamp } from '../../utils/dateFormat';
 import { readStorageEnv, readTimezone } from '../env';
 import { catchErrors, error, ok } from '../result';
 import { runServer } from '../runServer';
@@ -57,9 +58,7 @@ let groupId: string;
 let timestampFormatter: Intl.DateTimeFormat;
 
 function formatTimestamp(timestamp: number): string {
-  const parts = timestampFormatter.formatToParts(new Date(timestamp));
-  const get = (type: string) => parts.find(p => p.type === type)?.value || '';
-  return `${get('year')}-${get('month')}-${get('day')} ${get('hour')}:${get('minute')}`;
+  return sharedFormatTimestamp(timestamp, timestampFormatter);
 }
 
 function formatMessages(messages: Message[]): string {
@@ -78,7 +77,7 @@ function formatMessages(messages: Message[]): string {
 export const messageHistoryServer: McpServerDefinition = {
   serverName: 'signal-bot-message-history',
   configKey: 'history',
-  entrypoint: 'mcp/servers/messageHistory',
+  entrypoint: 'messageHistory',
   tools: TOOLS,
   envMapping: { DB_PATH: 'dbPath', MCP_GROUP_ID: 'groupId', TZ: 'timezone' },
   handlers: {

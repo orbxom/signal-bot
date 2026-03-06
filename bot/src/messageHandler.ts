@@ -1,41 +1,43 @@
-import type { ClaudeCLIClient } from './claudeClient';
 import { ContextBuilder } from './contextBuilder';
 import { logger } from './logger';
+import { estimateTokens } from './mcp/result';
 import { MentionDetector } from './mentionDetector';
 import { MessageDeduplicator } from './messageDeduplicator';
 import type { SignalClient } from './signalClient';
 import type { Storage } from './storage';
-import type { Message, MessageContext, SignalAttachment } from './types';
+import type { AppConfig, LLMClient, Message, SignalAttachment } from './types';
 import { TypingIndicatorManager } from './typingIndicator';
+
+export interface MessageHandlerOptions {
+  systemPrompt?: string;
+  contextWindowSize?: number;
+  contextTokenBudget?: number;
+  messageRetentionCount?: number;
+}
 
 export class MessageHandler {
   private mentionDetector: MentionDetector;
   private contextBuilder: ContextBuilder;
   private deduplicator: MessageDeduplicator;
   private typingManager: TypingIndicatorManager;
-  private messageContext: MessageContext;
-  private storage?: Storage;
-  private llmClient?: ClaudeCLIClient;
-  private signalClient?: SignalClient;
+  private appConfig: AppConfig;
+  private storage: Storage;
+  private llmClient: LLMClient;
+  private signalClient: SignalClient;
   private contextWindowSize: number;
   private messageRetentionCount: number;
 
   constructor(
     mentionTriggers: string[],
-    options?: {
-      messageContext?: MessageContext;
-      systemPrompt?: string;
-      storage?: Storage;
-      llmClient?: ClaudeCLIClient;
-      signalClient?: SignalClient;
-      contextWindowSize?: number;
-      contextTokenBudget?: number;
-      messageRetentionCount?: number;
+    deps: {
+      storage: Storage;
+      llmClient: LLMClient;
+      signalClient: SignalClient;
+      appConfig?: AppConfig;
     },
+    options?: MessageHandlerOptions,
   ) {
-    this.messageContext = options?.messageContext || {
-      groupId: '',
-      sender: '',
+    this.appConfig = deps.appConfig || {
       dbPath: './data/bot.db',
       timezone: 'Australia/Sydney',
       githubRepo: '',
@@ -45,24 +47,21 @@ export class MessageHandler {
       attachmentsDir: './data/signal-attachments',
       whisperModelPath: './models/ggml-base.en.bin',
     };
-    this.storage = options?.storage;
-    this.llmClient = options?.llmClient;
-    this.signalClient = options?.signalClient;
+    this.storage = deps.storage;
+    this.llmClient = deps.llmClient;
+    this.signalClient = deps.signalClient;
     this.contextWindowSize = options?.contextWindowSize || 200;
     this.messageRetentionCount = options?.messageRetentionCount || 1000;
 
     this.mentionDetector = new MentionDetector(mentionTriggers);
     this.contextBuilder = new ContextBuilder({
       systemPrompt: options?.systemPrompt || '',
-      timezone: this.messageContext.timezone,
+      timezone: this.appConfig.timezone,
       contextTokenBudget: options?.contextTokenBudget || 4000,
-      attachmentsDir: this.messageContext.attachmentsDir,
+      attachmentsDir: this.appConfig.attachmentsDir,
     });
     this.deduplicator = new MessageDeduplicator();
-    // TypingIndicatorManager is only used when signalClient is provided
-    this.typingManager = new TypingIndicatorManager(
-      options?.signalClient || ({ sendTyping: async () => {}, stopTyping: async () => {} } as SignalClient),
-    );
+    this.typingManager = new TypingIndicatorManager(deps.signalClient);
   }
 
   async handleMessage(
@@ -73,12 +72,8 @@ export class MessageHandler {
     attachments: SignalAttachment[] = [],
     options?: { storeOnly?: boolean },
   ): Promise<void> {
-    if (!this.storage || !this.llmClient || !this.signalClient) {
-      throw new Error('Handler not fully initialized');
-    }
-
     // Skip messages from the bot itself
-    if (this.messageContext.botPhoneNumber && sender === this.messageContext.botPhoneNumber) {
+    if (this.appConfig.botPhoneNumber && sender === this.appConfig.botPhoneNumber) {
       logger.compact('SKIP', `(bot-self) [${groupId}]`);
       return;
     }
@@ -126,6 +121,55 @@ export class MessageHandler {
     );
   }
 
+  /** Assemble additional context (dossiers, memories, skills, persona) for the LLM request. */
+  private assembleAdditionalContext(groupId: string): {
+    additionalContext: string | undefined;
+    nameMap: Map<string, string>;
+    personaPrompt: string | undefined;
+  } {
+    const contextParts: string[] = [];
+    const dossiers = this.storage.getDossiersByGroup(groupId);
+    const nameMap = new Map(dossiers.map(d => [d.personId, d.displayName]));
+    if (dossiers.length > 0) {
+      const entries = dossiers.map(d => {
+        const parts = [`- ${d.displayName} (${d.personId})`];
+        if (d.notes) parts.push(`  ${d.notes}`);
+        return parts.join('\n');
+      });
+      contextParts.push(`## People in this group\n${entries.join('\n')}`);
+    }
+    const MEMORY_CONTEXT_BUDGET = 2000;
+    const memories = this.storage.getMemoriesByGroup(groupId);
+    if (memories.length > 0) {
+      let tokenTotal = 0;
+      const memoryLines: string[] = [];
+      for (const m of memories) {
+        const line = `- **${m.topic}**: ${m.content}`;
+        const tokens = estimateTokens(line);
+        if (tokenTotal + tokens > MEMORY_CONTEXT_BUDGET) break;
+        tokenTotal += tokens;
+        memoryLines.push(line);
+      }
+      if (memoryLines.length > 0) {
+        contextParts.push(`## Group Memory\n${memoryLines.join('\n')}`);
+      }
+    }
+    const skillContent = this.contextBuilder.loadSkillContent();
+    if (skillContent) {
+      contextParts.push(skillContent);
+    }
+
+    // Look up active persona for this group
+    const activePersona = this.storage.getActivePersonaForGroup(groupId);
+    const personaPrompt = activePersona?.description;
+
+    return {
+      additionalContext: contextParts.join('\n\n') || undefined,
+      nameMap,
+      personaPrompt,
+    };
+  }
+
   private async processLlmRequest(
     groupId: string,
     sender: string,
@@ -134,11 +178,6 @@ export class MessageHandler {
     history: Message[],
     historyFormatted?: string[],
   ): Promise<void> {
-    // These are guaranteed non-null by the guard in handleMessage
-    const storage = this.storage as Storage;
-    const llmClient = this.llmClient as ClaudeCLIClient;
-    const signalClient = this.signalClient as SignalClient;
-
     try {
       // Extract query
       const query = this.mentionDetector.extractQuery(content);
@@ -161,29 +200,10 @@ export class MessageHandler {
         queryWithAttachments = query ? `${query}\n\n${attachmentBlock}` : attachmentBlock;
       }
 
-      // Build additional system context (dossiers + skills)
-      const contextParts: string[] = [];
-      const dossiers = storage.getDossiersByGroup(groupId);
-      const nameMap = new Map(dossiers.map(d => [d.personId, d.displayName]));
-      if (dossiers.length > 0) {
-        const entries = dossiers.map(d => {
-          const parts = [`- ${d.displayName} (${d.personId})`];
-          if (d.notes) parts.push(`  ${d.notes}`);
-          return parts.join('\n');
-        });
-        contextParts.push(`## People in this group\n${entries.join('\n')}`);
-      }
-      const skillContent = this.contextBuilder.loadSkillContent();
-      if (skillContent) {
-        contextParts.push(skillContent);
-      }
-
-      // Look up active persona for this group
-      const activePersona = storage.getActivePersonaForGroup(groupId);
-      const personaPrompt = activePersona?.description;
+      // Build additional system context (dossiers + memories + skills + persona)
+      const { additionalContext, nameMap, personaPrompt } = this.assembleAdditionalContext(groupId);
 
       // Build context
-      const additionalContext = contextParts.join('\n\n') || undefined;
       const messages = this.contextBuilder.buildContext({
         history,
         query: queryWithAttachments,
@@ -195,12 +215,12 @@ export class MessageHandler {
         preFormatted: historyFormatted,
       });
 
-      logger.step(`context: ${dossiers.length} dossiers${activePersona ? `, persona "${activePersona.name}"` : ''}`);
+      logger.step(`context: ${nameMap.size} dossiers${personaPrompt ? ', with persona' : ''}`);
 
       // Get LLM response
       const startTime = Date.now();
-      const response = await llmClient.generateResponse(messages, {
-        ...this.messageContext,
+      const response = await this.llmClient.generateResponse(messages, {
+        ...this.appConfig,
         groupId,
         sender,
       });
@@ -208,11 +228,11 @@ export class MessageHandler {
       const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
       logger.step(`llm: response in ${elapsed}s (${response.tokensUsed} tokens)`);
 
-      const botSender = this.messageContext.botPhoneNumber || 'bot';
+      const botSender = this.appConfig.botPhoneNumber || 'bot';
       if (response.sentViaMcp) {
         // Claude sent messages directly — store each one
         for (const mcpMsg of response.mcpMessages) {
-          storage.addMessage({
+          this.storage.addMessage({
             groupId,
             sender: botSender,
             content: mcpMsg,
@@ -223,8 +243,8 @@ export class MessageHandler {
         logger.step(`delivery: sent via MCP (${response.mcpMessages.length} message(s))`);
       } else {
         // Fallback: Claude didn't use the MCP tool, send result as before
-        await signalClient.sendMessage(groupId, response.content);
-        storage.addMessage({
+        await this.signalClient.sendMessage(groupId, response.content);
+        this.storage.addMessage({
           groupId,
           sender: botSender,
           content: response.content,
@@ -235,7 +255,7 @@ export class MessageHandler {
       }
 
       // Trim old messages
-      storage.trimMessages(groupId, this.messageRetentionCount);
+      this.storage.trimMessages(groupId, this.messageRetentionCount);
 
       logger.groupEnd();
     } catch (error) {
@@ -245,7 +265,7 @@ export class MessageHandler {
       // Try to send error message to group
       try {
         const errorMsg = 'Sorry, I encountered an error processing your request.';
-        await signalClient.sendMessage(groupId, errorMsg);
+        await this.signalClient.sendMessage(groupId, errorMsg);
       } catch (sendError) {
         logger.error('Failed to send error message:', sendError);
       }

@@ -41,7 +41,8 @@ export class DatabaseConnection {
           sender TEXT NOT NULL,
           content TEXT NOT NULL,
           timestamp INTEGER NOT NULL,
-          isBot INTEGER NOT NULL DEFAULT 0
+          isBot INTEGER NOT NULL DEFAULT 0,
+          attachments TEXT
         );
 
         CREATE INDEX IF NOT EXISTS idx_group_timestamp
@@ -106,12 +107,6 @@ export class DatabaseConnection {
           value TEXT NOT NULL
         );
       `);
-
-      // Migration: add attachments column to messages table
-      const cols = this.db.pragma('table_info(messages)') as Array<{ name: string }>;
-      if (!cols.some(c => c.name === 'attachments')) {
-        this.db.exec('ALTER TABLE messages ADD COLUMN attachments TEXT');
-      }
     } catch (error) {
       wrapSqliteError(error, 'create tables');
     }
@@ -129,6 +124,11 @@ export class DatabaseConnection {
       if (currentVersion < 2) {
         this.migrateToV2();
         this.setSchemaVersion(2);
+      }
+
+      if (currentVersion < 3) {
+        this.migrateToV3();
+        this.setSchemaVersion(3);
       }
     } catch (error) {
       wrapSqliteError(error, 'run migrations');
@@ -151,6 +151,14 @@ export class DatabaseConnection {
   }
 
   private migrateToV1(): void {
+    // Add attachments column to messages table (for databases created before it was in CREATE TABLE)
+    const cols = this.db.pragma('table_info(messages)') as Array<{ name: string }>;
+    if (!cols.some(c => c.name === 'attachments')) {
+      this.db.exec('ALTER TABLE messages ADD COLUMN attachments TEXT');
+    }
+  }
+
+  private migrateToV2(): void {
     // Add lastAttemptAt and failureReason columns to reminders
     const cols = this.db.pragma('table_info(reminders)') as Array<{ name: string }>;
     const colNames = cols.map(c => c.name);
@@ -166,7 +174,7 @@ export class DatabaseConnection {
     this.db.exec('CREATE INDEX IF NOT EXISTS idx_reminders_group_status ON reminders(groupId, status, dueAt)');
   }
 
-  private migrateToV2(): void {
+  private migrateToV3(): void {
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS memories (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -183,6 +191,15 @@ export class DatabaseConnection {
       CREATE INDEX IF NOT EXISTS idx_memories_group
       ON memories(groupId);
     `);
+  }
+
+  runOp<T>(name: string, fn: () => T): T {
+    this.ensureOpen();
+    try {
+      return fn();
+    } catch (error) {
+      wrapSqliteError(error, name);
+    }
   }
 
   ensureOpen(): void {

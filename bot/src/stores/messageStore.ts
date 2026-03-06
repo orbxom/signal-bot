@@ -208,13 +208,9 @@ export class MessageStore {
   }
 
   getDistinctGroupIds(): string[] {
-    this.conn.ensureOpen();
-
-    try {
+    return this.conn.runOp('get distinct group IDs', () => {
       const rows = this.stmts.getDistinctGroupIds.all() as Array<{ groupId: string }>;
       return rows.map(row => row.groupId);
-    } catch (error) {
-      wrapSqliteError(error, 'get distinct group IDs');
-    }
+    });
   }
 }

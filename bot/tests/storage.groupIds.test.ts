@@ -1,33 +1,25 @@
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { Storage } from '../src/storage';
+import { createTestStorage, type TestStorage } from './helpers/testDb';
 
 describe('Storage - getDistinctGroupIds', () => {
-  let testDir: string;
-  let storage: Storage;
+  let ts: TestStorage;
 
   const createStorage = () => {
-    testDir = mkdtempSync(join(tmpdir(), 'signal-bot-groupids-test-'));
-    storage = new Storage(join(testDir, 'test.db'));
-    return storage;
+    ts = createTestStorage('signal-bot-groupids-test-');
+    return ts.storage;
   };
 
   afterEach(() => {
-    storage?.close();
-    if (testDir) {
-      rmSync(testDir, { recursive: true, force: true });
-    }
+    ts?.cleanup();
   });
 
   it('should return empty array when no messages exist', () => {
-    createStorage();
+    const storage = createStorage();
     expect(storage.getDistinctGroupIds()).toEqual([]);
   });
 
   it('should return distinct group IDs from messages', () => {
-    createStorage();
+    const storage = createStorage();
     const now = Date.now();
     storage.addMessage({ groupId: 'group1', sender: 'Alice', content: 'Hi', timestamp: now, isBot: false });
     storage.addMessage({ groupId: 'group2', sender: 'Bob', content: 'Hey', timestamp: now + 1, isBot: false });
@@ -40,14 +32,14 @@ describe('Storage - getDistinctGroupIds', () => {
   });
 
   it('should include groups with only bot messages', () => {
-    createStorage();
+    const storage = createStorage();
     storage.addMessage({ groupId: 'group1', sender: 'bot', content: 'Hello', timestamp: Date.now(), isBot: true });
 
     expect(storage.getDistinctGroupIds()).toEqual(['group1']);
   });
 
   it('should throw when database is closed', () => {
-    createStorage();
+    const storage = createStorage();
     storage.close();
     expect(() => storage.getDistinctGroupIds()).toThrow('Database is closed');
   });

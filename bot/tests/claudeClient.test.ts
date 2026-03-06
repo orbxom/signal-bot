@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChatMessage } from '../src/types';
+import { makeMessageContext } from './helpers/fixtures';
 
 const { mockSpawn } = vi.hoisted(() => {
   const mockSpawn = vi.fn();
@@ -15,7 +16,7 @@ vi.mock('child_process', async importOriginal => {
   };
 });
 
-import { ClaudeCLIClient } from '../src/claudeClient';
+import { ClaudeCLIClient, parseClaudeOutput } from '../src/claudeClient';
 
 function makeResultOutput(result: string, isError = false, usage?: { output_tokens: number }) {
   const initLine = JSON.stringify({ type: 'system', subtype: 'init', session_id: 'test' });
@@ -257,16 +258,15 @@ describe('ClaudeCLIClient', () => {
 
       const client = new ClaudeCLIClient();
       const messages: ChatMessage[] = [{ role: 'user', content: 'Remind me' }];
-      const context = {
+      const context = makeMessageContext({
         groupId: 'test-group',
         sender: '+61400000000',
         dbPath: '/tmp/test.db',
-        timezone: 'Australia/Sydney',
         githubRepo: 'owner/repo',
         sourceRoot: '/tmp/src',
         signalCliUrl: 'http://localhost:8080',
         botPhoneNumber: '+61400000000',
-      };
+      });
 
       await client.generateResponse(messages, context);
 
@@ -294,16 +294,15 @@ describe('ClaudeCLIClient', () => {
 
       const client = new ClaudeCLIClient();
       const messages: ChatMessage[] = [{ role: 'user', content: 'Hello' }];
-      const context = {
+      const context = makeMessageContext({
         groupId: 'test-group',
         sender: '+61400000000',
         dbPath: '/tmp/test.db',
-        timezone: 'Australia/Sydney',
         githubRepo: 'owner/repo',
         sourceRoot: '/tmp/src',
         signalCliUrl: 'http://localhost:8080',
         botPhoneNumber: '+61400000000',
-      };
+      });
 
       await client.generateResponse(messages, context);
 
@@ -376,16 +375,15 @@ describe('ClaudeCLIClient', () => {
 
       const client = new ClaudeCLIClient();
       const messages: ChatMessage[] = [{ role: 'user', content: 'What did we talk about yesterday?' }];
-      const context = {
+      const context = makeMessageContext({
         groupId: 'test-group',
         sender: '+61400000000',
         dbPath: '/tmp/test.db',
-        timezone: 'Australia/Sydney',
         githubRepo: 'owner/repo',
         sourceRoot: '/tmp/src',
         signalCliUrl: 'http://localhost:8080',
         botPhoneNumber: '+61400000000',
-      };
+      });
 
       await client.generateResponse(messages, context);
 
@@ -416,16 +414,15 @@ describe('ClaudeCLIClient', () => {
 
       const client = new ClaudeCLIClient();
       const messages: ChatMessage[] = [{ role: 'user', content: 'Search history' }];
-      const context = {
+      const context = makeMessageContext({
         groupId: 'test-group',
         sender: '+61400000000',
         dbPath: '/tmp/test.db',
-        timezone: 'Australia/Sydney',
         githubRepo: 'owner/repo',
         sourceRoot: '/tmp/src',
         signalCliUrl: 'http://localhost:8080',
         botPhoneNumber: '+61400000000',
-      };
+      });
 
       await client.generateResponse(messages, context);
 
@@ -445,16 +442,15 @@ describe('ClaudeCLIClient', () => {
 
       const client = new ClaudeCLIClient();
       const messages: ChatMessage[] = [{ role: 'user', content: 'Remember this' }];
-      const context = {
+      const context = makeMessageContext({
         groupId: 'test-group',
         sender: '+61400000000',
         dbPath: '/tmp/test.db',
-        timezone: 'Australia/Sydney',
         githubRepo: 'owner/repo',
         sourceRoot: '/tmp/src',
         signalCliUrl: 'http://localhost:8080',
         botPhoneNumber: '+61400000000',
-      };
+      });
 
       await client.generateResponse(messages, context);
 
@@ -466,7 +462,7 @@ describe('ClaudeCLIClient', () => {
       expect(['node', 'npx']).toContain(mcpConfig.mcpServers.dossiers.command);
       expect(mcpConfig.mcpServers.dossiers.env.DB_PATH).toBe('/tmp/test.db');
       expect(mcpConfig.mcpServers.dossiers.env.MCP_GROUP_ID).toBe('test-group');
-      expect(mcpConfig.mcpServers.dossiers.env.MCP_SENDER).toBe('+61400000000');
+      expect(mcpConfig.mcpServers.dossiers.env.MCP_SENDER).toBeUndefined();
     });
 
     it('should detect when messages were sent via MCP signal tool', async () => {
@@ -559,18 +555,17 @@ describe('ClaudeCLIClient', () => {
 
       const client = new ClaudeCLIClient();
       const messages: ChatMessage[] = [{ role: 'user', content: 'Transcribe this' }];
-      const context = {
+      const context = makeMessageContext({
         groupId: 'test-group',
         sender: '+61400000000',
         dbPath: '/tmp/test.db',
-        timezone: 'Australia/Sydney',
         githubRepo: 'owner/repo',
         sourceRoot: '/app/source',
         signalCliUrl: 'http://localhost:8080',
         botPhoneNumber: '+61400000000',
         attachmentsDir: '/app/signal-attachments',
         whisperModelPath: '/models/ggml-large.bin',
-      };
+      });
 
       await client.generateResponse(messages, context);
 
@@ -632,18 +627,17 @@ describe('ClaudeCLIClient', () => {
 
       const client = new ClaudeCLIClient();
       const messages: ChatMessage[] = [{ role: 'user', content: 'Switch persona' }];
-      const context = {
+      const context = makeMessageContext({
         groupId: 'test-group',
         sender: '+61400000000',
         dbPath: '/tmp/test.db',
-        timezone: 'Australia/Sydney',
         githubRepo: 'owner/repo',
         sourceRoot: '/tmp/src',
         signalCliUrl: 'http://localhost:8080',
         botPhoneNumber: '+61400000000',
         attachmentsDir: '/app/signal-attachments',
         whisperModelPath: '/models/ggml-large.bin',
-      };
+      });
 
       await client.generateResponse(messages, context);
 
@@ -756,18 +750,17 @@ describe('ClaudeCLIClient', () => {
 
       const client = new ClaudeCLIClient();
       const messages: ChatMessage[] = [{ role: 'user', content: 'Browse web' }];
-      const context = {
+      const context = makeMessageContext({
         groupId: 'test-group',
         sender: '+61400000000',
         dbPath: '/tmp/test.db',
-        timezone: 'Australia/Sydney',
         githubRepo: 'owner/repo',
         sourceRoot: '/tmp/src',
         signalCliUrl: 'http://localhost:8080',
         botPhoneNumber: '+61400000000',
         attachmentsDir: '/app/signal-attachments',
         whisperModelPath: '/models/ggml-large.bin',
-      };
+      });
 
       await client.generateResponse(messages, context);
 
@@ -778,6 +771,59 @@ describe('ClaudeCLIClient', () => {
       expect(mcpConfig.mcpServers.playwright).toBeDefined();
       expect(mcpConfig.mcpServers.playwright.command).toBe('npx');
       expect(mcpConfig.mcpServers.playwright.args).toContain('--headless');
+    });
+  });
+
+  describe('parseClaudeOutput', () => {
+    it('should parse NDJSON output with result line', () => {
+      const output = makeResultOutput('Hello!', false, { output_tokens: 10 });
+      const result = parseClaudeOutput(output);
+      expect(result.content).toBe('Hello!');
+      expect(result.tokensUsed).toBe(10);
+      expect(result.sentViaMcp).toBe(false);
+    });
+
+    it('should parse JSON array output', () => {
+      const output = JSON.stringify([
+        { type: 'system', subtype: 'init', session_id: 'test' },
+        { type: 'result', is_error: false, result: 'Array!', usage: { output_tokens: 5 } },
+      ]);
+      const result = parseClaudeOutput(output);
+      expect(result.content).toBe('Array!');
+    });
+
+    it('should throw when no result line found', () => {
+      const output = JSON.stringify({ type: 'system', subtype: 'init' });
+      expect(() => parseClaudeOutput(output)).toThrow('No result found in Claude CLI output');
+    });
+
+    it('should detect MCP send_message tool calls', () => {
+      const output = [
+        JSON.stringify({ type: 'system', subtype: 'init', session_id: 'test' }),
+        JSON.stringify({
+          type: 'assistant',
+          message: {
+            content: [{ type: 'tool_use', name: 'mcp__signal__send_message', input: { message: 'Hi there' } }],
+          },
+        }),
+        JSON.stringify({ type: 'result', is_error: false, result: 'Hi there', usage: { output_tokens: 5 } }),
+      ].join('\n');
+      const result = parseClaudeOutput(output);
+      expect(result.sentViaMcp).toBe(true);
+      expect(result.mcpMessages).toEqual(['Hi there']);
+    });
+
+    it('should fall back to assistant text when result has is_error', () => {
+      const output = [
+        JSON.stringify({ type: 'system', subtype: 'init', session_id: 'test' }),
+        JSON.stringify({
+          type: 'assistant',
+          message: { content: [{ type: 'text', text: 'Fallback text' }] },
+        }),
+        JSON.stringify({ type: 'result', is_error: true, result: 'Rate limited', subtype: 'error' }),
+      ].join('\n');
+      const result = parseClaudeOutput(output);
+      expect(result.content).toBe('Fallback text');
     });
   });
 });

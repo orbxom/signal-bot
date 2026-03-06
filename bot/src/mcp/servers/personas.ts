@@ -4,7 +4,7 @@ import { readStorageEnv } from '../env';
 import { catchErrors, error, ok } from '../result';
 import { runServer } from '../runServer';
 import type { McpServerDefinition } from '../types';
-import { requireGroupId, requireNumber, requireString } from '../validate';
+import { optionalString, requireGroupId, requireNumber, requireString } from '../validate';
 
 const TOOLS = [
   {
@@ -107,7 +107,7 @@ function resolvePersona(identifier: string) {
 export const personaServer: McpServerDefinition = {
   serverName: 'signal-bot-personas',
   configKey: 'personas',
-  entrypoint: 'mcp/servers/personas',
+  entrypoint: 'personas',
   tools: TOOLS,
   envMapping: { DB_PATH: 'dbPath', MCP_GROUP_ID: 'groupId', MCP_SENDER: 'sender' },
   handlers: {
@@ -116,7 +116,7 @@ export const personaServer: McpServerDefinition = {
       if (name.error) return name.error;
       const description = requireString(args, 'description');
       if (description.error) return description.error;
-      const tags = (args.tags as string) ?? '';
+      const tags = optionalString(args, 'tags', '');
 
       return catchErrors(() => {
         const persona = store.create(name.value, description.value, tags);
@@ -143,12 +143,15 @@ export const personaServer: McpServerDefinition = {
     },
 
     list_personas() {
+      const groupErr = requireGroupId(groupId);
+      if (groupErr) return groupErr;
+
       const personas = store.list();
       if (personas.length === 0) {
         return ok('No personas found.');
       }
 
-      const active = groupId ? store.getActiveForGroup(groupId) : null;
+      const active = store.getActiveForGroup(groupId);
 
       const lines = personas.map(p => {
         const isActive = active && active.id === p.id;
@@ -168,7 +171,7 @@ export const personaServer: McpServerDefinition = {
       if (name.error) return name.error;
       const description = requireString(args, 'description');
       if (description.error) return description.error;
-      const tags = (args.tags as string) ?? '';
+      const tags = optionalString(args, 'tags', '');
 
       return catchErrors(() => {
         const result = store.update(id.value, name.value, description.value, tags);
