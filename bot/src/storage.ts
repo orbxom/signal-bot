@@ -1,15 +1,17 @@
 import { DatabaseConnection } from './db';
 import { DossierStore } from './stores/dossierStore';
+import { MemoryStore } from './stores/memoryStore';
 import { MessageStore } from './stores/messageStore';
 import { PersonaStore } from './stores/personaStore';
 import { ReminderStore } from './stores/reminderStore';
-import type { Dossier, Message, Persona, Reminder } from './types';
+import type { Dossier, Memory, Message, Persona, Reminder } from './types';
 
 export class Storage {
   private conn: DatabaseConnection;
   readonly messages: MessageStore;
   readonly reminders: ReminderStore;
   readonly dossiers: DossierStore;
+  readonly memories: MemoryStore;
   readonly personas: PersonaStore;
 
   constructor(dbPath: string) {
@@ -17,6 +19,7 @@ export class Storage {
     this.messages = new MessageStore(this.conn);
     this.reminders = new ReminderStore(this.conn);
     this.dossiers = new DossierStore(this.conn);
+    this.memories = new MemoryStore(this.conn);
     this.personas = new PersonaStore(this.conn);
 
     // Seed default persona (previously done in initTables)
@@ -99,6 +102,24 @@ export class Storage {
 
   deleteDossier(groupId: string, personId: string): boolean {
     return this.dossiers.delete(groupId, personId);
+  }
+
+  // === Memory methods (delegate to MemoryStore) ===
+
+  upsertMemory(groupId: string, topic: string, content: string): Memory {
+    return this.memories.upsert(groupId, topic, content);
+  }
+
+  getMemory(groupId: string, topic: string): Memory | null {
+    return this.memories.get(groupId, topic);
+  }
+
+  getMemoriesByGroup(groupId: string): Memory[] {
+    return this.memories.getByGroup(groupId);
+  }
+
+  deleteMemory(groupId: string, topic: string): boolean {
+    return this.memories.delete(groupId, topic);
   }
 
   // === Persona methods (delegate to PersonaStore) ===

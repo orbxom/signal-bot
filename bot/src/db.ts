@@ -125,6 +125,11 @@ export class DatabaseConnection {
         this.migrateToV1();
         this.setSchemaVersion(1);
       }
+
+      if (currentVersion < 2) {
+        this.migrateToV2();
+        this.setSchemaVersion(2);
+      }
     } catch (error) {
       wrapSqliteError(error, 'run migrations');
     }
@@ -159,6 +164,25 @@ export class DatabaseConnection {
 
     // Add composite index for group + status queries
     this.db.exec('CREATE INDEX IF NOT EXISTS idx_reminders_group_status ON reminders(groupId, status, dueAt)');
+  }
+
+  private migrateToV2(): void {
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS memories (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        groupId TEXT NOT NULL,
+        topic TEXT NOT NULL,
+        content TEXT NOT NULL,
+        createdAt INTEGER NOT NULL,
+        updatedAt INTEGER NOT NULL
+      );
+
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_memories_group_topic
+      ON memories(groupId, topic);
+
+      CREATE INDEX IF NOT EXISTS idx_memories_group
+      ON memories(groupId);
+    `);
   }
 
   ensureOpen(): void {

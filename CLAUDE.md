@@ -52,13 +52,46 @@ No other files need to change.
 
 ### Prerequisites
 
-- signal-cli must be running locally (handles Signal protocol)
 - Claude CLI installed and authenticated (`claude login`)
 - Node.js 20+
+- Either signal-cli running locally OR use the mock Signal server (see below)
 
-### Steps
+### Mock Signal Server (no Signal access needed)
 
-1. Ensure `.env` exists in the project root with at least `BOT_PHONE_NUMBER` set:
+A mock signal-cli HTTP server (`bot/src/mock/signalServer.ts`) implements the JSON-RPC API so you can test the bot from the CLI without Signal. It uses `node:http` and `node:readline` with no extra dependencies.
+
+**In two terminals:**
+
+```bash
+# Terminal 1: Start the mock signal-cli server
+cd bot
+npm run mock-signal                    # Listens on port 8080 by default
+# Or on a custom port:
+MOCK_SIGNAL_PORT=9090 npm run mock-signal
+
+# Terminal 2: Start the bot pointed at the mock server
+cd bot
+npm run dev:test                       # If mock is on default port 8080
+# Or if using a custom port:
+SIGNAL_CLI_URL=http://localhost:9090 npm run dev:test
+```
+
+**Sending messages:** Type in the mock server terminal. Prefix with `claude:` to trigger the bot.
+
+```
+you> claude: what is 2+2?
+[QUEUED] "claude: what is 2+2?"
+[TYPING...]
+[BOT] 4!
+```
+
+**Mock commands:** `/help`, `/clear` (empty queue), `/quit`.
+
+The mock server hardcodes the Bot Test group and sender `+61400111222`. The bot requires no code changes — it connects to the mock via the same JSON-RPC API it uses with real signal-cli.
+
+### With Real Signal
+
+1. Ensure signal-cli is running locally and `.env` exists in the project root with at least `BOT_PHONE_NUMBER` set:
    ```bash
    # .env
    BOT_PHONE_NUMBER=+61XXXXXXXXXX
@@ -82,6 +115,7 @@ No other files need to change.
 
 - **Bot not receiving messages**: The `extractMessageData` method only processes group messages with `dataMessage.message` and `groupInfo.groupId`. DMs and reactions are silently dropped.
 - **MCP tools not working**: MCP servers run via `npx tsx` on the `.ts` source files. The `resolveMcpServerPath` helper in `mcp/registry.ts` handles path resolution.
+- **Port already in use**: If port 8080 is taken (e.g. real signal-cli is running), use `MOCK_SIGNAL_PORT=9090` for the mock and `SIGNAL_CLI_URL=http://localhost:9090` for the bot.
 
 ## Testing
 

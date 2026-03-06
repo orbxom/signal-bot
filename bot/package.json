@@ -15,7 +15,8 @@
     "format": "biome format --write ./src ./tests",
     "format:check": "biome format ./src ./tests",
     "check": "biome check ./src ./tests",
-    "check:fix": "biome check --write ./src ./tests"
+    "check:fix": "biome check --write ./src ./tests",
+    "mock-signal": "tsx src/mock/signalServer.ts"
   },
   "keywords": [
     "signal",

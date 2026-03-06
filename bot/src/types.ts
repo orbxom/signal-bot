@@ -46,6 +46,15 @@ export interface Dossier {
   updatedAt: number;
 }
 
+export interface Memory {
+  id: number;
+  groupId: string;
+  topic: string;
+  content: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
 export interface Persona {
   id: number;
   name: string;

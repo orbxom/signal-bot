@@ -1,5 +1,6 @@
 import type { ClaudeCLIClient } from './claudeClient';
 import { ContextBuilder } from './contextBuilder';
+import { estimateTokens } from './mcp/result';
 import { MentionDetector } from './mentionDetector';
 import { MessageDeduplicator } from './messageDeduplicator';
 import type { SignalClient } from './signalClient';
@@ -160,6 +161,22 @@ export class MessageHandler {
           return parts.join('\n');
         });
         contextParts.push(`## People in this group\n${entries.join('\n')}`);
+      }
+      const MEMORY_CONTEXT_BUDGET = 2000;
+      const memories = storage.getMemoriesByGroup(groupId);
+      if (memories.length > 0) {
+        let tokenTotal = 0;
+        const memoryLines: string[] = [];
+        for (const m of memories) {
+          const line = `- **${m.topic}**: ${m.content}`;
+          const tokens = estimateTokens(line);
+          if (tokenTotal + tokens > MEMORY_CONTEXT_BUDGET) break;
+          tokenTotal += tokens;
+          memoryLines.push(line);
+        }
+        if (memoryLines.length > 0) {
+          contextParts.push(`## Group Memory\n${memoryLines.join('\n')}`);
+        }
       }
       const skillContent = this.contextBuilder.loadSkillContent();
       if (skillContent) {
