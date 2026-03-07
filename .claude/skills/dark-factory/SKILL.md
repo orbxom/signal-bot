@@ -7,6 +7,8 @@ description: Use when the user says "work on issue #N", "dark factory", "run the
 
 This is a RIGID skill. Follow every stage in order. Do not skip stages. Do not take shortcuts. The human must approve at every checkpoint before you proceed.
 
+**Context preservation rule:** The orchestrator (you) MUST NOT write code directly. All code writing, editing, debugging, and refactoring MUST be delegated to subagents or agent teams. The orchestrator's job is to manage the pipeline, make decisions, coordinate agents, and communicate with the human. This keeps the orchestrator's context clean and focused.
+
 ## Trigger
 
 The user says something like:
@@ -140,9 +142,15 @@ Update `status.json`: plan -> complete.
 
 1. Use the `using-git-worktrees` skill to create an isolated worktree
 2. Create feature branch: `feature/<run-id>-<slug>` (slug from title, lowercase, hyphens)
-3. Use the `test-driven-development` skill to implement the plan task by task
-4. Report progress at natural milestones: "Completed task 3/7 — <description>"
-5. Log progress notes to `factory/runs/<run-id>/build.log`
+3. **Delegate all implementation to subagents.** Use the `subagent-driven-development` or `dispatching-parallel-agents` skill to break the plan into independent tasks and dispatch agents to implement them. Each subagent should:
+   - Be given the relevant section of the plan and necessary file paths
+   - Use the `test-driven-development` skill
+   - Work in the worktree created in step 1
+   - Check what skills they have available
+4. As subagents complete, review their summaries (not their full code output) and log progress to `factory/runs/<run-id>/build.log`
+5. Report progress at natural milestones: "Completed task 3/7 — <description>"
+
+**Do NOT read or write implementation code yourself.** Only read subagent summaries and status.
 
 Update `status.json`: build -> complete.
 
@@ -155,11 +163,10 @@ Update `status.json`: build -> complete.
 3. Run format/check: `cd bot && npm run check`
 4. Capture all output to `factory/runs/<run-id>/test.log`
 5. If any failures:
-   - Use the `systematic-debugging` skill to diagnose
-   - Fix the issue
-   - Re-run all checks
-   - Log the debugging process to `test.log`
-6. If failures persist after 3 attempts:
+   - **Dispatch a subagent** to diagnose and fix. The subagent should use the `systematic-debugging` skill, fix the issue, and re-run all checks.
+   - Review the subagent's summary and log the debugging process to `test.log`
+   - **Do NOT debug or fix code yourself.** Only dispatch agents and review their results.
+6. If failures persist after 3 subagent attempts:
    - **STOP. Checkpoint with human.** Explain what's failing and what you've tried.
 
 Update `status.json`: test -> complete.
@@ -168,10 +175,11 @@ Update `status.json`: test -> complete.
 
 ## Stage 4 — SIMPLIFY
 
-1. Use the `simplify` skill on all changed files
-2. Log what was changed to `factory/runs/<run-id>/simplify.log`
-3. Re-run tests to confirm nothing broke
-4. If tests break, revert the simplify changes and note it in the log
+1. **Dispatch a subagent** to run the `simplify` skill on all changed files
+2. The subagent should log what was changed to `factory/runs/<run-id>/simplify.log`
+3. The subagent should re-run tests to confirm nothing broke
+4. If tests break, the subagent should revert the simplify changes and note it in the log
+5. Review the subagent's summary. **Do NOT read or edit code yourself.**
 
 Update `status.json`: simplify -> complete.
 
@@ -221,7 +229,7 @@ Verify the feature actually works end-to-end using the mock signal server.
 3. Send each test message via the mock server's `queueMessage` RPC and verify the bot responds correctly by checking the log output
 4. Log test messages, expected outcomes, and actual outcomes to `factory/runs/<run-id>/integration-test.log`
 5. If a test fails:
-   - Dispatch a subagent to diagnose and fix the issue
+   - **Dispatch a subagent** to diagnose and fix the issue. Do NOT fix code yourself.
    - The subagent should run unit tests after fixing to ensure nothing else broke
    - Re-run the failing integration test
    - Log what went wrong and what the fix was
@@ -268,5 +276,6 @@ If a conversation is interrupted, the human can say "resume issue-42" (or "resum
 - **Never proceed past a checkpoint without human approval.**
 - **Always update status.json** when entering and completing a stage.
 - **Always write artifacts** to the run directory, not just to stdout.
+- **Never write or edit code directly.** The orchestrator delegates ALL code work (implementation, debugging, refactoring, simplification) to subagents. You may read subagent summaries, run shell commands (tests, git), and write pipeline artifacts (status.json, logs, event.json), but never use Read/Edit on source code files. This keeps your context clean for orchestration.
 - **Encourage subagents to check their available skills** when spawning them.
 - **Use `gh api` instead of `gh issue view`** — the latter fails with GraphQL errors.

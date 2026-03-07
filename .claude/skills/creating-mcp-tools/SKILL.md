@@ -7,7 +7,7 @@ description: Use when creating, adding, or modifying MCP tool servers for the si
 
 ## Overview
 
-MCP tools in this project are **standalone stdio JSON-RPC 2.0 servers** spawned by Claude CLI as subprocesses. They are **language-agnostic** — any executable that reads JSON-RPC from stdin and writes responses to stdout works. The bot can add/remove MCP servers **at runtime without restarting** because each is an independent process.
+MCP tools in this project are **standalone stdio JSON-RPC 2.0 servers** spawned by Claude CLI as subprocesses. They are **language-agnostic** — any executable that reads JSON-RPC from stdin and writes responses to stdout works. The bot auto-discovers servers from a registry — adding a new server requires **no changes to core bot files**.
 
 ## Safety Rules
 
@@ -19,9 +19,9 @@ MCP tools in this project are **standalone stdio JSON-RPC 2.0 servers** spawned 
 - `bot/src/reminderScheduler.ts` — reminder polling
 
 **Safe to modify anytime (independent processes):**
-- Any `*McpServer.ts` file in `bot/src/`
-- `bot/src/storage.ts` (only if tool needs persistence)
-- `bot/src/claudeClient.ts` (registration — but only when bot is stopped or between restarts)
+- Any file in `bot/src/mcp/servers/`
+- `bot/src/mcp/` framework files (types, result, validate, env)
+- `bot/src/stores/` (if tool needs persistence)
 
 ## TDD Requirements — Tests FIRST
 
@@ -52,21 +52,30 @@ describe('<Name> MCP Server', () => {
   afterEach(() => { proc?.kill(); proc = null; });
 
   function spawnMcpServer(env?: Record<string, string>): ChildProcess {
-    proc = spawnServer('<name>McpServer.ts', env);
+    proc = spawnServer('mcp/servers/<name>.ts', env);
     return proc;
   }
 
-  // Required tests: initialize, tools/list, unknown tool, unknown method, per-tool validation, per-tool success
+  // Required tests: initialize, tools/list, unknown tool, per-tool validation, per-tool success
 });
 ```
 
 **Required test coverage:**
-1. `initialize` returns valid protocol response
+1. `initialize` returns valid protocol response with correct `serverInfo.name`
 2. `tools/list` returns correct tool count and names
-3. Unknown tool returns `isError: true`
-4. Unknown method returns JSON-RPC `-32601` error
-5. Per-tool: missing/invalid parameter validation
-6. Per-tool: successful execution with expected output
+3. Unknown tool returns `isError: true` with "Unknown tool" message
+4. Per-tool: missing/invalid parameter validation returns `isError: true`
+5. Per-tool: successful execution with expected output
+
+**For DB-backed servers**, use temp directories:
+```typescript
+let testDir: string;
+beforeEach(() => {
+  testDir = mkdtempSync(join(tmpdir(), '<name>-mcp-test-'));
+  // Pre-populate DB if needed
+});
+afterEach(() => rmSync(testDir, { recursive: true, force: true }));
+```
 
 ### Step 2: Watch tests fail (RED)
 
@@ -76,14 +85,19 @@ cd bot && npx vitest run tests/<name>McpServer.test.ts
 
 All tests must fail. If any pass, your tests are wrong.
 
-### Step 3: Write server `bot/src/<name>McpServer.ts`
+### Step 3: Write server `bot/src/mcp/servers/<name>.ts`
 
-**MUST use `mcpServerBase.ts`** — do NOT duplicate protocol boilerplate.
-
-Import `getErrorMessage` when your tool has external I/O (API calls, file ops, subprocess). Pure-computation tools can omit it:
+Export a `McpServerDefinition` using the shared framework. **Never** duplicate protocol boilerplate — `runServer()` handles all JSON-RPC plumbing.
 
 ```typescript
-import { getErrorMessage, runMcpServer, type ToolResult } from './mcpServerBase';
+import { readStorageEnv } from '../env';
+import { catchErrors, error, ok } from '../result';
+import { runServer } from '../runServer';
+import type { McpServerDefinition, ToolResult } from '../types';
+import { requireString } from '../validate';
+
+// Module-level state initialized in onInit()
+let someState: SomeType | null = null;
 
 const TOOLS = [
   {
@@ -92,28 +106,63 @@ const TOOLS = [
     description: 'What this tool does.',
     inputSchema: {
       type: 'object' as const,
-      properties: { /* ... */ },
+      properties: {
+        param1: { type: 'string', description: 'Description of param1' },
+      },
       required: ['param1'],
     },
   },
 ];
 
-function handleToolCall(name: string, args: Record<string, unknown>): ToolResult {
-  switch (name) {
-    case 'tool_name':
-      return handleToolName(args);
-    default:
-      return { content: [{ type: 'text', text: `Unknown tool: ${name}` }], isError: true };
-  }
-}
-
-runMcpServer({
-  name: 'signal-bot-<name>',
+export const myServer: McpServerDefinition = {
+  serverName: 'signal-bot-<name>',
+  configKey: '<name>',
+  entrypoint: '<name>',
   tools: TOOLS,
-  handleToolCall,
-  onInit() { console.error('<Name> MCP server started'); },
-});
+  envMapping: { DB_PATH: 'dbPath', MCP_GROUP_ID: 'groupId' },
+  handlers: {
+    tool_name(args): ToolResult {
+      const param = requireString(args, 'param1');
+      if (param.error) return param.error;
+      return catchErrors(() => {
+        // Tool logic here
+        return ok('Result text');
+      }, 'Failed to do thing');
+    },
+  },
+  onInit() {
+    const env = readStorageEnv();
+    // Initialize state from env
+    console.error('<Name> MCP server started');
+  },
+  onClose() {
+    // Clean up resources
+  },
+};
+
+if (require.main === module) {
+  runServer(myServer);
+}
 ```
+
+**Key interfaces:**
+
+| Type | From | Purpose |
+|------|------|---------|
+| `McpServerDefinition` | `../types` | Server definition with tools, handlers, env mapping |
+| `ToolResult` | `../types` | Return type: `{ content: ToolResultContent[], isError?: boolean }` |
+| `ToolHandler` | `../types` | `(args) => ToolResult \| Promise<ToolResult>` |
+| `ok(text)` | `../result` | Success result shorthand |
+| `error(text)` | `../result` | Error result with `isError: true` |
+| `catchErrors(fn, prefix?)` | `../result` | Wraps sync/async in try-catch returning error results |
+| `requireString(args, name)` | `../validate` | Returns `{ value }` or `{ error }` — check `.error` first |
+| `requireNumber(args, name)` | `../validate` | Same pattern for numbers |
+| `optionalString(args, name, default)` | `../validate` | Returns string value or default |
+| `requireGroupId(groupId)` | `../validate` | Returns error ToolResult or null |
+| `readStorageEnv()` | `../env` | Returns `{ dbPath, groupId, sender }` from env vars |
+| `readTimezone()` | `../env` | Returns timezone string (default: `Australia/Sydney`) |
+
+**STDIO logging rule:** Never use `console.log()` — it writes to stdout and corrupts JSON-RPC. Use `console.error()` for all logging.
 
 ### Step 4: Watch tests pass (GREEN)
 
@@ -121,22 +170,20 @@ runMcpServer({
 cd bot && npx vitest run tests/<name>McpServer.test.ts
 ```
 
-### Step 5: Register in `bot/src/claudeClient.ts`
+### Step 5: Register in barrel export
 
-Two changes needed (do this when bot is stopped):
-
-1. Add tool names to `MCP_TOOLS` array (format: `mcp__<serverKey>__<toolName>`)
-2. Add server entry to `mcpServers` in `generateResponse()`:
+Add one import line to `bot/src/mcp/servers/index.ts`:
 
 ```typescript
-const myServer = resolveMcpServerPath('<name>McpServer');
-// In mcpServers object:
-<serverKey>: {
-  command: myServer.command,
-  args: myServer.args,
-  env: { /* any env vars the server needs */ },
-},
+import { myServer } from './<name>';
+
+export const ALL_SERVERS: McpServerDefinition[] = [
+  // ... existing servers ...
+  myServer,
+];
 ```
+
+That's it. The registry auto-discovers tools and builds the MCP config. No other files need to change.
 
 ### Step 6: Verify everything
 
@@ -159,16 +206,23 @@ Any executable that speaks JSON-RPC 2.0 over stdio works. Protocol requirements:
 - `tools/call` → respond with `{ content: [{ type: 'text', text: '...' }], isError?: true }`
 - Unknown method with `id` → respond with `{ error: { code: -32601, message: '...' } }`
 
-**Registration in claudeClient.ts** is the same — just point `command`/`args` at the binary:
+**Registration** for non-TS servers uses the `EXTERNAL_SERVERS` object in `bot/src/mcp/registry.ts`:
 ```typescript
-myTool: {
-  command: '/path/to/my-rust-binary',
-  args: [],
-  env: { SOME_VAR: 'value' },
-},
+const EXTERNAL_SERVERS = {
+  myTool: {
+    tools: ['mcp__myTool__tool_name'],
+    resolve(context: MessageContext) {
+      return {
+        command: '/path/to/binary',
+        args: [],
+        env: { SOME_VAR: context.someField || '' },
+      };
+    },
+  },
+};
 ```
 
-**Testing** uses the same `mcpTestHelpers.ts` pattern but with a custom spawn:
+**Testing** uses the same `mcpTestHelpers.ts` but with a custom spawn:
 ```typescript
 function spawnMcpServer(): ChildProcess {
   proc = spawn('/path/to/binary', [], { stdio: ['pipe', 'pipe', 'pipe'] });
@@ -180,9 +234,14 @@ function spawnMcpServer(): ChildProcess {
 
 | File | Purpose |
 |------|---------|
-| `bot/src/mcpServerBase.ts` | Shared TS framework: `runMcpServer()`, `ToolResult`, `getErrorMessage()` |
-| `bot/src/claudeClient.ts` | Registration: `MCP_TOOLS` string + `mcpServers` config object |
-| `bot/tests/helpers/mcpTestHelpers.ts` | Shared test helpers: `spawnMcpServer()`, `sendAndReceive()`, `initializeServer()` |
+| `bot/src/mcp/types.ts` | `McpServerDefinition`, `ToolDefinition`, `ToolHandler`, `ToolResult` |
+| `bot/src/mcp/result.ts` | `ok()`, `error()`, `catchErrors()`, `getErrorMessage()`, `estimateTokens()` |
+| `bot/src/mcp/validate.ts` | `requireString()`, `requireNumber()`, `requireGroupId()`, `optionalString()` |
+| `bot/src/mcp/env.ts` | `readStorageEnv()`, `readTimezone()` |
+| `bot/src/mcp/runServer.ts` | `runServer()` — JSON-RPC protocol handler (stdin/stdout) |
+| `bot/src/mcp/registry.ts` | `buildAllowedTools()`, `buildMcpConfig()` — auto-discovers from `ALL_SERVERS` |
+| `bot/src/mcp/servers/index.ts` | Barrel export: `ALL_SERVERS` array (add one import here) |
+| `bot/tests/helpers/mcpTestHelpers.ts` | `spawnMcpServer()`, `sendAndReceive()`, `initializeServer()` |
 
 ## Common Rationalizations
 
@@ -190,16 +249,17 @@ function spawnMcpServer(): ChildProcess {
 |--------|---------|
 | "It's too simple to need tests first" | Simple tools still need protocol tests. Write them first. |
 | "I'll write tests after the code" | Tests-after prove what code does, not what it should do. |
-| "I know this pattern, I'll just copy-paste the boilerplate" | That's exactly what `runMcpServer()` eliminates. Import it. |
+| "I'll just copy-paste from another server" | Good — but write the test first, then adapt from an existing server. |
 | "The shared helpers don't fit my case" | They work for TS and non-TS servers. Customize `spawnMcpServer`, reuse the rest. |
-| "I need to modify messageHandler.ts for my new tool" | No. MCP tools are discovered via `tools/list`. No core changes needed. |
+| "I need to modify messageHandler.ts for my new tool" | No. MCP tools are auto-discovered via the registry. No core changes needed. |
+| "I need to update claudeClient.ts" | No. Add to `servers/index.ts` barrel. Registry handles the rest. |
 
 ## Red Flags — STOP and Start Over
 
 - Writing server code before test file exists
-- Copying `readline`/`handleMessage`/`main()` boilerplate instead of using `runMcpServer()`
-- Defining local `ToolResult` type instead of importing from `mcpServerBase`
-- Defining local `PROTOCOL_VERSION` instead of using `MCP_PROTOCOL_VERSION`
-- Writing your own `sendAndReceive`/`initializeServer` in tests instead of importing shared helpers
-- Modifying core files (index.ts, messageHandler.ts) for a new tool
+- Duplicating JSON-RPC protocol handling instead of using `runServer()`
+- Defining local `ToolResult` type instead of importing from `mcp/types`
+- Writing your own `sendAndReceive`/`initializeServer` instead of importing shared helpers
+- Modifying core files (index.ts, messageHandler.ts, claudeClient.ts) for a new tool
+- Using `console.log()` instead of `console.error()` for logging
 - Skipping `npx vitest run` or `npm run check` before declaring done

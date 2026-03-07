@@ -1,0 +1,18 @@
+# Simplify Log — Issue #35
+
+## Changes Made
+1. Extracted `GH_TIMEOUT = 30000` constant (replaced 7 occurrences)
+2. Extracted `MERGE_STRATEGIES` constant — used in both schema enum and runtime validation
+3. Derived review event schema enum from `Object.keys(REVIEW_EVENT_FLAGS)` — eliminates duplication
+4. Added review body validation: body required for COMMENT and REQUEST_CHANGES events
+5. Moved constants before TOOLS array (fixed ReferenceError from `Object.keys(REVIEW_EVENT_FLAGS)` used before declaration)
+
+## Skipped (false positives or not worth addressing)
+- `gh pr list` vs `gh api` for listing — `gh pr list` works reliably, GraphQL issue only affects `gh pr view`
+- `optionalNumber` helper — YAGNI with single usage
+- Limit cap — `gh` handles internally
+- `onInit` env reading inconsistency — pre-existing pattern
+
+## Results
+- 694 tests passing
+- Lint + format clean

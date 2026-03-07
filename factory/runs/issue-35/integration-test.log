@@ -1,0 +1,25 @@
+# Integration Test Log — Issue #35
+
+## Setup
+- Mock signal server on port 9090
+- Bot started with --test-channel-only from worktree
+- .env copied from main repo, data/ dir created
+
+## Test 1: list_pull_requests
+- **Message:** "claude: list open PRs on this repo"
+- **Expected:** Bot calls list_pull_requests tool, returns PR list
+- **Actual:** Bot called mcp__github__list_pull_requests with {"state":"open"}, returned PR #37 (draft)
+- **Bot response:** "There's 1 open PR on the repo: #37 (draft) — feat: add GitHub PR tools to MCP server by orbxom"
+- **Result:** PASS
+
+## Test 2: view_pull_request
+- **Message:** "claude: show me the details of PR 37"
+- **Expected:** Bot calls view_pull_request tool, returns PR details
+- **Actual:** Bot called mcp__github__view_pull_request with {"number":37}, returned full PR summary
+- **Bot response:** Full PR details including status (draft), changes (+494/-11, 2 files), description, test plan
+- **Result:** PASS
+
+## Notes
+- Both tools were auto-discovered by Claude via MCP (no system prompt injection needed)
+- Claude correctly used requireNumber (passed number: 37, not string "37")
+- Response times: ~44s and ~46s (includes Claude CLI startup + MCP server spawn)
