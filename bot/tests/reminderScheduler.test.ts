@@ -29,6 +29,7 @@ function makeReminder(overrides: Partial<Reminder> = {}): Reminder {
     sentAt: null,
     lastAttemptAt: null,
     failureReason: null,
+    mode: 'simple' as const,
     ...overrides,
   };
 }

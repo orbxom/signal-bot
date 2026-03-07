@@ -2,7 +2,7 @@ import { parseClaudeOutput, spawnPromise } from './claudeClient';
 import { logger } from './logger';
 import { buildAllowedTools, buildMcpConfig } from './mcp/registry';
 import type { SignalClient } from './signalClient';
-import type { AppConfig, RecurringReminder } from './types';
+import type { AppConfig, PromptExecution } from './types';
 
 export class RecurringReminderExecutor {
   constructor(
@@ -11,7 +11,7 @@ export class RecurringReminderExecutor {
     private maxTurns: number,
   ) {}
 
-  async execute(reminder: RecurringReminder): Promise<void> {
+  async execute(reminder: PromptExecution): Promise<void> {
     const context = {
       ...this.appConfig,
       groupId: reminder.groupId,
@@ -22,7 +22,7 @@ export class RecurringReminderExecutor {
       'You are a helpful assistant in a Signal group chat. A recurring reminder has fired.',
       'Process the following instruction and send your response to the group using the send_message tool.',
       `Current time: ${new Date().toISOString()}`,
-      `Timezone: ${reminder.timezone}`,
+      `Timezone: ${reminder.timezone ?? this.appConfig.timezone}`,
       `Group ID: ${reminder.groupId}`,
     ].join('\n');
 
@@ -30,7 +30,7 @@ export class RecurringReminderExecutor {
     const agentsConfig = JSON.stringify({
       'message-historian': {
         description: 'Searches and summarizes historical messages from this group chat.',
-        prompt: `You search through chat history and return concise summaries. Use search_messages for keyword lookups and get_messages_by_date for date ranges. Timezone: ${reminder.timezone}`,
+        prompt: `You search through chat history and return concise summaries. Use search_messages for keyword lookups and get_messages_by_date for date ranges. Timezone: ${reminder.timezone ?? this.appConfig.timezone}`,
         tools: ['mcp__history__search_messages', 'mcp__history__get_messages_by_date'],
         model: 'haiku',
       },
