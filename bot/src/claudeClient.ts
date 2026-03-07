@@ -22,7 +22,7 @@ function getAllowedTools(): string {
   return cachedAllowedTools;
 }
 
-function spawnPromise(
+export function spawnPromise(
   cmd: string,
   args: string[],
   options: { timeout?: number; env?: NodeJS.ProcessEnv },
