@@ -360,10 +360,12 @@ export class MessageHandler {
 
       // Get LLM response
       const startTime = Date.now();
+      const toolNotificationsEnabled = this.storage.toolNotifications.isEnabled(groupId);
       const response = await this.llmClient.generateResponse(messages, {
         ...this.appConfig,
         groupId,
         sender,
+        toolNotificationsEnabled,
       });
 
       const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);

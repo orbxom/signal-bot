@@ -66,45 +66,62 @@ export function spawnPromise(
   });
 }
 
-/** Parse raw Claude CLI stdout into a structured LLMResponse. */
-export function parseClaudeOutput(stdout: string): LLMResponse {
-  const trimmed = stdout.trim();
-  let entries: Array<Record<string, unknown>> = [];
+interface ToolCall {
+  name: string;
+  input?: Record<string, unknown>;
+}
 
+interface ParsedClaudeOutput extends LLMResponse {
+  toolCalls: ToolCall[];
+  inputTokens: number;
+}
+
+/** Parse raw Claude CLI stdout into entries (JSON array or NDJSON). */
+function parseEntries(stdout: string): Array<Record<string, unknown>> {
+  const trimmed = stdout.trim();
   if (trimmed.startsWith('[')) {
-    entries = JSON.parse(trimmed);
-  } else {
-    for (const line of trimmed.split('\n')) {
-      try {
-        entries.push(JSON.parse(line));
-      } catch {
-        /* skip */
-      }
+    return JSON.parse(trimmed);
+  }
+  const entries: Array<Record<string, unknown>> = [];
+  for (const line of trimmed.split('\n')) {
+    try {
+      entries.push(JSON.parse(line));
+    } catch {
+      /* skip */
     }
   }
+  return entries;
+}
 
-  // Single pass: find result line, last assistant entry, and MCP send_message calls
+/** Parse raw Claude CLI stdout into a structured response including tool calls. */
+export function parseClaudeOutput(stdout: string): ParsedClaudeOutput {
+  const entries = parseEntries(stdout);
+
+  // Single pass: find result line, last assistant entry, MCP send_message calls, and all tool calls
   let resultLine: ClaudeResultLine | undefined;
   let lastAssistant: { message?: { content?: Array<{ type: string; text?: string }> } } | undefined;
   const mcpMessages: string[] = [];
+  const toolCalls: ToolCall[] = [];
   for (const e of entries) {
     if (e.type === 'result') resultLine = e as unknown as ClaudeResultLine;
-    if (e.type === 'assistant') lastAssistant = e as unknown as typeof lastAssistant;
-
-    // Detect send_message and send_image MCP tool calls
     if (e.type === 'assistant') {
+      lastAssistant = e as unknown as typeof lastAssistant;
+
       const msg = e as unknown as {
         message?: {
           content?: Array<{ type: string; name?: string; input?: Record<string, unknown> }>;
         };
       };
       for (const block of msg.message?.content || []) {
-        if (block.type === 'tool_use' && block.name === 'mcp__signal__send_message' && block.input?.message) {
-          mcpMessages.push(block.input.message as string);
-        }
-        if (block.type === 'tool_use' && block.name === 'mcp__signal__send_image') {
-          const caption = block.input?.caption as string | undefined;
-          mcpMessages.push(caption ? `[sent an image: ${caption}]` : '[sent an image]');
+        if (block.type === 'tool_use') {
+          if (block.name) toolCalls.push({ name: block.name, input: block.input });
+          if (block.name === 'mcp__signal__send_message' && block.input?.message) {
+            mcpMessages.push(block.input.message as string);
+          }
+          if (block.name === 'mcp__signal__send_image') {
+            const caption = block.input?.caption as string | undefined;
+            mcpMessages.push(caption ? `[sent an image: ${caption}]` : '[sent an image]');
+          }
         }
       }
     }
@@ -152,6 +169,8 @@ export function parseClaudeOutput(stdout: string): LLMResponse {
     tokensUsed: resultLine.usage?.output_tokens || 0,
     sentViaMcp: mcpMessages.length > 0,
     mcpMessages,
+    toolCalls,
+    inputTokens: resultLine.usage?.input_tokens || 0,
   };
 }
 
@@ -195,7 +214,9 @@ export class ClaudeCLIClient implements LLMClient {
     ];
 
     if (context) {
-      const mcpConfig = JSON.stringify(buildMcpConfig(context));
+      const mcpConfig = JSON.stringify(
+        buildMcpConfig(context, { toolNotificationsEnabled: context.toolNotificationsEnabled }),
+      );
       args.push('--mcp-config', mcpConfig, '--strict-mcp-config');
 
       const agentsConfig = JSON.stringify({
@@ -227,39 +248,18 @@ export class ClaudeCLIClient implements LLMClient {
         env: { ...process.env, CLAUDECODE: '' },
       });
 
-      // Log tool calls from raw output before parsing
-      const trimmed = stdout.trim();
-      let rawEntries: Array<Record<string, unknown>> = [];
-      if (trimmed.startsWith('[')) {
-        rawEntries = JSON.parse(trimmed);
-      } else {
-        for (const line of trimmed.split('\n')) {
-          try {
-            rawEntries.push(JSON.parse(line));
-          } catch {
-            /* skip */
-          }
-        }
-      }
-      const toolCalls = rawEntries
-        .filter((e): e is Record<string, unknown> => e.type === 'assistant')
-        .flatMap((e: any) => e.message?.content?.filter((b: any) => b.type === 'tool_use') || []);
-      if (toolCalls.length > 0) {
+      const response = parseClaudeOutput(stdout);
+
+      // Log tool calls, token usage, and delivery method
+      if (response.toolCalls.length > 0) {
         logger.step('tools called:');
-        for (const tool of toolCalls) {
+        for (const tool of response.toolCalls) {
           const toolArgs = tool.input ? JSON.stringify(tool.input).substring(0, 100) : '';
           logger.step(`  ${tool.name}  ${toolArgs}`);
         }
       }
-
-      const response = parseClaudeOutput(stdout);
-
-      // Log token usage and delivery method
-      const resultEntry = rawEntries.find(e => e.type === 'result') as any;
-      if (resultEntry?.usage) {
-        logger.step(
-          `llm: ${resultEntry.usage.input_tokens || 0} input / ${resultEntry.usage.output_tokens || 0} output tokens`,
-        );
+      if (response.inputTokens || response.tokensUsed) {
+        logger.step(`llm: ${response.inputTokens} input / ${response.tokensUsed} output tokens`);
       }
       logger.step(`llm: result via ${response.sentViaMcp ? 'MCP send_message' : 'result field'}`);
 

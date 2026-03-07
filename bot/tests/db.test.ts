@@ -209,7 +209,7 @@ describe('DatabaseConnection', () => {
       const row = db.conn.db.prepare("SELECT value FROM schema_meta WHERE key = 'schema_version'").get() as {
         value: string;
       };
-      expect(Number.parseInt(row.value, 10)).toBe(6);
+      expect(Number.parseInt(row.value, 10)).toBe(7);
     });
 
     it('should add mode column with default simple in v6 migration', () => {

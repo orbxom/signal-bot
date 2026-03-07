@@ -6,6 +6,7 @@ import { MessageStore } from './stores/messageStore';
 import { PersonaStore } from './stores/personaStore';
 import { RecurringReminderStore } from './stores/recurringReminderStore';
 import { ReminderStore } from './stores/reminderStore';
+import { ToolNotificationStore } from './stores/toolNotificationStore';
 import type { Attachment, Dossier, Memory, Message, Persona, Reminder, ReminderMode } from './types';
 
 export class Storage {
@@ -17,6 +18,7 @@ export class Storage {
   readonly personas: PersonaStore;
   readonly attachments: AttachmentStore;
   readonly recurringReminders: RecurringReminderStore;
+  readonly toolNotifications: ToolNotificationStore;
 
   constructor(dbPath: string) {
     this.conn = new DatabaseConnection(dbPath);
@@ -27,6 +29,7 @@ export class Storage {
     this.personas = new PersonaStore(this.conn);
     this.attachments = new AttachmentStore(this.conn);
     this.recurringReminders = new RecurringReminderStore(this.conn);
+    this.toolNotifications = new ToolNotificationStore(this.conn);
 
     // Seed default persona (previously done in initTables)
     this.personas.seedDefault();

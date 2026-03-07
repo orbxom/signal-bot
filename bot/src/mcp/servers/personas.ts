@@ -1,7 +1,8 @@
 import { DatabaseConnection } from '../../db';
 import { PersonaStore } from '../../stores/personaStore';
 import { readStorageEnv } from '../env';
-import { catchErrors, error, ok } from '../result';
+import { withNotification } from '../notify';
+import { error, ok, resultText } from '../result';
 import { runServer } from '../runServer';
 import type { McpServerDefinition } from '../types';
 import { optionalString, requireGroupId, requireNumber, requireString } from '../validate';
@@ -118,10 +119,15 @@ export const personaServer: McpServerDefinition = {
       if (description.error) return description.error;
       const tags = optionalString(args, 'tags', '');
 
-      return catchErrors(() => {
-        const persona = store.create(name.value, description.value, tags);
-        return ok(`Persona "${persona.name}" created (ID: ${persona.id}). ${tags ? `Tags: ${tags}` : ''}`);
-      }, 'Failed to create persona');
+      return withNotification(
+        `Persona "${name.value}" created`,
+        'create persona',
+        () => {
+          const persona = store.create(name.value, description.value, tags);
+          return ok(`Persona "${persona.name}" created (ID: ${persona.id}). ${tags ? `Tags: ${tags}` : ''}`);
+        },
+        'Failed to create persona',
+      );
     },
 
     get_persona(args) {
@@ -173,26 +179,36 @@ export const personaServer: McpServerDefinition = {
       if (description.error) return description.error;
       const tags = optionalString(args, 'tags', '');
 
-      return catchErrors(() => {
-        const result = store.update(id.value, name.value, description.value, tags);
-        if (!result) {
-          return error(`Persona with ID ${id.value} not found.`);
-        }
-        return ok(`Persona "${name.value}" (ID: ${id.value}) updated.`);
-      }, 'Failed to update persona');
+      return withNotification(
+        result => resultText(result).split('\n')[0],
+        'update persona',
+        () => {
+          const result = store.update(id.value, name.value, description.value, tags);
+          if (!result) {
+            return error(`Persona with ID ${id.value} not found.`);
+          }
+          return ok(`Persona "${name.value}" (ID: ${id.value}) updated.`);
+        },
+        'Failed to update persona',
+      );
     },
 
     delete_persona(args) {
       const id = requireNumber(args, 'id');
       if (id.error) return id.error;
 
-      return catchErrors(() => {
-        const result = store.delete(id.value);
-        if (!result) {
-          return error(`Cannot delete persona with ID ${id.value}. It may be the default persona or does not exist.`);
-        }
-        return ok(`Persona with ID ${id.value} deleted.`);
-      }, 'Failed to delete persona');
+      return withNotification(
+        result => resultText(result).split('\n')[0],
+        'delete persona',
+        () => {
+          const result = store.delete(id.value);
+          if (!result) {
+            return error(`Cannot delete persona with ID ${id.value}. It may be the default persona or does not exist.`);
+          }
+          return ok(`Persona with ID ${id.value} deleted.`);
+        },
+        'Failed to delete persona',
+      );
     },
 
     switch_persona(args) {
@@ -201,21 +217,28 @@ export const personaServer: McpServerDefinition = {
       const groupErr = requireGroupId(groupId);
       if (groupErr) return groupErr;
 
-      const lowerIdent = identifier.value.toLowerCase();
-      if (lowerIdent === 'default' || lowerIdent === 'reset') {
-        store.clearActive(groupId);
-        const defaultPersona = store.getDefault();
-        const name = defaultPersona?.name ?? 'Default Assistant';
-        return ok(`Persona switched to "${name}". I'll use this personality starting from the next message.`);
-      }
+      return withNotification(
+        result => resultText(result).split('.')[0],
+        'switch persona',
+        () => {
+          const lowerIdent = identifier.value.toLowerCase();
+          if (lowerIdent === 'default' || lowerIdent === 'reset') {
+            store.clearActive(groupId);
+            const defaultPersona = store.getDefault();
+            const name = defaultPersona?.name ?? 'Default Assistant';
+            return ok(`Persona switched to "${name}". I'll use this personality starting from the next message.`);
+          }
 
-      const persona = resolvePersona(identifier.value);
-      if (!persona) {
-        return error(`Persona "${identifier.value}" not found.`);
-      }
+          const persona = resolvePersona(identifier.value);
+          if (!persona) {
+            return error(`Persona "${identifier.value}" not found.`);
+          }
 
-      store.setActive(groupId, persona.id);
-      return ok(`Persona switched to "${persona.name}". I'll use this personality starting from the next message.`);
+          store.setActive(groupId, persona.id);
+          return ok(`Persona switched to "${persona.name}". I'll use this personality starting from the next message.`);
+        },
+        'Failed to switch persona',
+      );
     },
   },
   onInit() {

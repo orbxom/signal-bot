@@ -37,6 +37,7 @@ async function main() {
     },
     signalClient,
     config.claude.maxTurns,
+    groupId => storage.toolNotifications.isEnabled(groupId),
   );
   logger.success('Recurring reminder executor initialized');
 

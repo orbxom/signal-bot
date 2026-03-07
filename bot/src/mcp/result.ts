@@ -2,6 +2,12 @@ import type { ToolResult } from './types';
 
 export { estimateTokens } from '../utils/tokens';
 
+/** Extract the text from the first content block of a ToolResult, or '' if missing. */
+export function resultText(result: ToolResult): string {
+  const block = result.content[0];
+  return block && 'text' in block ? block.text : '';
+}
+
 export function ok(text: string): ToolResult {
   return { content: [{ type: 'text', text }] };
 }

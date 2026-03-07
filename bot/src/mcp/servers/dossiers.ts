@@ -1,7 +1,8 @@
 import { DatabaseConnection } from '../../db';
 import { DossierStore } from '../../stores/dossierStore';
 import { readStorageEnv } from '../env';
-import { catchErrors, estimateTokens, ok } from '../result';
+import { withNotification } from '../notify';
+import { estimateTokens, ok } from '../result';
 import { runServer } from '../runServer';
 import type { McpServerDefinition } from '../types';
 import { optionalString, requireGroupId, requireString } from '../validate';
@@ -65,12 +66,17 @@ export const dossierServer: McpServerDefinition = {
       const groupErr = requireGroupId(groupId);
       if (groupErr) return groupErr;
 
-      return catchErrors(() => {
-        store.upsert(groupId, personId.value, displayName.value, notes);
-        return ok(
-          `Updated dossier for ${displayName.value} (${personId.value}). Notes: ~${estimateTokens(notes)} tokens used.`,
-        );
-      }, 'Failed to update dossier');
+      return withNotification(
+        `Dossier updated for ${displayName.value}`,
+        'update dossier',
+        () => {
+          store.upsert(groupId, personId.value, displayName.value, notes);
+          return ok(
+            `Updated dossier for ${displayName.value} (${personId.value}). Notes: ~${estimateTokens(notes)} tokens used.`,
+          );
+        },
+        'Failed to update dossier',
+      );
     },
 
     get_dossier(args) {

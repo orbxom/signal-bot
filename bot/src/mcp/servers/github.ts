@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { readStorageEnv } from '../env';
+import { withNotification } from '../notify';
 import { catchErrors, error, ok } from '../result';
 import { runServer } from '../runServer';
 import type { McpServerDefinition } from '../types';
@@ -192,17 +193,22 @@ export const githubServer: McpServerDefinition = {
 
       const fullBody = sender ? `${body.value}\n\n---\n_Requested via Signal by ${sender}_` : body.value;
 
-      return catchErrors(async () => {
-        const ghArgs = ['issue', 'create', '--repo', githubRepo, '--title', title.value, '--body', fullBody];
-        for (const label of labels) {
-          ghArgs.push('--label', label);
-        }
+      return withNotification(
+        'Feature request created',
+        'create feature request',
+        async () => {
+          const ghArgs = ['issue', 'create', '--repo', githubRepo, '--title', title.value, '--body', fullBody];
+          for (const label of labels) {
+            ghArgs.push('--label', label);
+          }
 
-        const { stdout } = await execFileAsync('gh', ghArgs, { timeout: GH_TIMEOUT });
-        const issueUrl = stdout.trim();
+          const { stdout } = await execFileAsync('gh', ghArgs, { timeout: GH_TIMEOUT });
+          const issueUrl = stdout.trim();
 
-        return ok(`Feature request created: ${issueUrl}`);
-      }, 'Failed to create issue');
+          return ok(`Feature request created: ${issueUrl}`);
+        },
+        'Failed to create issue',
+      );
     },
 
     async list_pull_requests(args) {
@@ -330,14 +336,19 @@ export const githubServer: McpServerDefinition = {
       const repoErr = validateRepo();
       if (repoErr) return repoErr;
 
-      return catchErrors(async () => {
-        const { stdout } = await execFileAsync(
-          'gh',
-          ['pr', 'comment', String(num.value), '--repo', githubRepo, '--body', body.value],
-          { timeout: GH_TIMEOUT },
-        );
-        return ok(stdout.trim() || `Comment added to PR #${num.value}.`);
-      }, 'Failed to comment on pull request');
+      return withNotification(
+        `Commented on PR #${num.value}`,
+        'comment on pull request',
+        async () => {
+          const { stdout } = await execFileAsync(
+            'gh',
+            ['pr', 'comment', String(num.value), '--repo', githubRepo, '--body', body.value],
+            { timeout: GH_TIMEOUT },
+          );
+          return ok(stdout.trim() || `Comment added to PR #${num.value}.`);
+        },
+        'Failed to comment on pull request',
+      );
     },
 
     async review_pull_request(args) {
@@ -358,15 +369,20 @@ export const githubServer: McpServerDefinition = {
         return error(`Body is required for ${event.value} reviews.`);
       }
 
-      return catchErrors(async () => {
-        const ghArgs = ['pr', 'review', String(num.value), '--repo', githubRepo, flag];
-        if (reviewBody) {
-          ghArgs.push('--body', reviewBody);
-        }
+      return withNotification(
+        `Review submitted on PR #${num.value}: ${event.value}`,
+        'review pull request',
+        async () => {
+          const ghArgs = ['pr', 'review', String(num.value), '--repo', githubRepo, flag];
+          if (reviewBody) {
+            ghArgs.push('--body', reviewBody);
+          }
 
-        await execFileAsync('gh', ghArgs, { timeout: GH_TIMEOUT });
-        return ok(`Review submitted on PR #${num.value}: ${event.value}.`);
-      }, 'Failed to review pull request');
+          await execFileAsync('gh', ghArgs, { timeout: GH_TIMEOUT });
+          return ok(`Review submitted on PR #${num.value}: ${event.value}.`);
+        },
+        'Failed to review pull request',
+      );
     },
 
     async merge_pull_request(args) {
@@ -380,14 +396,19 @@ export const githubServer: McpServerDefinition = {
         return error(`Invalid strategy "${strategy}". Must be merge, squash, or rebase.`);
       }
 
-      return catchErrors(async () => {
-        const { stdout } = await execFileAsync(
-          'gh',
-          ['pr', 'merge', String(num.value), '--repo', githubRepo, `--${strategy}`],
-          { timeout: GH_TIMEOUT },
-        );
-        return ok(stdout.trim() || `PR #${num.value} merged via ${strategy}.`);
-      }, 'Failed to merge pull request');
+      return withNotification(
+        `PR #${num.value} merged via ${strategy}`,
+        'merge pull request',
+        async () => {
+          const { stdout } = await execFileAsync(
+            'gh',
+            ['pr', 'merge', String(num.value), '--repo', githubRepo, `--${strategy}`],
+            { timeout: GH_TIMEOUT },
+          );
+          return ok(stdout.trim() || `PR #${num.value} merged via ${strategy}.`);
+        },
+        'Failed to merge pull request',
+      );
     },
   },
   onInit() {

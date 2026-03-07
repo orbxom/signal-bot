@@ -185,6 +185,51 @@ export const ALL_SERVERS: McpServerDefinition[] = [
 
 That's it. The registry auto-discovers tools and builds the MCP config. No other files need to change.
 
+### Integrating Tool Notifications
+
+MCP tools can send brief Signal notifications to the group after completing state-changing actions. This is opt-in per group — controlled by the `toggle_tool_notifications` tool in the settings server.
+
+**How it works:** The registry passes `TOOL_NOTIFICATIONS_ENABLED=1`, `SIGNAL_CLI_URL`, and `SIGNAL_ACCOUNT` as env vars to all MCP servers. The `withNotification()` wrapper composes around `catchErrors()` to send a Signal notification after the tool completes.
+
+**To add notifications to state-changing handlers:**
+
+1. Import `withNotification`:
+   ```typescript
+   import { withNotification } from '../notify.js';
+   ```
+
+2. Replace `catchErrors` with `withNotification` for state-changing handlers:
+   ```typescript
+   my_tool: (args) => withNotification(
+     'Item created',              // success notification (or callback for dynamic messages)
+     'create item',               // error context for notification
+     () => {
+       const name = requireString(args, 'name');
+       // ... your implementation
+       return ok(`Created ${name}`);
+     },
+     'my_tool',                   // error prefix for catchErrors (optional)
+   ),
+   ```
+
+3. For dynamic success messages, use a callback:
+   ```typescript
+   onSuccess: (result) => {
+     const text = result.content[0] && 'text' in result.content[0] ? result.content[0].text : '';
+     return text.split('\n')[0];
+   },
+   ```
+
+**Do NOT add notifications to:**
+- Read-only tools (search, list, view, etc.) — keep using `catchErrors`
+- The `send_message` / `send_image` tools (the message IS the notification)
+- The `toggle_tool_notifications` tool (avoid infinite loops)
+
+**Notification messages should be:**
+- Concise (1 line, describes what happened)
+- User-facing (no internal IDs or raw data)
+- Prefixed automatically with "Done" or "Failed" by the utility
+
 ### Step 6: Verify everything
 
 ```bash
@@ -242,6 +287,9 @@ function spawnMcpServer(): ChildProcess {
 | `bot/src/mcp/registry.ts` | `buildAllowedTools()`, `buildMcpConfig()` — auto-discovers from `ALL_SERVERS` |
 | `bot/src/mcp/servers/index.ts` | Barrel export: `ALL_SERVERS` array (add one import here) |
 | `bot/tests/helpers/mcpTestHelpers.ts` | `spawnMcpServer()`, `sendAndReceive()`, `initializeServer()` |
+| `bot/src/mcp/notify.ts` | Shared notification utility: `sendToolNotification()`, `withNotification()` |
+| `bot/src/stores/toolNotificationStore.ts` | Per-group notification toggle setting store |
+| `bot/src/mcp/servers/settings.ts` | Settings MCP server with toggle tool |
 
 ## Common Rationalizations
 

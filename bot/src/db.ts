@@ -146,6 +146,11 @@ export class DatabaseConnection {
         this.migrateToV6();
         this.setSchemaVersion(6);
       }
+
+      if (currentVersion < 7) {
+        this.migrateToV7();
+        this.setSchemaVersion(7);
+      }
     } catch (error) {
       wrapSqliteError(error, 'run migrations');
     }
@@ -258,6 +263,16 @@ export class DatabaseConnection {
     if (!cols.some(c => c.name === 'mode')) {
       this.db.exec("ALTER TABLE reminders ADD COLUMN mode TEXT NOT NULL DEFAULT 'simple'");
     }
+  }
+
+  private migrateToV7(): void {
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS tool_notification_settings (
+        groupId TEXT NOT NULL PRIMARY KEY,
+        enabled INTEGER NOT NULL DEFAULT 0,
+        updatedAt INTEGER NOT NULL
+      );
+    `);
   }
 
   runOp<T>(name: string, fn: () => T): T {

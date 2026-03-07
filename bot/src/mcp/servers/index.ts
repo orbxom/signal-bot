@@ -7,6 +7,7 @@ import { memoryServer } from './memories';
 import { messageHistoryServer } from './messageHistory';
 import { personaServer } from './personas';
 import { reminderServer } from './reminders';
+import { settingsServer } from './settings';
 import { signalServer } from './signal';
 import { sourceCodeServer } from './sourceCode';
 import { weatherServer } from './weather';
@@ -21,6 +22,7 @@ export const ALL_SERVERS: McpServerDefinition[] = [
   messageHistoryServer,
   weatherServer,
   sourceCodeServer,
+  settingsServer,
   signalServer,
   personaServer,
 ];
