@@ -1,11 +1,11 @@
 {
   "issueNumber": 34,
-  "currentStage": "build",
+  "currentStage": "simplify",
   "stages": {
     "plan": "complete",
-    "build": "in-progress",
-    "test": "pending",
-    "simplify": "pending",
+    "build": "complete",
+    "test": "complete",
+    "simplify": "in-progress",
     "pr": "pending",
     "integration-test": "pending",
     "review": "pending"

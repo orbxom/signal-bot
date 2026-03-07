@@ -1,0 +1,32 @@
+## Stage 4 — SIMPLIFY Results
+
+### Three-agent parallel review conducted
+
+**Agent 1 — Code Reuse:**
+- Timestamp formatting uses inline `toLocaleString()` instead of `formatTimestamp()` utility — SKIPPED (different format output)
+- All other code properly leverages existing utilities (ok/error, requireString, wrapSqliteError, etc.)
+
+**Agent 2 — Code Quality:**
+- CRITICAL: `handleRecurringFailure` called `markFired()` which resets `consecutiveFailures` to 0, then `incrementFailures()` set it to 1. This meant auto-cancel after 5 failures could NEVER trigger. — FIXED
+- Duplicate `MAX_RECURRING_FAILURES` constant vs exported `MAX_CONSECUTIVE_FAILURES` — FIXED (import from store)
+- Type assertions (`as RecurringReminderStore`) — acknowledged, acceptable given the guard check
+- Parameter sprawl in executor — acceptable, mirrors existing patterns
+- Method naming inconsistency — skipped, not worth addressing
+
+**Agent 3 — Efficiency:**
+- Confirmed the `handleRecurringFailure` double-update bug — FIXED via new `advanceNextDue()` method
+- Unused `resetFailures` prepared statement — FIXED (replaced with `advanceNextDue`)
+- Polling frequency (30s for hourly reminders) — skipped, negligible overhead
+- `incrementFailures` double-read — skipped, failures are rare
+
+### Changes Made
+1. Added `advanceNextDue()` method to RecurringReminderStore — updates nextDueAt and clears in-flight WITHOUT resetting consecutiveFailures
+2. Replaced `resetFailures` prepared statement with `advanceNextDue`
+3. Fixed `handleRecurringFailure` to use `advanceNextDue` instead of `markFired`
+4. Imported `MAX_CONSECUTIVE_FAILURES` from store instead of duplicating constant
+5. Added test for `advanceNextDue` verifying failures are preserved
+
+### Verification
+- 724 tests pass (1 new test added)
+- Lint clean
+- Committed as ebbba5e

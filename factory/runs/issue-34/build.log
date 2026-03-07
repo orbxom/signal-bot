@@ -1,0 +1,33 @@
+# Build Log — Issue #34
+
+## Task 1: Scaffold MCP server (d94db08)
+- Created darkFactory.ts skeleton with checkEnabled gate, 2 tool definitions, validation
+- Created 5 tests: initialize, tool listing, gate check, missing params
+- Registered in index.ts
+
+## Task 2: start_dark_factory handler (committed with Task 1 batch)
+- Added imports: execFile, fs, os, path, promisify
+- Added projectRoot() and sessionsDir() helpers
+- Implemented KDL layout generation + kitty launch + session metadata
+
+## Task 3: read_dark_factory handler (ae5f6f4)
+- Added ParsedMessage interface and parseConversationJSONL function
+- Implemented JSONL file discovery with content-based matching
+- Added "no session found" test
+
+## Task 4: JSONL parsing integration test (7a0c07d)
+- Integration test with temp dirs, fake session metadata, fake JSONL
+- Verified end-to-end parsing of assistant messages and tool usage
+
+## Task 5: Register + gitignore (2be209f)
+- Added factory/sessions/ to .gitignore
+
+## Code Review Fixes (ce45666)
+- Fixed envMapping: {} (darkFactoryEnabled not a valid MessageContext key)
+- Shell-escaped project root in KDL layout
+- Added path.basename for session_name traversal prevention
+
+## Final State
+- 691 tests passing (7 new)
+- Lint/format clean
+- Branch: feature/issue-34-dark-factory-mcp

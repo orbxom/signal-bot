@@ -46,7 +46,10 @@ Determine the entry mode from what the user provided, then initialize accordingl
 2. Create the run directory: `factory/runs/<run-id>/`
 3. Write `event.json` with: source, issueNumber, issueUrl, title, description, acceptanceCriteria, mode ("full"), createdAt
 4. Write `status.json` with all stages set to `pending` (plan, build, test, simplify, pr, integration-test, review)
-5. Update `status.json` to set current stage to `plan`
+5. Create `diary.md` with header `# Diary — <run-id>`
+6. Update `status.json` to set current stage to `plan`
+
+**Diary:** Append entry — "Initialized. Mode: full. Issue #N: <title>."
 
 ### Plan-only mode (plan, no issue)
 1. Choose a run ID from the plan filename or content (e.g., `plan-<slug>`)
@@ -54,7 +57,10 @@ Determine the entry mode from what the user provided, then initialize accordingl
 3. Copy the user's plan file to `factory/runs/<run-id>/plan.md`
 4. Write `event.json` synthesized from the plan content: source ("local"), title, description, acceptanceCriteria (extracted from plan), mode ("plan-only"), createdAt. No issueNumber or issueUrl.
 5. Write `status.json` with all stages set to `pending`
-6. Update `status.json` to set current stage to `plan`
+6. Create `diary.md` with header `# Diary — <run-id>`
+7. Update `status.json` to set current stage to `plan`
+
+**Diary:** Append entry — "Initialized. Mode: plan-only. Plan: <filename>. Title: <title>."
 
 ### Fast-start mode (issue + plan)
 1. Fetch the GitHub issue details using `gh api repos/orbxom/signal-bot/issues/<N>`
@@ -62,7 +68,10 @@ Determine the entry mode from what the user provided, then initialize accordingl
 3. Copy the user's plan file to `factory/runs/<run-id>/plan.md`
 4. Write `event.json` with: source, issueNumber, issueUrl, title, description, acceptanceCriteria, mode ("fast-start"), createdAt
 5. Write `status.json` with all stages set to `pending`
-6. Update `status.json` to set current stage to `plan`
+6. Create `diary.md` with header `# Diary — <run-id>`
+7. Update `status.json` to set current stage to `plan`
+
+**Diary:** Append entry — "Initialized. Mode: fast-start. Issue #N: <title>. Plan: <filename>."
 
 **Announce:** "Initialized run for <run-id>. Mode: <mode>. Starting planning stage."
 
@@ -93,6 +102,8 @@ Combine all findings into `factory/runs/<run-id>/research.md`.
 
 **This step always runs**, even when a plan is provided. Research validates the plan against the current state of the codebase.
 
+**Diary:** Append entry when dispatching agents, then another when research completes (summarize key findings in one line).
+
 ### Step 2: Plan Drafting
 
 **Skip this step if `plan.md` already exists in the run directory** (plan-only or fast-start mode). Jump to Step 3.
@@ -106,6 +117,8 @@ Use the `writing-plans` skill to create the implementation plan. The plan MUST i
 
 Write to `factory/runs/<run-id>/plan.md`.
 
+**Diary:** Append entry — "Plan drafted. <N> tasks, <approach summary>." (Skip if step was skipped; note "Plan provided by user, skipping drafting." instead.)
+
 ### Step 3: Devil's Advocate Review
 
 Spawn a subagent with this mandate:
@@ -114,6 +127,8 @@ Spawn a subagent with this mandate:
 - Be constructive but thorough
 - Write critique to `factory/runs/<run-id>/plan-review.md`
 
+**Diary:** Append entry — "Devil's advocate: <N> concerns raised (<brief list>)."
+
 ### Step 4: Plan Revision
 
 - Review the devil's advocate critique
@@ -121,6 +136,8 @@ Spawn a subagent with this mandate:
 - Dismiss invalid concerns with clear reasoning
 - Update `factory/runs/<run-id>/plan.md` with the final version
 - Add a "Revisions" section at the bottom noting what changed and why
+
+**Diary:** Append entry — "Plan revised. Addressed: <concerns addressed>. Dismissed: <concerns dismissed>."
 
 ### Step 5: Human Checkpoint
 
@@ -135,6 +152,8 @@ In your plan mode message, present:
 This launches the Plannotator UI where the human can review and annotate the plan interactively. When they approve exiting plan mode, proceed to the next stage.
 
 **Do NOT proceed until the human explicitly approves.**
+
+**Diary:** Append entry — "Human approved plan. Moving to BUILD."
 
 Update `status.json`: plan -> complete.
 
@@ -151,6 +170,8 @@ Update `status.json`: plan -> complete.
 5. Report progress at natural milestones: "Completed task 3/7 — <description>"
 
 **Do NOT read or write implementation code yourself.** Only read subagent summaries and status.
+
+**Diary:** Append entry when worktree/branch is created. Append an entry after each subagent completes a task — "Task N/M done — <brief description>. Tests: pass/fail." Append a summary entry when all tasks are done.
 
 Update `status.json`: build -> complete.
 
@@ -169,6 +190,8 @@ Update `status.json`: build -> complete.
 6. If failures persist after 3 subagent attempts:
    - **STOP. Checkpoint with human.** Explain what's failing and what you've tried.
 
+**Diary:** Append entry with initial test/lint/check results (pass, or list failures). After each debug subagent attempt, append — "Debug attempt N: <what was tried>, result: <pass/fail>." When all pass (or escalating), append final entry.
+
 Update `status.json`: test -> complete.
 
 **Announce:** "All tests passing. Moving to simplify."
@@ -180,6 +203,8 @@ Update `status.json`: test -> complete.
 3. The subagent should re-run tests to confirm nothing broke
 4. If tests break, the subagent should revert the simplify changes and note it in the log
 5. Review the subagent's summary. **Do NOT read or edit code yourself.**
+
+**Diary:** Append entry — "Simplify: <summary of changes or 'no changes needed'>. Tests: pass/fail."
 
 Update `status.json`: simplify -> complete.
 
@@ -216,6 +241,8 @@ Update `status.json`: simplify -> complete.
    - Report whether linkage was verified as-is or had to be fixed
 4. Log PR URL to `factory/runs/<run-id>/pr-url.txt`
 
+**Diary:** Append entry — "PR #<number> created: <title>. Issue linkage: <verified/fixed/skipped>."
+
 Update `status.json`: pr -> complete.
 
 **Announce:** "Draft PR created: <url>. Moving to integration testing."
@@ -242,6 +269,8 @@ Verify the feature actually works end-to-end using the mock signal server.
    - This prevents the same mistakes from recurring in future pipeline runs
 8. Clean up: kill mock server and bot processes
 
+**Diary:** Append entry for each test case — "Test: '<message>' — expected: <X>, actual: <Y>, result: pass/fail." After fix attempts, append — "Fix attempt N: <what was tried>, result: <pass/fail>." Final entry when all pass (or escalating).
+
 Update `status.json`: integration-test -> complete.
 
 **Announce:** "Integration testing complete. Moving to review."
@@ -258,6 +287,8 @@ Update `status.json`: integration-test -> complete.
    - Write findings to `factory/runs/<run-id>/review.md`
    - **Tell the human:** "Review found issues. See PR comments. Want me to address them?"
 
+**Diary:** Append entry — "Review: <clean/N issues found>." If clean: "Run complete. PR ready for merge." If issues: "Returning to BUILD to address review feedback."
+
 Update `status.json`: review -> complete (or back to build if fixing issues).
 
 ## Resuming a Run
@@ -266,15 +297,19 @@ If a conversation is interrupted, the human can say "resume issue-42" (or "resum
 
 1. Read `factory/runs/<run-id>/status.json`
 2. Read `factory/runs/<run-id>/event.json` to determine the entry mode
-3. Find the first non-complete stage
-4. Announce: "Resuming <run-id> from <stage> stage. Mode: <mode>."
-5. Continue from that stage, respecting the original entry mode
+3. Read `factory/runs/<run-id>/diary.md` to understand what happened, decisions made, and current context
+4. Find the first non-complete stage
+5. Announce: "Resuming <run-id> from <stage> stage. Mode: <mode>. Last activity: <last diary entry summary>."
+6. Continue from that stage, respecting the original entry mode
+
+**Diary:** Append entry — "Resumed from <stage>. Previous session ended at: <last entry context>."
 
 ## Rules
 
 - **Never skip a stage.** Even for "trivial" changes.
 - **Never proceed past a checkpoint without human approval.**
 - **Always update status.json** when entering and completing a stage.
+- **Always append to diary.md** at stage transitions and mid-stage milestones. Each entry: one line with timestamp, what happened, key decisions or outcomes. Brief but meaningful — enough for a new conversation to resume without reading full artifacts.
 - **Always write artifacts** to the run directory, not just to stdout.
 - **Never write or edit code directly.** The orchestrator delegates ALL code work (implementation, debugging, refactoring, simplification) to subagents. You may read subagent summaries, run shell commands (tests, git), and write pipeline artifacts (status.json, logs, event.json), but never use Read/Edit on source code files. This keeps your context clean for orchestration.
 - **Encourage subagents to check their available skills** when spawning them.

@@ -1,12 +1,12 @@
 {
   "issueNumber": 33,
-  "currentStage": "build",
+  "currentStage": "integration-test",
   "stages": {
     "plan": "complete",
-    "build": "in_progress",
-    "test": "pending",
-    "simplify": "pending",
-    "pr": "pending",
+    "build": "complete",
+    "test": "complete",
+    "simplify": "complete",
+    "pr": "complete",
     "integration-test": "pending",
     "review": "pending"
   }

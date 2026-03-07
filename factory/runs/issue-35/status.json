@@ -1,6 +1,6 @@
 {
   "issueNumber": 35,
-  "currentStage": "review",
+  "currentStage": "complete",
   "stages": {
     "plan": "complete",
     "build": "complete",
@@ -8,6 +8,6 @@
     "simplify": "complete",
     "pr": "complete",
     "integration-test": "complete",
-    "review": "in-progress"
+    "review": "complete"
   }
 }
