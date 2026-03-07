@@ -1,0 +1,12 @@
+{
+  "currentStage": "plan",
+  "stages": {
+    "plan": "in-progress",
+    "build": "pending",
+    "test": "pending",
+    "simplify": "pending",
+    "pr": "pending",
+    "integration-test": "pending",
+    "review": "pending"
+  }
+}

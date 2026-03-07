@@ -1,0 +1,14 @@
+{
+  "source": "github",
+  "issueNumber": 36,
+  "issueUrl": "https://github.com/orbxom/signal-bot/issues/36",
+  "title": "Add health check MCP server",
+  "description": "Add a basic health check MCP server that exposes a `health_check` tool. This lets Claude (or external monitors) verify the bot's operational status.",
+  "acceptanceCriteria": [
+    "`health_check` tool returns structured JSON with uptime, db status, signal connectivity, and memory usage",
+    "Gracefully handles cases where signal-cli is unreachable",
+    "Tests cover happy path and failure scenarios"
+  ],
+  "mode": "full",
+  "createdAt": "2026-03-07T00:00:00Z"
+}

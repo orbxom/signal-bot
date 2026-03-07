@@ -7,6 +7,32 @@ import { runServer } from '../runServer';
 import type { McpServerDefinition } from '../types';
 import { requireNumber, requireString } from '../validate';
 
+let signalCliUrl = '';
+let signalAccount = '';
+let groupId = '';
+
+async function sendSignalNotification(message: string): Promise<void> {
+  if (!signalCliUrl || !signalAccount || !groupId) return;
+  try {
+    const response = await fetch(`${signalCliUrl}/api/v1/rpc`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'send',
+        params: { account: signalAccount, groupId, message },
+        id: `dark-factory-${Date.now()}`,
+      }),
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!response.ok) {
+      console.error(`Signal notification failed: ${response.statusText}`);
+    }
+  } catch (err) {
+    console.error(`Signal notification failed: ${err}`);
+  }
+}
+
 function projectRoot(): string {
   return process.env.DARK_FACTORY_PROJECT_ROOT || path.resolve(__dirname, '..', '..', '..', '..');
 }
@@ -105,6 +131,8 @@ const handlers = {
     if (issueNumber.error) return issueNumber.error;
 
     return catchErrors(async () => {
+      await sendSignalNotification(`Dark factory starting for issue #${issueNumber.value}...`);
+
       const now = new Date();
       const sessionName = `dark-factory-${issueNumber.value}-${now.getTime()}`;
       const root = projectRoot();
@@ -122,15 +150,7 @@ const handlers = {
       // Launch a new kitty window with zellij inside it
       const child = spawn(
         'kitty',
-        [
-          '--title',
-          sessionName,
-          'zellij',
-          '-s',
-          sessionName,
-          '--new-session-with-layout',
-          layoutPath,
-        ],
+        ['--title', sessionName, 'zellij', '-s', sessionName, '--new-session-with-layout', layoutPath],
         { detached: true, stdio: 'ignore', env: { ...process.env, CLAUDECODE: '' } },
       );
       child.unref();
@@ -250,8 +270,17 @@ export const darkFactoryServer: McpServerDefinition = {
   entrypoint: 'darkFactory',
   tools: TOOLS,
   handlers,
-  envMapping: { DARK_FACTORY_ENABLED: 'darkFactoryEnabled', DARK_FACTORY_PROJECT_ROOT: 'darkFactoryProjectRoot' },
+  envMapping: {
+    DARK_FACTORY_ENABLED: 'darkFactoryEnabled',
+    DARK_FACTORY_PROJECT_ROOT: 'darkFactoryProjectRoot',
+    SIGNAL_CLI_URL: 'signalCliUrl',
+    SIGNAL_ACCOUNT: 'botPhoneNumber',
+    MCP_GROUP_ID: 'groupId',
+  },
   onInit() {
+    signalCliUrl = process.env.SIGNAL_CLI_URL || '';
+    signalAccount = process.env.SIGNAL_ACCOUNT || '';
+    groupId = process.env.MCP_GROUP_ID || '';
     console.error('Dark Factory MCP server started');
   },
 };
