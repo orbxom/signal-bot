@@ -15,7 +15,7 @@ describe('MentionDetector', () => {
 
     expect(detector.extractQuery('@bot what is the weather?')).toBe('what is the weather?');
     expect(detector.extractQuery('bot: tell me a joke')).toBe('tell me a joke');
-    expect(detector.extractQuery('hey @bot how are you')).toBe('hey how are you');
+    expect(detector.extractQuery('hey @bot how are you')).toBe('hey @bot how are you');
   });
 
   describe('isMentioned', () => {
@@ -51,7 +51,7 @@ describe('MentionDetector', () => {
   describe('extractQuery', () => {
     it('should handle multiple mentions in the same message', () => {
       const detector = new MentionDetector(['@bot']);
-      expect(detector.extractQuery('@bot @bot hello')).toBe('hello');
+      expect(detector.extractQuery('@bot @bot hello')).toBe('@bot hello');
     });
 
     it('should handle empty string after extraction', () => {
@@ -71,7 +71,14 @@ describe('MentionDetector', () => {
 
     it('should remove all trigger patterns', () => {
       const detector = new MentionDetector(['@bot', 'bot:']);
-      expect(detector.extractQuery('@bot bot: hello')).toBe('hello');
+      expect(detector.extractQuery('@bot bot: hello')).toBe('bot: hello');
+    });
+
+    it('should only strip triggers from the start of the message', () => {
+      const detector = new MentionDetector(['c ']);
+      // "c " appears inside "music scenes" — must NOT be stripped
+      expect(detector.extractQuery('c tell me about music scenes')).toBe('tell me about music scenes');
+      expect(detector.extractQuery('c describe the basic stuff')).toBe('describe the basic stuff');
     });
 
     it('should handle triggers with regex metacharacters safely', () => {

@@ -14,16 +14,12 @@ export class MentionDetector {
 
   extractQuery(content: string): string {
     let query = content;
-    for (let i = 0; i < this.triggers.length; i++) {
-      const trigger = this.triggers[i];
-      // Case-insensitive removal without regex to avoid injection
-      const lowerTrigger = this.lowerTriggers[i];
-      let lowerQuery = query.toLowerCase();
-      let idx = lowerQuery.indexOf(lowerTrigger);
-      while (idx !== -1) {
-        query = query.slice(0, idx) + query.slice(idx + trigger.length);
-        lowerQuery = query.toLowerCase();
-        idx = lowerQuery.indexOf(lowerTrigger, idx);
+    const lowerContent = query.toLowerCase();
+    // Only strip the trigger that matched at position 0
+    for (let i = 0; i < this.lowerTriggers.length; i++) {
+      if (lowerContent.startsWith(this.lowerTriggers[i])) {
+        query = query.slice(this.triggers[i].length);
+        break;
       }
     }
     return query.replace(/\s+/g, ' ').trim();
