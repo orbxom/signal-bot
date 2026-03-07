@@ -1,0 +1,27 @@
+# Test Log: Issue #5
+
+## Full Test Suite
+- 39 test files, 654 tests, all passing
+- No regressions
+
+## Weather MCP Server Tests (15 tests)
+- should respond to initialize request
+- should list 5 tools (updated from 4)
+- should return error for unknown tool
+- should return error for unknown method
+- should search for a location by name
+- should reject short search queries
+- should get observations for a valid geohash
+- should handle 7-char geohash for observations by trimming
+- should reject invalid geohash for observations
+- should get daily forecast
+- should get warnings or report none
+- should fetch radar image for a valid location (NEW - verifies GIF magic bytes)
+- should return error with station list for unknown location (NEW)
+- should handle case-insensitive location lookup (NEW)
+- should return error when location parameter is missing (NEW)
+
+## Lint & Format
+- biome lint: clean (0 errors, 0 warnings after fixes)
+- biome check: clean (0 errors)
+- Fixed: unused imports (os, path), non-null assertion, formatting

@@ -1,0 +1,30 @@
+# Test Log — Issue #2: Image Attachment Support
+
+## Run 1: Full test suite
+- 670 tests passing (42 test files)
+- Duration: 8.62s
+
+## Run 2: Lint (biome lint)
+- 15 `noNonNullAssertion` warnings in 3 test files
+- Fixed by replacing `!` with `?.` optional chaining
+- Files fixed:
+  - bot/tests/imageAttachment.integration.test.ts (7 warnings)
+  - bot/tests/signalClient.test.ts (2 warnings)
+  - bot/tests/stores/attachmentStore.test.ts (6 warnings)
+- Commit: 271db7c
+
+## Run 3: Format check (biome check)
+- 7 formatting errors (long lines in attachmentStore.test.ts and integration test)
+- Auto-fixed by `npx biome check --write`
+- Included in commit 271db7c
+
+## Run 4: Re-verification after fixes
+- Tests: 670 passing (42 files)
+- Lint: 0 warnings
+- Format check: 0 errors
+
+## Final State
+- All 670 tests passing
+- 0 lint warnings
+- 0 format errors
+- 9 commits on feature/issue-2-image-attachments

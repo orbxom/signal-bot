@@ -1,0 +1,55 @@
+# Build Log — Issue #2: Image Attachment Support
+
+## Task 0: Validate MCP image content blocks (spike)
+- SUCCESS: Claude CLI processes MCP image content blocks correctly
+- Caveat: minimum 10x10 pixel image (1x1 fails with Anthropic API error)
+- Spike file created and cleaned up
+
+## Task 1: AttachmentStore + DB migration
+- Added Attachment type (Buffer data for BLOB storage)
+- Migration v4: attachment_data table with BLOB column
+- AttachmentStore with save/get/trimOlderThan
+- 4 new tests, all passing
+- Commit: 3b39d77
+
+## Task 2: Wire into Storage facade
+- Added saveAttachment, getAttachment, trimAttachments delegates
+- No new tests needed (delegation only)
+- Commit: 0fa440f
+
+## Task 3: Ingest attachments on receive
+- Added readAttachmentFile to SignalClient
+- Wired ingestion into handleMessage and handleMessageBatch
+- 5 new tests (2 signalClient + 3 messageHandler)
+- Commit: e6e3c30
+
+## Task 4: Update context builder URIs
+- Changed format from [Image attached: /path/abc] to [Image: attachment://abc]
+- Updated IMAGE_INSTRUCTIONS to reference view_image tool
+- Updated existing test assertions
+- Commit: 4f40b91
+
+## Task 5: Images MCP server
+- Updated ToolResult type for image content blocks
+- Created images MCP server with view_image tool
+- Registered in ALL_SERVERS
+- 7 new tests (integration-level with real MCP process)
+- Commit: aad9bec
+
+## Task 6: Mock server /image command
+- Added /image command with 10x10 red PNG
+- Updated Envelope interface for attachments
+- Commit: 50f556a
+
+## Task 7: Integration test
+- 3 tests: full pipeline, null filename, trimming
+- Commit: 622999f
+
+## Task 8: Documentation
+- Updated CLAUDE.md with images MCP server and architecture
+- Commit: 0c4f372
+
+## Final State
+- 670 tests passing (42 test files)
+- 8 commits on feature/issue-2-image-attachments
+- 0 lint/format issues

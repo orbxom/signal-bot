@@ -26,7 +26,7 @@ Before starting, verify:
 1. Fetch the GitHub issue details using `gh api repos/orbxom/signal-bot/issues/<N>`
 2. Create the run directory: `factory/runs/issue-<N>/`
 3. Write `event.json` with: source, issueNumber, issueUrl, title, description, acceptanceCriteria, createdAt
-4. Write `status.json` with all stages set to `pending`
+4. Write `status.json` with all stages set to `pending` (plan, build, test, simplify, pr, integration-test, review)
 5. Update `status.json` to set current stage to `plan`
 
 **Announce:** "Initialized run for issue #N. Starting planning stage."
@@ -165,9 +165,35 @@ Update `status.json`: simplify -> complete.
 
 Update `status.json`: pr -> complete.
 
-**Announce:** "Draft PR created: <url>. Moving to review."
+**Announce:** "Draft PR created: <url>. Moving to integration testing."
 
-## Stage 6 — REVIEW
+## Stage 6 — INTEGRATION TEST
+
+Verify the feature actually works end-to-end using the mock signal server.
+
+1. Use the `mock-signal-testing` skill to start the mock server and bot
+2. Design test messages that exercise the feature built in this run (based on the plan's acceptance criteria)
+3. Send each test message via the mock server's `queueMessage` RPC and verify the bot responds correctly by checking the log output
+4. Log test messages, expected outcomes, and actual outcomes to `factory/runs/issue-<N>/integration-test.log`
+5. If a test fails:
+   - Dispatch a subagent to diagnose and fix the issue
+   - The subagent should run unit tests after fixing to ensure nothing else broke
+   - Re-run the failing integration test
+   - Log what went wrong and what the fix was
+6. If failures persist after 3 fix attempts:
+   - **STOP. Checkpoint with human.** Explain what's failing and what you've tried.
+7. **Save learnings as memories**: After fixing any integration test failure, write a memory to `/home/zknowles/.claude/projects/-home-zknowles-personal-signal-bot/memory/` documenting:
+   - What went wrong (the symptom)
+   - Why it went wrong (root cause)
+   - How it was fixed (the solution)
+   - This prevents the same mistakes from recurring in future pipeline runs
+8. Clean up: kill mock server and bot processes
+
+Update `status.json`: integration-test -> complete.
+
+**Announce:** "Integration testing complete. Moving to review."
+
+## Stage 7 — REVIEW
 
 1. Use the `requesting-code-review` skill on the PR
 2. If review is clean:

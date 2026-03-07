@@ -1,0 +1,13 @@
+{
+  "source": "github",
+  "issueNumber": 2,
+  "issueUrl": "https://github.com/orbxom/signal-bot/issues/2",
+  "title": "Support image attachments in messages",
+  "description": "When users send images in Signal messages directed at Claude, the bot should be able to view and respond to those image attachments.",
+  "acceptanceCriteria": [
+    "Bot detects image attachments in incoming messages",
+    "Images are forwarded to Claude for multimodal analysis",
+    "Claude responds with context about the image"
+  ],
+  "createdAt": "2026-03-02T08:36:44Z"
+}

@@ -1,0 +1,34 @@
+# Simplify Log — Issue #2: Image Attachment Support
+
+## Review Agents Dispatched
+Three parallel review agents: Code Reuse, Code Quality, Efficiency.
+
+## Findings Addressed
+
+### 1. Copy-paste ingestion logic (Quality — Critical)
+**Issue:** Identical attachment ingestion code duplicated in both `handleMessage` and `handleMessageBatch`.
+**Fix:** Extracted into private `ingestImageAttachments()` method. Both callers now use it.
+
+### 2. images.ts missing catchErrors (Reuse — Medium)
+**Issue:** Every other MCP server wraps handlers with `catchErrors()` but images.ts didn't.
+**Fix:** Wrapped the `view_image` handler body with `catchErrors()` for consistent error handling.
+
+### 3. Mock server double base64 decode (Efficiency — Low)
+**Issue:** `Buffer.from(fakePng, 'base64')` called twice — once for writeFile, once for size.
+**Fix:** Decode once into `pngBuffer`, reuse for both operations.
+
+## Findings Dismissed
+
+- **AttachmentStore should use runOp()**: False positive. Other stores (DossierStore, etc.) also use manual try/catch with wrapSqliteError. The pattern is consistent.
+- **Stringly-typed MIME prefixes**: Pre-existing pattern throughout codebase. Changing would be scope creep.
+- **attachmentsDir leaky abstraction**: Would require changing SignalClient constructor signature used everywhere.
+- **processLlmRequest parameter sprawl**: Pre-existing, not part of this change.
+- **Async file reads**: Synchronous reads are fine for this single-threaded bot.
+- **trimAttachments not called**: True, but wiring into polling loop is separate work.
+- **Batch message loop consolidation**: Minor optimization, not worth the risk.
+
+## Verification
+- 670 tests passing (42 files)
+- 0 lint warnings
+- 0 format errors
+- Commit: d40cc15

@@ -1,0 +1,22 @@
+# Build Log: Issue #5
+
+## Task 1+2: Add get_radar_image tool (COMPLETE)
+
+- Added RADAR_STATIONS mapping with ~20 stations and common aliases
+- Added RANGE_MAP (512km→1, 256km→2, 128km→3, 64km→4)
+- Added get_radar_image tool definition with location (required) and range (optional) params
+- Implemented handler: validates location, looks up station, fetches GIF from reg.bom.gov.au, validates GIF magic bytes, cleans up old temp files, writes to tmpdir
+- On unknown location: returns error with full station list
+- Content validation: checks GIF89a/GIF87a magic bytes before writing file
+- Temp file cleanup: removes radar-*.gif files older than 1 hour
+
+### Tests added:
+1. Tool count updated 4 → 5 (tool list includes get_radar_image)
+2. Fetch radar image for valid location (Sydney) — verifies GIF magic bytes
+3. Error with station list for unknown location (Narnia)
+4. Case-insensitive location lookup (sydney → Sydney)
+5. Missing location parameter error
+
+### Test results:
+- Weather MCP server: 15/15 passing
+- Full suite: 654/654 passing (was 650)

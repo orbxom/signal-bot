@@ -1,0 +1,14 @@
+{
+  "issueNumber": 5,
+  "currentStage": "review",
+  "stages": {
+    "init": "complete",
+    "plan": "complete",
+    "build": "complete",
+    "test": "complete",
+    "simplify": "complete",
+    "pr": "complete",
+    "review": "complete"
+  },
+  "updatedAt": "2026-03-07T00:00:00Z"
+}

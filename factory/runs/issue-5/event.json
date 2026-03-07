@@ -1,0 +1,14 @@
+{
+  "source": "github",
+  "issueNumber": 5,
+  "issueUrl": "https://github.com/orbxom/signal-bot/issues/5",
+  "title": "Fetch and post BOM radar images in chat",
+  "description": "When a user asks for a radar image (e.g. \"grab the radar for Sydney from BOM\"), the bot should be able to:\n\n1. Fetch the current radar image from BOM (e.g. the Sydney/Terrey Hills radar)\n2. Send it as an image attachment in the Signal group chat\n\nThis would require:\n- A way to download radar images from BOM (likely fetching a known URL pattern for each radar station)\n- Support for sending image attachments via the Signal client (signal-cli supports this)\n- Possibly a new MCP tool like `get_radar_image` on the weather server, or a separate capability",
+  "acceptanceCriteria": [
+    "Bot can fetch current BOM radar images given a location/station",
+    "Bot can send radar images as image attachments in Signal group chat",
+    "Works with predictable BOM radar URL patterns",
+    "New MCP tool for radar image fetching"
+  ],
+  "createdAt": "2026-03-02T08:46:20Z"
+}
