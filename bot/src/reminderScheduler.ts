@@ -1,7 +1,7 @@
 import { logger } from './logger';
 import type { RecurringReminderExecutor } from './recurringReminderExecutor';
 import type { SignalClient } from './signalClient';
-import type { RecurringReminderStore } from './stores/recurringReminderStore';
+import { MAX_CONSECUTIVE_FAILURES, type RecurringReminderStore } from './stores/recurringReminderStore';
 import type { ReminderStore } from './stores/reminderStore';
 import type { RecurringReminder, Reminder } from './types';
 import { computeNextDue } from './utils/cron';
@@ -10,8 +10,6 @@ const MAX_RETRIES = 3;
 const MAX_STALENESS_MS = 24 * 60 * 60 * 1000; // 24 hours
 const PER_GROUP_LIMIT = 20;
 const BASE_BACKOFF_MS = 60_000; // 60 seconds
-
-const MAX_RECURRING_FAILURES = 5;
 
 export class ReminderScheduler {
   constructor(
@@ -69,13 +67,12 @@ export class ReminderScheduler {
 
   private async handleRecurringFailure(reminder: RecurringReminder): Promise<void> {
     const store = this.recurringStore as RecurringReminderStore;
-    store.clearInFlight(reminder.id);
 
     const nextDueAt = computeNextDue(reminder.cronExpression, reminder.timezone);
-    store.markFired(reminder.id, nextDueAt);
+    store.advanceNextDue(reminder.id, nextDueAt);
 
     const failures = store.incrementFailures(reminder.id);
-    if (failures >= MAX_RECURRING_FAILURES) {
+    if (failures >= MAX_CONSECUTIVE_FAILURES) {
       store.cancel(reminder.id, reminder.groupId);
       try {
         const msg = `⚠️ Recurring reminder auto-cancelled after ${failures} consecutive failures: "${reminder.promptText}". It was set by ${reminder.requester}.`;

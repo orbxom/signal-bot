@@ -29,7 +29,7 @@ export class RecurringReminderStore {
     cancel: Database.Statement;
     listActive: Database.Statement;
     incrementFailures: Database.Statement;
-    resetFailures: Database.Statement;
+    advanceNextDue: Database.Statement;
     getById: Database.Statement;
   };
 
@@ -77,8 +77,8 @@ export class RecurringReminderStore {
         UPDATE recurring_reminders SET consecutiveFailures = consecutiveFailures + 1, updatedAt = ?
         WHERE id = ?
       `),
-      resetFailures: conn.db.prepare(`
-        UPDATE recurring_reminders SET consecutiveFailures = 0, updatedAt = ?
+      advanceNextDue: conn.db.prepare(`
+        UPDATE recurring_reminders SET nextDueAt = ?, lastInFlightAt = NULL, updatedAt = ?
         WHERE id = ?
       `),
       getById: conn.db.prepare(`
@@ -179,6 +179,12 @@ export class RecurringReminderStore {
       this.stmts.incrementFailures.run(Date.now(), id);
       const row = this.stmts.getById.get(id) as RecurringReminderRow | undefined;
       return row?.consecutiveFailures ?? 0;
+    });
+  }
+
+  advanceNextDue(id: number, nextDueAt: number): void {
+    this.conn.runOp('advance recurring reminder next due', () => {
+      this.stmts.advanceNextDue.run(nextDueAt, Date.now(), id);
     });
   }
 }

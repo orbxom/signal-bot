@@ -249,6 +249,24 @@ describe('RecurringReminderStore', () => {
     });
   });
 
+  describe('advanceNextDue', () => {
+    it('should update nextDueAt and clear lastInFlightAt without resetting failures', () => {
+      setup();
+      const id = store.create('group1', 'Alice', 'Task', '0 9 * * *', 'UTC', NOW - 1000);
+      store.markInFlight(id);
+      store.incrementFailures(id);
+      store.incrementFailures(id);
+
+      store.advanceNextDue(id, NEXT_DUE);
+
+      const active = store.listActive('group1');
+      expect(active).toHaveLength(1);
+      expect(active[0].nextDueAt).toBe(NEXT_DUE);
+      expect(active[0].lastInFlightAt).toBeNull();
+      expect(active[0].consecutiveFailures).toBe(2); // NOT reset
+    });
+  });
+
   describe('incrementFailures', () => {
     it('should increment count and return new value', () => {
       setup();

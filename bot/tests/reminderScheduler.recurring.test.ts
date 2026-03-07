@@ -76,11 +76,11 @@ function createMockRecurringStore() {
     markInFlight: vi.fn().mockReturnValue(true),
     markFired: vi.fn().mockReturnValue(true),
     clearInFlight: vi.fn(),
+    advanceNextDue: vi.fn(),
     cancel: vi.fn().mockReturnValue(true),
     incrementFailures: vi.fn().mockReturnValue(1),
     listActive: vi.fn().mockReturnValue([]),
     create: vi.fn(),
-    resetFailures: vi.fn(),
   };
 }
 
@@ -163,9 +163,8 @@ describe('ReminderScheduler — recurring reminders', () => {
     const count = await scheduler.processDueReminders();
 
     expect(count).toBe(0);
-    expect(mockRecurringStore.clearInFlight).toHaveBeenCalledWith(100);
     expect(computeNextDue).toHaveBeenCalledWith(recurring.cronExpression, recurring.timezone);
-    expect(mockRecurringStore.markFired).toHaveBeenCalledWith(100, 9999999999999);
+    expect(mockRecurringStore.advanceNextDue).toHaveBeenCalledWith(100, 9999999999999);
     expect(mockRecurringStore.incrementFailures).toHaveBeenCalledWith(100);
   });
 
