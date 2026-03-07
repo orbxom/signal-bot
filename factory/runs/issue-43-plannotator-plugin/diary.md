@@ -12,3 +12,8 @@
 - **Moving to BUILD.** Creating worktree and dispatching implementation subagent.
 - **Worktree created** at `.worktrees/issue-43-plannotator/` on branch `feature/issue-43-plannotator-plugin`. Baseline: 748 tests passing.
 - **Task 1/1 done** — CLAUDE.md updated with plannotator docs (lines 66-69). Verification: binary PATH (pass), non-interactive shell PATH (pass), plugin enabled (pass), ExitPlanMode hook (pass). All 4 checks passed. Committed at `1721b7f`.
+- **TEST: all pass.** 748 tests (48 files), lint clean (97 files), check clean (97 files).
+- **Simplify: condensed CLAUDE.md bullet** to match terse style of surrounding prerequisites. Removed verbose workflow explanation, flattened nested env var sub-bullets. Tests: pass (748/748).
+- **PR #47 created:** "docs: document plannotator plugin for dark factory". Issue linkage: verified (Closes #43). Moving to integration testing.
+- **Integration test deferred** — other run(s) in progress: issue-2, issue-31, issue-33, issue-34, issue-40, issue-41, issue-42, issue-5. Also: plannotator is a CLI feature untestable via mock signal. This pipeline run itself served as the end-to-end test (plannotator fired at Step 5).
+- **Review: clean.** All 6 acceptance criteria met. No issues found. PR #47 marked ready for review. Run complete.

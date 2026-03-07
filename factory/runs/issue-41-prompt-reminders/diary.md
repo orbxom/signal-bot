@@ -15,3 +15,7 @@
 - **2026-03-07** — Task 5/6 done — MCP tool updates. Tests: 755 pass. All implementation complete.
 - **2026-03-07** — Task 6/6 done — Lint/format fixes. All 755 tests pass, biome check clean. BUILD complete.
 - **2026-03-07** — TEST stage: 755/755 tests pass, lint clean, format clean. No failures. Moving to SIMPLIFY.
+- **2026-03-07** — Simplify: replaced `(mode as any)` with `(mode as ReminderMode)` in reminders.ts. Tests: 755 pass, lint clean.
+- **2026-03-07** — PR #46 created: feat: add prompt mode to one-off reminders. Issue linkage: verified (Closes #41).
+- **2026-03-07** — Integration test deferred — other runs in progress: issue-2, issue-31, issue-33, issue-34, issue-40, issue-42, issue-43, issue-5.
+- **2026-03-07** — Review: clean (1 issue fixed — uncommitted simplify fix committed+pushed). PR #46 marked ready for review. Run complete pending integration test.

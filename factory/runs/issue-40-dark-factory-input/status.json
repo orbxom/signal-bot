@@ -1,12 +1,14 @@
 {
-  "currentStage": "plan",
+  "issueNumber": 40,
+  "currentStage": "integration-test",
   "stages": {
-    "plan": "in-progress",
-    "build": "pending",
-    "test": "pending",
-    "simplify": "pending",
-    "pr": "pending",
+    "plan": "complete",
+    "build": "complete",
+    "test": "complete",
+    "simplify": "complete",
+    "pr": "complete",
     "integration-test": "pending",
     "review": "pending"
-  }
+  },
+  "updatedAt": "2026-03-07T23:50:00Z"
 }

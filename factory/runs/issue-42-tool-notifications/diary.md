@@ -15,3 +15,11 @@
 **2026-03-07 23:55** — Human approved plan. Moving to BUILD.
 
 **2026-03-08 00:00** — Worktree created at `.worktrees/issue-42-tool-notifications/` on branch `feature/issue-42-tool-notifications`. 742 tests passing. Dispatching Phase 1 agents (Tasks 1, 2, 6 in parallel).
+
+**2026-03-08 00:05** — Phase 1 complete (Tasks 1, 2, 6). Task 1: store+migration, 5 new tests. Task 2: notify.ts, 13 new tests. Task 6: skill docs updated.
+
+**2026-03-08 00:10** — Phase 2 complete (Tasks 3, 4). Task 3: registry passes TOOL_NOTIFICATIONS_ENABLED/SIGNAL_CLI_URL/SIGNAL_ACCOUNT to all servers, 7 new registry tests. Task 4: settings MCP server with toggle/status tools, 8 new tests. Total: 774 tests passing.
+
+**2026-03-08 00:15** — Dispatching Phase 3: Task 5 (update 6 state-changing servers with withNotification).
+
+**2026-03-08 00:20** — Task 5 complete. All 6 servers updated: reminders (4 handlers), dossiers (1), personas (4), github (4), memories (2), darkFactory (1 + refactored inline notification). darkFactory's inline sendSignalNotification() removed. 774 tests pass. Lint/format clean. BUILD complete.

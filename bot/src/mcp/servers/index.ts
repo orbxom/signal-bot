@@ -2,7 +2,6 @@ import type { McpServerDefinition } from '../types';
 import { darkFactoryServer } from './darkFactory';
 import { dossierServer } from './dossiers';
 import { githubServer } from './github';
-import { healthCheckServer } from './healthCheck';
 import { imagesServer } from './images';
 import { memoryServer } from './memories';
 import { messageHistoryServer } from './messageHistory';
@@ -15,7 +14,6 @@ import { weatherServer } from './weather';
 export const ALL_SERVERS: McpServerDefinition[] = [
   darkFactoryServer,
   githubServer,
-  healthCheckServer,
   reminderServer,
   dossierServer,
   imagesServer,

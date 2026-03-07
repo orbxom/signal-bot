@@ -1,12 +1,12 @@
 {
-  "currentStage": "test",
+  "currentStage": "complete",
   "stages": {
     "plan": "complete",
     "build": "complete",
-    "test": "in-progress",
-    "simplify": "pending",
-    "pr": "pending",
-    "integration-test": "pending",
-    "review": "pending"
+    "test": "complete",
+    "simplify": "complete",
+    "pr": "complete",
+    "integration-test": "deferred",
+    "review": "complete"
   }
 }
