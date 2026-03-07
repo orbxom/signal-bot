@@ -34,7 +34,7 @@ describe('GitHub MCP Server', () => {
     expect(serverInfo.name).toBe('signal-bot-github');
   });
 
-  it('should list 1 tool', async () => {
+  it('should list 7 tools', async () => {
     const server = spawnMcpServer();
     await initializeServer(server);
     const response = await sendAndReceive(server, {
@@ -44,8 +44,15 @@ describe('GitHub MCP Server', () => {
     });
 
     const result = response.result as { tools: Array<{ name: string }> };
-    expect(result.tools).toHaveLength(1);
-    expect(result.tools[0].name).toBe('create_feature_request');
+    expect(result.tools).toHaveLength(7);
+    const names = result.tools.map(t => t.name);
+    expect(names).toContain('create_feature_request');
+    expect(names).toContain('list_pull_requests');
+    expect(names).toContain('view_pull_request');
+    expect(names).toContain('get_pr_diff');
+    expect(names).toContain('comment_on_pull_request');
+    expect(names).toContain('review_pull_request');
+    expect(names).toContain('merge_pull_request');
   });
 
   it('should return error for unknown tool', async () => {
@@ -123,5 +130,167 @@ describe('GitHub MCP Server', () => {
     const result = response.result as { content: Array<{ text: string }>; isError?: boolean };
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toContain('GITHUB_REPO environment variable is not configured');
+  });
+
+  // --- list_pull_requests ---
+
+  it('should return error for list_pull_requests when GITHUB_REPO is not set', async () => {
+    const server = spawnMcpServer({ GITHUB_REPO: '' });
+    await initializeServer(server);
+    const response = await sendAndReceive(server, {
+      jsonrpc: '2.0',
+      id: 8,
+      method: 'tools/call',
+      params: { name: 'list_pull_requests', arguments: {} },
+    });
+
+    const result = response.result as { content: Array<{ text: string }>; isError?: boolean };
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('GITHUB_REPO environment variable is not configured');
+  });
+
+  // --- view_pull_request ---
+
+  it('should return error for view_pull_request when number is missing', async () => {
+    const server = spawnMcpServer({ GITHUB_REPO: 'owner/repo' });
+    await initializeServer(server);
+    const response = await sendAndReceive(server, {
+      jsonrpc: '2.0',
+      id: 9,
+      method: 'tools/call',
+      params: { name: 'view_pull_request', arguments: {} },
+    });
+
+    const result = response.result as { content: Array<{ text: string }>; isError?: boolean };
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('Missing or invalid number');
+  });
+
+  // --- get_pr_diff ---
+
+  it('should return error for get_pr_diff when number is missing', async () => {
+    const server = spawnMcpServer({ GITHUB_REPO: 'owner/repo' });
+    await initializeServer(server);
+    const response = await sendAndReceive(server, {
+      jsonrpc: '2.0',
+      id: 10,
+      method: 'tools/call',
+      params: { name: 'get_pr_diff', arguments: {} },
+    });
+
+    const result = response.result as { content: Array<{ text: string }>; isError?: boolean };
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('Missing or invalid number');
+  });
+
+  // --- comment_on_pull_request ---
+
+  it('should return error for comment_on_pull_request when number is missing', async () => {
+    const server = spawnMcpServer({ GITHUB_REPO: 'owner/repo' });
+    await initializeServer(server);
+    const response = await sendAndReceive(server, {
+      jsonrpc: '2.0',
+      id: 11,
+      method: 'tools/call',
+      params: { name: 'comment_on_pull_request', arguments: { body: 'test' } },
+    });
+
+    const result = response.result as { content: Array<{ text: string }>; isError?: boolean };
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('Missing or invalid number');
+  });
+
+  it('should return error for comment_on_pull_request when body is missing', async () => {
+    const server = spawnMcpServer({ GITHUB_REPO: 'owner/repo' });
+    await initializeServer(server);
+    const response = await sendAndReceive(server, {
+      jsonrpc: '2.0',
+      id: 12,
+      method: 'tools/call',
+      params: { name: 'comment_on_pull_request', arguments: { number: 1 } },
+    });
+
+    const result = response.result as { content: Array<{ text: string }>; isError?: boolean };
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('Missing or invalid body');
+  });
+
+  // --- review_pull_request ---
+
+  it('should return error for review_pull_request when number is missing', async () => {
+    const server = spawnMcpServer({ GITHUB_REPO: 'owner/repo' });
+    await initializeServer(server);
+    const response = await sendAndReceive(server, {
+      jsonrpc: '2.0',
+      id: 13,
+      method: 'tools/call',
+      params: { name: 'review_pull_request', arguments: { event: 'APPROVE' } },
+    });
+
+    const result = response.result as { content: Array<{ text: string }>; isError?: boolean };
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('Missing or invalid number');
+  });
+
+  it('should return error for review_pull_request when event is missing', async () => {
+    const server = spawnMcpServer({ GITHUB_REPO: 'owner/repo' });
+    await initializeServer(server);
+    const response = await sendAndReceive(server, {
+      jsonrpc: '2.0',
+      id: 14,
+      method: 'tools/call',
+      params: { name: 'review_pull_request', arguments: { number: 1 } },
+    });
+
+    const result = response.result as { content: Array<{ text: string }>; isError?: boolean };
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('Missing or invalid event');
+  });
+
+  it('should return error for review_pull_request COMMENT without body', async () => {
+    const server = spawnMcpServer({ GITHUB_REPO: 'owner/repo' });
+    await initializeServer(server);
+    const response = await sendAndReceive(server, {
+      jsonrpc: '2.0',
+      id: 17,
+      method: 'tools/call',
+      params: { name: 'review_pull_request', arguments: { number: 1, event: 'COMMENT' } },
+    });
+
+    const result = response.result as { content: Array<{ text: string }>; isError?: boolean };
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('Body is required for COMMENT reviews');
+  });
+
+  it('should return error for review_pull_request with invalid event', async () => {
+    const server = spawnMcpServer({ GITHUB_REPO: 'owner/repo' });
+    await initializeServer(server);
+    const response = await sendAndReceive(server, {
+      jsonrpc: '2.0',
+      id: 15,
+      method: 'tools/call',
+      params: { name: 'review_pull_request', arguments: { number: 1, event: 'INVALID' } },
+    });
+
+    const result = response.result as { content: Array<{ text: string }>; isError?: boolean };
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('Invalid event');
+  });
+
+  // --- merge_pull_request ---
+
+  it('should return error for merge_pull_request when number is missing', async () => {
+    const server = spawnMcpServer({ GITHUB_REPO: 'owner/repo' });
+    await initializeServer(server);
+    const response = await sendAndReceive(server, {
+      jsonrpc: '2.0',
+      id: 16,
+      method: 'tools/call',
+      params: { name: 'merge_pull_request', arguments: {} },
+    });
+
+    const result = response.result as { content: Array<{ text: string }>; isError?: boolean };
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('Missing or invalid number');
   });
 });
