@@ -74,6 +74,21 @@ describe('Dark Factory MCP Server', () => {
     expect(result.content[0].text).toContain('Missing or invalid issue_number');
   });
 
+  it('should return "no session found" for nonexistent session', async () => {
+    const server = spawnMcpServer({ DARK_FACTORY_ENABLED: '1' });
+    await initializeServer(server);
+    const response = await sendAndReceive(server, {
+      jsonrpc: '2.0',
+      id: 6,
+      method: 'tools/call',
+      params: { name: 'read_dark_factory', arguments: { session_name: 'nonexistent-session' } },
+    });
+
+    const result = response.result as { content: Array<{ text: string }>; isError?: boolean };
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('No session found');
+  });
+
   it('should return error when session_name is missing for read', async () => {
     const server = spawnMcpServer({ DARK_FACTORY_ENABLED: '1' });
     await initializeServer(server);

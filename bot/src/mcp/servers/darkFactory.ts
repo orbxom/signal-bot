@@ -64,6 +64,41 @@ const TOOLS = [
   },
 ];
 
+interface ParsedMessage {
+  text: string;
+  tools: string[];
+  timestamp: string;
+}
+
+function parseConversationJSONL(filePath: string, lastN: number): ParsedMessage[] {
+  const content = fs.readFileSync(filePath, 'utf-8');
+  const lines = content.split('\n').filter(Boolean);
+  const messages: ParsedMessage[] = [];
+
+  for (const line of lines) {
+    try {
+      const entry = JSON.parse(line);
+      if (entry.type !== 'assistant' || !entry.message?.content) continue;
+
+      const contentBlocks = entry.message.content as Array<{ type: string; text?: string; name?: string }>;
+      const textParts = contentBlocks.filter(b => b.type === 'text' && b.text).map(b => b.text as string);
+      const toolNames = contentBlocks.filter(b => b.type === 'tool_use' && b.name).map(b => b.name as string);
+
+      if (textParts.length > 0 || toolNames.length > 0) {
+        messages.push({
+          text: textParts.join('\n'),
+          tools: toolNames,
+          timestamp: entry.timestamp || '',
+        });
+      }
+    } catch {
+      // Skip malformed lines
+    }
+  }
+
+  return messages.slice(-lastN);
+}
+
 const handlers = {
   async start_dark_factory(args: Record<string, unknown>) {
     const gateErr = checkEnabled();
@@ -130,7 +165,80 @@ const handlers = {
     const sessionName = requireString(args, 'session_name');
     if (sessionName.error) return sessionName.error;
 
-    return error('Not implemented yet');
+    return catchErrors(() => {
+      const lastN = typeof args.last_n === 'number' ? args.last_n : 5;
+      const sessions = sessionsDir();
+      const metadataPath = path.join(sessions, `${sessionName.value}.json`);
+
+      if (!fs.existsSync(metadataPath)) {
+        return error(`No session found: ${sessionName.value}`);
+      }
+
+      const metadata = JSON.parse(fs.readFileSync(metadataPath, 'utf-8'));
+      const launchedAt = new Date(metadata.launchedAt).getTime();
+
+      // Path encoding: /home/user/project → -home-user-project
+      const claudeDir = path.join(os.homedir(), '.claude', 'projects', projectRoot().replace(/\//g, '-'));
+
+      if (!fs.existsSync(claudeDir)) {
+        return ok(`Session: ${sessionName.value}\nNo Claude conversation directory found.`);
+      }
+
+      // Find JSONL files modified after launch, then match by issue number
+      const candidates = fs
+        .readdirSync(claudeDir)
+        .filter(f => f.endsWith('.jsonl'))
+        .map(f => ({ name: f, mtime: fs.statSync(path.join(claudeDir, f)).mtimeMs }))
+        .filter(f => f.mtime >= launchedAt - 5000)
+        .sort((a, b) => b.mtime - a.mtime);
+
+      if (candidates.length === 0) {
+        return ok(
+          `Session: ${sessionName.value}\n` +
+            `Issue: #${metadata.issueNumber}\n` +
+            `No conversation file found yet. Claude may still be starting up.`,
+        );
+      }
+
+      // Find the file containing our dark factory prompt
+      const issuePattern = `dark factory issue ${metadata.issueNumber}`;
+      let jsonlPath = path.join(claudeDir, candidates[0].name); // fallback to newest
+      for (const candidate of candidates) {
+        const filePath = path.join(claudeDir, candidate.name);
+        const head = fs.readFileSync(filePath, 'utf-8').slice(0, 5000);
+        if (head.includes(issuePattern)) {
+          jsonlPath = filePath;
+          break;
+        }
+      }
+
+      const messages = parseConversationJSONL(jsonlPath, lastN);
+
+      if (messages.length === 0) {
+        return ok(
+          `Session: ${sessionName.value}\n` +
+            `Issue: #${metadata.issueNumber}\n` +
+            `Session started but no assistant responses yet.`,
+        );
+      }
+
+      let summary = `Session: ${sessionName.value}\n`;
+      summary += `Issue: #${metadata.issueNumber}\n`;
+      summary += `Showing last ${messages.length} messages:\n\n`;
+
+      for (let i = 0; i < messages.length; i++) {
+        const msg = messages[i];
+        summary += `--- Message ${i + 1} ---\n`;
+        const text = msg.text.length > 500 ? `${msg.text.slice(0, 500)}...[truncated]` : msg.text;
+        if (text) summary += `${text}\n`;
+        if (msg.tools.length > 0) {
+          summary += `Tools: ${msg.tools.join(', ')}\n`;
+        }
+        summary += '\n';
+      }
+
+      return ok(summary);
+    }, 'Failed to read dark factory session');
   },
 };
 
