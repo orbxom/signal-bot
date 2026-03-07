@@ -1,9 +1,10 @@
-import { spawn } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { withNotification } from '../notify';
-import { catchErrors, error, ok } from '../result';
+import { catchErrors, error, getErrorMessage, ok } from '../result';
 import { runServer } from '../runServer';
 import type { McpServerDefinition } from '../types';
 import { requireNumber, requireString } from '../validate';
@@ -55,6 +56,35 @@ const TOOLS = [
         last_n: {
           type: 'number',
           description: 'Number of recent assistant messages to return (default: 5)',
+        },
+      },
+      required: ['session_name'],
+    },
+  },
+  {
+    name: 'send_dark_factory_input',
+    title: 'Send Input to Dark Factory Session',
+    description:
+      'Send keyboard input to a running dark factory zellij session. Reads the visible terminal viewport first, sends the input, and returns the terminal context plus confirmation. Use this to respond to interactive prompts (tool-use confirmations, option selections, etc.). Use special_key for non-text input like Ctrl+C or Escape. Requires DARK_FACTORY_ENABLED=1.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        session_name: {
+          type: 'string',
+          description: 'The session name returned by start_dark_factory',
+        },
+        input: {
+          type: 'string',
+          description: 'Text to send to the session terminal',
+        },
+        press_enter: {
+          type: 'boolean',
+          description: 'Whether to press Enter after the text (default: true)',
+        },
+        special_key: {
+          type: 'string',
+          enum: ['ctrl-c', 'escape'],
+          description: 'Send a special key instead of text input. When set, the input parameter is ignored.',
         },
       },
       required: ['session_name'],
@@ -239,6 +269,84 @@ const handlers = {
 
       return ok(summary);
     }, 'Failed to read dark factory session');
+  },
+
+  async send_dark_factory_input(args: Record<string, unknown>) {
+    const gateErr = checkEnabled();
+    if (gateErr) return gateErr;
+
+    const sessionName = requireString(args, 'session_name');
+    if (sessionName.error) return sessionName.error;
+
+    const specialKey = typeof args.special_key === 'string' ? args.special_key : undefined;
+    if (!specialKey) {
+      const input = requireString(args, 'input');
+      if (input.error) return input.error;
+    }
+
+    return catchErrors(() => {
+      const sessions = sessionsDir();
+      const safeName = path.basename(sessionName.value);
+      const metadataPath = path.join(sessions, `${safeName}.json`);
+
+      // Verify session metadata exists
+      try {
+        fs.readFileSync(metadataPath, 'utf-8');
+      } catch {
+        return error(`No session found: ${sessionName.value}`);
+      }
+
+      // Read current terminal viewport via dump-screen
+      const dumpFile = path.join(os.tmpdir(), `dump-${safeName}-${crypto.randomUUID()}.txt`);
+      let screenContent: string;
+      try {
+        execFileSync('zellij', ['-s', safeName, 'action', 'dump-screen', dumpFile], { timeout: 5000 });
+        screenContent = fs.readFileSync(dumpFile, 'utf-8');
+        fs.unlinkSync(dumpFile);
+      } catch {
+        try {
+          fs.unlinkSync(dumpFile);
+        } catch {}
+        return error(
+          `Session "${sessionName.value}" is not reachable. It may have exited or the terminal window was closed.`,
+        );
+      }
+
+      // Filter blank lines and keep last 50 for context
+      const lines = screenContent.split('\n').filter(line => line.trim() !== '');
+      const context = lines.slice(-50).join('\n');
+
+      // Send input — either special key or text
+      // Note: zellij write-chars/write are synchronous. On zellij 0.43.1, write-chars
+      // silently succeeds on detached sessions (#4535). Since dump-screen succeeded above,
+      // the session was reachable moments ago, but a narrow race exists if the terminal
+      // window closes between dump-screen and write-chars.
+      let inputDescription: string;
+      try {
+        if (specialKey) {
+          const keyBytes: Record<string, string> = { 'ctrl-c': '3', escape: '27' };
+          const byte = keyBytes[specialKey];
+          if (!byte) return error(`Unknown special_key: ${specialKey}`);
+          execFileSync('zellij', ['-s', safeName, 'action', 'write', byte], { timeout: 5000 });
+          inputDescription = specialKey;
+        } else {
+          const inputText = args.input as string;
+          const pressEnter = args.press_enter !== false;
+          execFileSync('zellij', ['-s', safeName, 'action', 'write-chars', inputText], { timeout: 5000 });
+          if (pressEnter) {
+            execFileSync('zellij', ['-s', safeName, 'action', 'write', '13'], { timeout: 5000 });
+          }
+          inputDescription = `"${inputText}"${pressEnter ? ' + Enter' : ''}`;
+        }
+      } catch (err) {
+        return error(`Failed to send input to session: ${getErrorMessage(err)}`);
+      }
+
+      return ok(
+        `Terminal context (visible viewport before input):\n${context}\n\n` +
+          `---\nInput sent: ${inputDescription} to session ${safeName}`,
+      );
+    }, 'Failed to send input to dark factory session');
   },
 };
 
