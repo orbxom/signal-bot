@@ -2,3 +2,5 @@
 .worktrees/
 logs/
 factory/sessions/
+dashboard/node_modules/
+dashboard/dist/
