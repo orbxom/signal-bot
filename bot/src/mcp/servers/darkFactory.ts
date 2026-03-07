@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { sendToolNotification, withNotification } from '../notify';
+import { withNotification } from '../notify';
 import { catchErrors, error, ok } from '../result';
 import { runServer } from '../runServer';
 import type { McpServerDefinition } from '../types';
@@ -109,8 +109,6 @@ const handlers = {
       `Dark factory started for issue #${issueNumber.value}`,
       'start dark factory',
       async () => {
-        sendToolNotification(`Dark factory starting for issue #${issueNumber.value}...`);
-
         const now = new Date();
         const sessionName = `dark-factory-${issueNumber.value}-${now.getTime()}`;
         const root = projectRoot();

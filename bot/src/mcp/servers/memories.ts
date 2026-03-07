@@ -2,7 +2,7 @@ import { DatabaseConnection } from '../../db';
 import { MemoryStore } from '../../stores/memoryStore';
 import { readStorageEnv } from '../env';
 import { withNotification } from '../notify';
-import { estimateTokens, ok } from '../result';
+import { estimateTokens, ok, resultText } from '../result';
 import { runServer } from '../runServer';
 import type { McpServerDefinition } from '../types';
 import { requireGroupId, requireString } from '../validate';
@@ -128,7 +128,7 @@ export const memoryServer: McpServerDefinition = {
       if (groupErr) return groupErr;
 
       return withNotification(
-        `Memory deleted: "${topic.value}"`,
+        result => resultText(result).split('\n')[0],
         'delete memory',
         () => {
           const deleted = store.delete(groupId, topic.value);

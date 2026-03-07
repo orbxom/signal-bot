@@ -1,6 +1,6 @@
 import { parseClaudeOutput, spawnPromise } from './claudeClient';
 import { logger } from './logger';
-import { buildAllowedTools, buildMcpConfig } from './mcp/registry';
+import { type BuildMcpConfigOptions, buildAllowedTools, buildMcpConfig } from './mcp/registry';
 import type { SignalClient } from './signalClient';
 import type { AppConfig, RecurringReminder } from './types';
 
@@ -9,6 +9,7 @@ export class RecurringReminderExecutor {
     private appConfig: AppConfig,
     private signalClient: SignalClient,
     private maxTurns: number,
+    private toolNotificationsLookup?: (groupId: string) => boolean,
   ) {}
 
   async execute(reminder: RecurringReminder): Promise<void> {
@@ -26,7 +27,10 @@ export class RecurringReminderExecutor {
       `Group ID: ${reminder.groupId}`,
     ].join('\n');
 
-    const mcpConfig = buildMcpConfig(context);
+    const mcpOptions: BuildMcpConfigOptions = {
+      toolNotificationsEnabled: this.toolNotificationsLookup?.(reminder.groupId) ?? false,
+    };
+    const mcpConfig = buildMcpConfig(context, mcpOptions);
     const agentsConfig = JSON.stringify({
       'message-historian': {
         description: 'Searches and summarizes historical messages from this group chat.',

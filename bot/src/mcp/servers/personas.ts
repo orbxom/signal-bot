@@ -180,7 +180,7 @@ export const personaServer: McpServerDefinition = {
       const tags = optionalString(args, 'tags', '');
 
       return withNotification(
-        `Persona "${name.value}" updated`,
+        result => resultText(result).split('\n')[0],
         'update persona',
         () => {
           const result = store.update(id.value, name.value, description.value, tags);
@@ -198,7 +198,7 @@ export const personaServer: McpServerDefinition = {
       if (id.error) return id.error;
 
       return withNotification(
-        `Persona #${id.value} deleted`,
+        result => resultText(result).split('\n')[0],
         'delete persona',
         () => {
           const result = store.delete(id.value);

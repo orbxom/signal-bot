@@ -150,7 +150,7 @@ export const reminderServer: McpServerDefinition = {
       if (groupErr) return groupErr;
 
       return withNotification(
-        `Reminder #${reminderId.value} cancelled`,
+        result => resultText(result).split('\n')[0],
         'cancel reminder',
         () => {
           const success = store.cancel(reminderId.value, groupId);
@@ -215,7 +215,7 @@ export const reminderServer: McpServerDefinition = {
       if (groupErr) return groupErr;
 
       return withNotification(
-        `Recurring reminder #${reminderId.value} cancelled`,
+        result => resultText(result).split('\n')[0],
         'cancel recurring reminder',
         () => {
           const success = recurringStore.cancel(reminderId.value, groupId);
