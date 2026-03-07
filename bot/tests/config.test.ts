@@ -152,7 +152,7 @@ describe('Config', () => {
     process.env.MENTION_TRIGGERS = ' @bot , bot: , hey bot ';
 
     const config = Config.load();
-    expect(config.mentionTriggers).toEqual(['@bot', 'bot:', 'hey bot']);
+    expect(config.mentionTriggers).toEqual(['@bot ', 'bot: ', 'hey bot ']);
   });
 
   it('should handle mention triggers with empty strings between commas', () => {
@@ -161,5 +161,13 @@ describe('Config', () => {
 
     const config = Config.load();
     expect(config.mentionTriggers).toEqual(['@bot', 'bot:']);
+  });
+
+  it('should preserve trailing whitespace in mention triggers', () => {
+    process.env.BOT_PHONE_NUMBER = '+1234567890';
+    process.env.MENTION_TRIGGERS = 'claude:,c ';
+
+    const config = Config.load();
+    expect(config.mentionTriggers).toEqual(['claude:', 'c ']);
   });
 });
