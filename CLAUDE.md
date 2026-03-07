@@ -63,10 +63,7 @@ No other files need to change.
 - Claude CLI installed and authenticated (`claude login`)
 - Node.js 20+
 - Either signal-cli running locally OR use mock mode (see below)
-- Plannotator plugin installed (`/plugin install plannotator@plannotator`) — required for dark factory human review steps. When Claude uses `EnterPlanMode` and the human exits plan mode, the plannotator ExitPlanMode hook automatically opens an interactive review UI in the browser where the plan can be annotated, approved, or sent back for changes. Requires `~/.local/bin` in PATH (including for non-interactive shells used by bot-spawned dark factory sessions). Environment variables:
-  - `PLANNOTATOR_REMOTE=1` — for remote/SSH sessions (uses fixed port 19432, skips browser auto-open). Do not use with concurrent dark factory sessions (port conflict).
-  - `PLANNOTATOR_PORT=<port>` — override default port (random locally)
-  - `PLANNOTATOR_BROWSER=<path>` — custom browser executable
+- Plannotator plugin installed (`/plugin install plannotator@plannotator`) — hooks into ExitPlanMode to open an interactive review UI for dark factory human review steps. Requires `~/.local/bin` in PATH (including non-interactive shells for bot-spawned sessions). Env vars: `PLANNOTATOR_REMOTE=1` (remote/SSH, fixed port 19432, no auto-open — avoid concurrent dark factory sessions), `PLANNOTATOR_PORT=<port>`, `PLANNOTATOR_BROWSER=<path>`.
 
 ### Test Mode (real Signal, Bot Test group only)
 
