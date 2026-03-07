@@ -1,6 +1,7 @@
 import { DatabaseConnection } from '../../db';
 import { RecurringReminderStore } from '../../stores/recurringReminderStore';
 import { ReminderStore } from '../../stores/reminderStore';
+import type { ReminderMode } from '../../types';
 import { computeNextDue, describeCron, isValidCron } from '../../utils/cron';
 import { readStorageEnv, readTimezone } from '../env';
 import { catchErrors, error, ok } from '../result';
@@ -126,7 +127,7 @@ export const reminderServer: McpServerDefinition = {
       }
 
       return catchErrors(() => {
-        const id = store.create(groupId, sender, reminderText.value, dueAt.value, (mode as any) ?? 'simple');
+        const id = store.create(groupId, sender, reminderText.value, dueAt.value, (mode as ReminderMode) ?? 'simple');
         const formatted = new Date(dueAt.value).toLocaleString('en-AU', { timeZone: tz });
         const modeInfo = mode === 'prompt' ? ' (prompt mode — will spawn a Claude session)' : '';
         return ok(`Reminder #${id} set for ${formatted}: "${reminderText.value}"${modeInfo}`);
