@@ -1,17 +1,24 @@
 import { logger } from './logger';
+import type { RecurringReminderExecutor } from './recurringReminderExecutor';
 import type { SignalClient } from './signalClient';
+import type { RecurringReminderStore } from './stores/recurringReminderStore';
 import type { ReminderStore } from './stores/reminderStore';
-import type { Reminder } from './types';
+import type { RecurringReminder, Reminder } from './types';
+import { computeNextDue } from './utils/cron';
 
 const MAX_RETRIES = 3;
 const MAX_STALENESS_MS = 24 * 60 * 60 * 1000; // 24 hours
 const PER_GROUP_LIMIT = 20;
 const BASE_BACKOFF_MS = 60_000; // 60 seconds
 
+const MAX_RECURRING_FAILURES = 5;
+
 export class ReminderScheduler {
   constructor(
     private reminderStore: ReminderStore,
     private signalClient: SignalClient,
+    private recurringStore?: RecurringReminderStore,
+    private recurringExecutor?: RecurringReminderExecutor,
   ) {}
 
   async processDueReminders(): Promise<number> {
@@ -21,7 +28,62 @@ export class ReminderScheduler {
     for (const groupId of groups) {
       total += await this.processGroupReminders(groupId, now);
     }
+    if (this.recurringStore && this.recurringExecutor) {
+      try {
+        total += await this.processRecurringReminders(now);
+      } catch (error) {
+        logger.error('Error processing recurring reminders:', error);
+      }
+    }
+
     return total;
+  }
+
+  private async processRecurringReminders(now: number): Promise<number> {
+    const store = this.recurringStore as RecurringReminderStore;
+    const executor = this.recurringExecutor as RecurringReminderExecutor;
+    const groups = store.getGroupsWithDue(now);
+    let total = 0;
+
+    for (const groupId of groups) {
+      const reminders = store.getDueByGroup(groupId, now, 1);
+      for (const reminder of reminders) {
+        try {
+          const claimed = store.markInFlight(reminder.id);
+          if (!claimed) continue;
+
+          await executor.execute(reminder);
+
+          const nextDueAt = computeNextDue(reminder.cronExpression, reminder.timezone);
+          store.markFired(reminder.id, nextDueAt);
+          total++;
+        } catch (error) {
+          logger.error(`Failed to execute recurring reminder ${reminder.id}:`, error);
+          await this.handleRecurringFailure(reminder);
+        }
+      }
+    }
+
+    return total;
+  }
+
+  private async handleRecurringFailure(reminder: RecurringReminder): Promise<void> {
+    const store = this.recurringStore as RecurringReminderStore;
+    store.clearInFlight(reminder.id);
+
+    const nextDueAt = computeNextDue(reminder.cronExpression, reminder.timezone);
+    store.markFired(reminder.id, nextDueAt);
+
+    const failures = store.incrementFailures(reminder.id);
+    if (failures >= MAX_RECURRING_FAILURES) {
+      store.cancel(reminder.id, reminder.groupId);
+      try {
+        const msg = `⚠️ Recurring reminder auto-cancelled after ${failures} consecutive failures: "${reminder.promptText}". It was set by ${reminder.requester}.`;
+        await this.signalClient.sendMessage(reminder.groupId, msg);
+      } catch {
+        logger.error(`Failed to send auto-cancel notification for recurring reminder ${reminder.id}`);
+      }
+    }
   }
 
   private async processGroupReminders(groupId: string, now: number): Promise<number> {
