@@ -1,14 +1,15 @@
 {
   "issueNumber": 40,
-  "currentStage": "integration-test",
+  "runId": "issue-40-dark-factory-input",
+  "currentStage": "review",
   "stages": {
     "plan": "complete",
     "build": "complete",
     "test": "complete",
     "simplify": "complete",
     "pr": "complete",
-    "integration-test": "pending",
+    "integration-test": "complete",
     "review": "pending"
   },
-  "updatedAt": "2026-03-07T23:50:00Z"
+  "updatedAt": "2026-03-08T00:45:00Z"
 }

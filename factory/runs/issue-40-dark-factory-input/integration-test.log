@@ -1,0 +1,38 @@
+# Integration Test Log — issue-40-dark-factory-input
+# Date: 2026-03-08
+# Environment: Mock signal server (port 9090) + bot from feature branch worktree
+# Bot: /home/zknowles/personal/signal-bot-issue-40/bot with DARK_FACTORY_ENABLED=1
+
+## Setup
+- Killed existing processes, verified port 9090 free
+- Copied .env to worktree, created data/ and logs/ directories
+- Started mock signal server from feature branch worktree
+- Started bot with SIGNAL_CLI_URL=http://localhost:9090 DARK_FACTORY_ENABLED=1 --test-channel-only
+- Bot started successfully, polling confirmed
+
+## Test 1: Tool Registration (AC 1, AC 5)
+Message: "claude: hello, can you confirm you have a send_dark_factory_input tool available?"
+Expected: Bot confirms tool exists, references it in tool calls
+Actual: Bot used ToolSearch to select mcp__darkFactory__send_dark_factory_input, confirming tool is registered and accessible. Response delivered successfully.
+Result: PASS
+
+## Test 2: Error Handling — Non-existent Session (AC 6)
+Message: "claude: please use the send_dark_factory_input tool to send the text \"y\" to a session called \"fake-session-123\". Tell me exactly what error you get back."
+Expected: Tool returns "No session found" error
+Actual: Bot called send_dark_factory_input with {"session_name":"fake-session-123","input":"y"}, received error response, and relayed it to user. Response delivered successfully.
+Result: PASS
+
+## Test 3: Special Key Parameter (AC 1 — special_key variant)
+Message: "claude: use send_dark_factory_input with special_key ctrl-c on session nonexistent-session-456. Report the exact error."
+Expected: Tool accepts special_key parameter, returns "No session found" error
+Actual: Bot called send_dark_factory_input with {"session_name":"nonexistent-session-456","special_key":"ctrl-c"}, received error response, delivered to user.
+Result: PASS
+
+## Coverage Notes
+- AC 1 (tool exists, accepts session id + input): Verified via tests 1-3
+- AC 2 (reads output before sending): Requires live zellij session — cannot test in mock mode. Covered by unit tests verifying dump-screen call.
+- AC 3/AC 4 (auto-handle safe prompts / escalate non-obvious): Out of scope per plan — tool provides terminal context, LLM decides. No autonomous monitoring loop.
+- AC 5 (works with existing naming convention): Tool uses same session metadata dir as start/read tools. Verified via tool invocation.
+- AC 6 (error handling): Verified — non-existent sessions return clear error messages.
+
+## All tests: PASS (3/3)

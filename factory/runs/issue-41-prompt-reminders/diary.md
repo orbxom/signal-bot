@@ -19,3 +19,9 @@
 - **2026-03-07** — PR #46 created: feat: add prompt mode to one-off reminders. Issue linkage: verified (Closes #41).
 - **2026-03-07** — Integration test deferred — other runs in progress: issue-2, issue-31, issue-33, issue-34, issue-40, issue-42, issue-43, issue-5.
 - **2026-03-07** — Review: clean (1 issue fixed — uncommitted simplify fix committed+pushed). PR #46 marked ready for review. Run complete pending integration test.
+- **2026-03-08** — Deferred integration tests now running. Triggered by `/dark-factory run integration tests`. No other runs have integration tests in progress.
+- **2026-03-08** — Test 1: Basic mention smoke test — PASS. Bot received, processed, responded in 42.3s.
+- **2026-03-08** — Test 2: Simple mode reminder — PASS. set_reminder called with mode="simple", scheduler fired as text message, marked sent.
+- **2026-03-08** — Test 3: Prompt mode reminder (core feature) — PASS. set_reminder called with mode="prompt", scheduler delegated to recurring executor, Claude session spawned with MCP tools, completed successfully.
+- **2026-03-08** — Test 4: Set both modes + list reminders — PASS. Both modes accepted and stored, list_reminders displayed correctly.
+- **2026-03-08** — Integration tests complete: 4/4 passed. All acceptance criteria verified. Run fully complete.

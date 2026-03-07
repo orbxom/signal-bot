@@ -1,13 +1,13 @@
 {
   "runId": "issue-42-tool-notifications",
-  "currentStage": "simplify",
+  "currentStage": "review",
   "stages": {
     "plan": "complete",
     "build": "complete",
     "test": "complete",
-    "simplify": "in-progress",
-    "pr": "pending",
-    "integration-test": "pending",
-    "review": "pending"
+    "simplify": "complete",
+    "pr": "complete",
+    "integration-test": "deferred",
+    "review": "complete"
   }
 }
