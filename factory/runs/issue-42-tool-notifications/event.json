@@ -1,0 +1,21 @@
+{
+  "source": "github",
+  "issueNumber": 42,
+  "issueUrl": "https://github.com/orbxom/signal-bot/issues/42",
+  "title": "MCP tool Signal notifications with per-group toggle",
+  "description": "Add optional Signal message notifications when MCP tools are invoked, controlled by a per-group setting. When enabled for a group, tools send a brief Signal message confirming what they did. Add a new MCP tool to toggle this setting per group, and update the creating-mcp-tools skill to document the pattern.",
+  "acceptanceCriteria": [
+    "New database table/column storing per-group 'tool notifications enabled' setting (default: off)",
+    "New MCP tool (toggle_tool_notifications or similar) that enables/disables tool notifications for a specific group",
+    "When enabled, MCP tools send a brief Signal message to the group after completing their action",
+    "Notification messages should be clearly distinguishable from regular bot responses (prefixed or formatted differently)",
+    "Tools that fail should also notify briefly",
+    "Notification mechanism available as a shared utility (not duplicated per server)",
+    "Update creating-mcp-tools skill to document notification integration",
+    "All existing MCP servers updated to use the notification mechanism",
+    "No notification for the toggle tool itself (avoid loops)",
+    "No notification for send_message/send_image signal tools (redundant)"
+  ],
+  "mode": "full",
+  "createdAt": "2026-03-07T23:25:00Z"
+}

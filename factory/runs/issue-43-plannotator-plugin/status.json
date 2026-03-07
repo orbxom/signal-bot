@@ -1,0 +1,12 @@
+{
+  "currentStage": "complete",
+  "stages": {
+    "plan": "abandoned",
+    "build": "abandoned",
+    "test": "abandoned",
+    "simplify": "abandoned",
+    "pr": "abandoned",
+    "integration-test": "abandoned",
+    "review": "abandoned"
+  }
+}

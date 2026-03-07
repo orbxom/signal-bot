@@ -1,0 +1,13 @@
+{
+  "runId": "issue-41-prompt-reminders",
+  "currentStage": "build",
+  "stages": {
+    "plan": "complete",
+    "build": "in-progress",
+    "test": "pending",
+    "simplify": "pending",
+    "pr": "pending",
+    "integration-test": "pending",
+    "review": "pending"
+  }
+}

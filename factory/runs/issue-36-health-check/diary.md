@@ -7,3 +7,17 @@
 - **Devil's advocate**: 13 concerns raised (2 high, 3 medium, 8 low). Key: misleading uptime (process vs bot), missing MCP registry status, heavyweight DB init.
 - **Plan revised**: Addressed: BOT_START_TIME env var for real uptime, MCP registry via ALL_SERVERS, raw better-sqlite3 read-only, 3s timeout, catchErrors wrapper, parse signal RPC response, both-down test. Dismissed: no input params (YAGNI), no rate limiting, test location (follows convention).
 - **Human approved plan**. Moving to BUILD.
+- **Resumed from BUILD**. Previous session created worktree and branch but no code was written. Dispatching implementation subagents.
+- **Task 1/3 done** — Scaffolded healthCheck.ts, registered in index.ts, added botStartTime to AppConfig/config. Tests: pass.
+- **Task 2/3 done** — Implemented full health_check handler (db, signal, uptime, memory, mcp registry). Resolved circular dep via lazy require(). Tests: pass.
+- **Task 3/3 done** — Added 4 failure scenario tests (signal down, no URL, bad DB, both down). All 6 health check tests pass, 744 total tests pass, lint clean.
+- **BUILD complete**. Moving to TEST.
+- **TEST**: 748/748 tests pass (48 files). Lint clean (97 files). No issues. Moving to SIMPLIFY.
+- **SIMPLIFY**: Fixed 2 bugs (botStartTime not propagated to MCP servers, ConfigType missing fields) and 1 simplification (getMemory). Tests: pass. Moving to PR.
+- **PR #44 created**: "Add health check MCP server". Rebased onto master, pushed. Issue linkage: verified (Closes #36). Moving to integration test.
+- **Integration test deferred** — other runs in progress: issue-2, issue-5, issue-31, issue-33, issue-34, issue-40, issue-41, issue-42, issue-43. Skipping to REVIEW.
+- **Review: clean**. No critical/important issues. All acceptance criteria met. PR marked ready for review. Run complete (pending deferred integration test).
+- **Deferred integration tests now running**. Triggered by `/dark-factory run integration tests`. Stale runs marked abandoned.
+- **Test 1**: "run a health check" — Bot called health_check tool, got healthy status with uptime/db/signal/mcp/memory. Result: PASS.
+- **Test 2**: "are you healthy?" — Bot called health_check again, uptime correctly increased. Result: PASS.
+- **Integration tests complete**. 2/2 passed, no fix attempts needed. Run fully complete.

@@ -1,0 +1,17 @@
+{
+  "source": "github",
+  "issueNumber": 43,
+  "issueUrl": "https://github.com/orbxom/signal-bot/issues/43",
+  "title": "Install plannotator plugin for dark factory review steps",
+  "description": "Install and configure the plannotator Claude Code plugin so that dark factory sessions automatically open plans in the browser when they reach human review checkpoints.",
+  "acceptanceCriteria": [
+    "Plannotator plugin is installed and available to Claude Code sessions",
+    "Dark factory Claude runs have plannotator available in their environment",
+    "When a dark factory session reaches a human review step (e.g. plan review, devil's advocate), it triggers the plannotator UI to open in the browser",
+    "The review UI shows the plan/output that needs human approval",
+    "Works with the existing dark factory session naming convention and workflow",
+    "Documented in CLAUDE.md or relevant config so future sessions pick it up automatically"
+  ],
+  "mode": "full",
+  "createdAt": "2026-03-07T12:30:00Z"
+}

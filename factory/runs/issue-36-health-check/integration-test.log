@@ -1,0 +1,34 @@
+## Integration Test Results — issue-36-health-check
+
+### Test Environment
+- Mock signal server on port 9090
+- Bot running from worktree: .worktrees/issue-36-health-check/bot
+- Test DB: data/integration-test.db
+
+### Test 1: "claude: run a health check and tell me the status"
+- **Expected**: Bot calls health_check MCP tool, responds with status info
+- **Actual**: Bot called `mcp__healthCheck__health_check {}`, responded:
+  - Status: Healthy
+  - Uptime: ~47 seconds
+  - Database: OK
+  - Signal connection: OK
+  - MCP servers: 12 registered, 42 tools
+- **Result**: PASS
+
+### Test 2: "claude: are you healthy? use the health check tool to verify"
+- **Expected**: Bot calls health_check again, shows consistent/updated data
+- **Actual**: Bot called `mcp__healthCheck__health_check {}`, responded:
+  - Status: Healthy
+  - Uptime: ~2 minutes 38 seconds (correctly increased)
+  - Database: OK
+  - Signal connection: OK
+  - MCP servers: 12 registered, 42 tools
+  - Memory: ~87 MB RSS
+- **Result**: PASS
+
+### Summary
+- 2/2 integration tests passed
+- Health check tool discovered and used by Claude automatically
+- Uptime tracking works correctly (increases between calls)
+- All subsystem checks return correct results
+- No fix attempts needed

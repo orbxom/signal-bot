@@ -1,0 +1,10 @@
+# Diary — issue-43-plannotator-plugin
+
+## 2026-03-07
+
+- **Initialized.** Mode: full. Issue #43: Install plannotator plugin for dark factory review steps.
+- **Research sprint dispatched.** Three parallel agents: codebase analyst, docs researcher, prior art reviewer.
+- **Research complete.** Key finding: plannotator v0.8.2 already installed at user scope with ExitPlanMode hook. Dark factory SKILL.md already references EnterPlanMode. Gaps: no project documentation, no verification, no /plannotator-annotate or /plannotator-review integration, PATH inheritance untested.
+- **Plan drafted.** 4 tasks: (1) document plannotator in CLAUDE.md, (2) add /plannotator-annotate to dark factory Step 5, (3) add /plannotator-review to Stage 7, (4) verify binary/hook configuration. Documentation + skill enhancement approach.
+- **Devil's advocate: 8 concerns raised** (3 HIGH: double popup UX in Step 5, YAGNI Stage 7 review, scope creep; 3 MEDIUM: PATH in subagents, test strategy inadequate, bot-spawned sessions; 2 LOW: CLAUDE.md content priority, port conflicts).
+- **Plan revised.** Addressed all 8 concerns. Dropped Tasks 2+3 (ExitPlanMode hook already handles plannotator, Stage 7 review is YAGNI). Reduced to 2 tasks: document in CLAUDE.md + verify binary/hook/PATH. Enhanced PATH verification with non-interactive shell check. Restructured docs to lead with behavior. None dismissed.

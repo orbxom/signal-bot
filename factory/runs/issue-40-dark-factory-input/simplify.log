@@ -1,0 +1,18 @@
+Simplify run: 2026-03-07
+Branch: feature/issue-40-dark-factory-input
+
+== Change Applied ==
+Extracted `loadSessionMetadata` helper to deduplicate session-lookup logic between
+`read_dark_factory` and `send_dark_factory_input` handlers. Both had identical patterns
+for: path.basename sanitization, metadata path construction, JSON read+parse, error return.
+
+New helper returns discriminated union: { safeName, metadata } on success or { error } on failure.
+Also added SessionMetadata interface. Net reduction ~10 lines.
+
+== Reviewed and Accepted (No Fix) ==
+1. Manual typeof check for special_key: optionalString() doesn't fit (need undefined vs provided distinction)
+2. keyBytes map re-created per call: two-entry record, rarely called, hoisting adds complexity for no gain
+3. Test boilerplate: matches existing convention across all *McpServer.test.ts files
+
+== Verification ==
+All 747 tests pass, biome check clean.

@@ -1,0 +1,18 @@
+{
+  "source": "github",
+  "issueNumber": 41,
+  "issueUrl": "https://github.com/orbxom/signal-bot/issues/41",
+  "title": "One-off reminders: add prompt mode (spawn session like recurring)",
+  "description": "Add an optional flag to one-off reminders so they can fire as a full prompt (spawning a Claude session with MCP tools) instead of just sending a plain text message. Currently one-off reminders fire by sending text, while recurring reminders spawn a full Claude session. This adds a mode flag so one-off reminders can optionally behave like recurring reminders.",
+  "acceptanceCriteria": [
+    "One-off reminders support a flag/mode that distinguishes 'plain text' from 'prompt' reminders",
+    "Plain text reminders continue to work exactly as they do now (send message to group) — this is the default",
+    "Prompt-mode reminders spawn a full Claude session when they fire, with MCP config and tool access (similar to recurringReminderExecutor.ts)",
+    "The set_reminder MCP tool accepts an optional parameter to set the reminder mode",
+    "The reminder scheduler (reminderScheduler.ts) handles both modes — sends text for plain, spawns session for prompt",
+    "Database schema updated to store the reminder mode (with migration, backward compatible — existing reminders default to plain text)",
+    "Tests cover both modes firing correctly"
+  ],
+  "mode": "full",
+  "createdAt": "2026-03-07T13:15:00Z"
+}

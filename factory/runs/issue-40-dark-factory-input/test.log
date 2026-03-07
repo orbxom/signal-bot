@@ -1,0 +1,13 @@
+Test run: 2026-03-07
+Branch: feature/issue-40-dark-factory-input
+Commit: 8144600
+
+== Test Suite ==
+Test Files  47 passed (47)
+      Tests  747 passed (747)
+Duration  10.79s
+
+== Lint/Format ==
+biome check: Checked 95 files in 28ms. No fixes applied.
+
+All checks pass.

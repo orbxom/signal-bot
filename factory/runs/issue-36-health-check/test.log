@@ -1,0 +1,12 @@
+## Test Results — issue-36-health-check
+
+### Full Test Suite
+- Test Files: 48 passed (48)
+- Tests: 748 passed (748)
+- Duration: 10.22s
+- Health check tests: 6/6 passed (healthCheckMcpServer.test.ts, 4558ms)
+
+### Lint (biome check)
+- Checked 97 files in 28ms. No fixes applied.
+
+### No failures — all green.
