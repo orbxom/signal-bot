@@ -12,7 +12,8 @@ Claude-powered Signal bot for family group chat. Responds to mention triggers in
 - `bot/src/contextBuilder.ts` — Builds LLM context: system prompt + history + dossiers + personas + skills
 - `bot/src/messageDeduplicator.ts` — Map-based LRU deduplication
 - `bot/src/typingIndicator.ts` — `withTyping()` lifecycle wrapper
-- `bot/src/reminderScheduler.ts` — Per-group processing, exponential backoff, claim-then-send, failure notifications
+- `bot/src/reminderScheduler.ts` — Per-group processing, exponential backoff, claim-then-send, failure notifications, recurring reminder orchestration
+- `bot/src/recurringReminderExecutor.ts` — Spawns `claude -p` with full MCP config + agents when recurring reminders fire
 - `bot/src/signalClient.ts` — JSON-RPC client for signal-cli's HTTP API
 - `bot/src/config.ts` — Loads env vars via dotenv
 
@@ -21,6 +22,7 @@ Claude-powered Signal bot for family group chat. Responds to mention triggers in
 - `bot/src/storage.ts` — Facade delegating to domain stores (backward compatible)
 - `bot/src/stores/messageStore.ts` — Message CRUD, search, date range queries
 - `bot/src/stores/reminderStore.ts` — Per-group reminders with idempotent markSent, retry tracking
+- `bot/src/stores/recurringReminderStore.ts` — Recurring reminders with cron scheduling, in-flight guards, failure tracking
 - `bot/src/stores/dossierStore.ts` — Person dossiers scoped by group
 - `bot/src/stores/personaStore.ts` — Bot personas with active-per-group management
 - `bot/src/stores/attachmentStore.ts` — Image attachment BLOB storage and cleanup
@@ -38,7 +40,7 @@ Image attachments sent in Signal messages are stored as BLOBs in the `attachment
 
 ### MCP Servers (bot/src/mcp/servers/)
 - `index.ts` — Barrel: ALL_SERVERS array (add new server = add one import here)
-- `reminders.ts` — set/list/cancel reminders (3 tools)
+- `reminders.ts` — set/list/cancel reminders + set/list/cancel recurring reminders (6 tools)
 - `weather.ts` — BOM weather: search, observations, forecast, warnings (4 tools)
 - `github.ts` — GitHub integration: feature request issues, PR list/view/diff/comment/review/merge (7 tools)
 - `dossiers.ts` — Person dossier CRUD (3 tools)
@@ -54,17 +56,43 @@ Image attachments sent in Signal messages are stored as BLOBs in the `attachment
 3. Add one import line to `bot/src/mcp/servers/index.ts`
 No other files need to change.
 
-## Running Locally for Testing
+## Running Locally
 
 ### Prerequisites
 
 - Claude CLI installed and authenticated (`claude login`)
 - Node.js 20+
-- Either signal-cli running locally OR use the mock Signal server (see below)
+- Either signal-cli running locally OR use mock mode (see below)
 
-### Mock Signal Server (no Signal access needed)
+### Test Mode (real Signal, Bot Test group only)
 
-A mock signal-cli HTTP server (`bot/src/mock/signalServer.ts`) implements the JSON-RPC API so you can test the bot from the CLI without Signal. It uses `node:http` and `node:readline` with no extra dependencies.
+Requires signal-cli running locally. Restricts the bot to the "Bot Test" group only to prevent spamming the family group.
+
+1. Ensure signal-cli is running and `bot/.env` exists (dotenv loads from CWD, which is `bot/`):
+   ```bash
+   # bot/.env
+   BOT_PHONE_NUMBER=+61XXXXXXXXXX
+   SIGNAL_CLI_URL=http://localhost:8080
+   MENTION_TRIGGERS="@bot,bot:,@claude,claude:,c "
+   CLAUDE_MAX_TURNS=25
+   ```
+   **Important:** The `c ` trigger has a trailing space. Dotenv strips trailing whitespace from unquoted values, so the `MENTION_TRIGGERS` value **must be quoted** to preserve it.
+
+2. Run:
+   ```bash
+   cd bot
+   SIGNAL_CLI_URL=http://localhost:8080 npm run dev:test
+   ```
+
+   Note: `npm run dev:test` defaults `SIGNAL_CLI_URL` to port 9090 (mock). You must explicitly set port 8080 when using real signal-cli.
+
+3. Send a message starting with the mention trigger (e.g. `claude: hello`) in the Bot Test Signal group.
+
+Use `npm run dev` for all channels (only if specifically needed).
+
+### Mock Mode (no Signal access needed)
+
+Uses a mock signal-cli HTTP server (`bot/src/mock/signalServer.ts`) so you can test the bot from the CLI without Signal. Uses the `mock-signal-testing` skill for setup guidance.
 
 **In two terminals:**
 
@@ -75,7 +103,7 @@ npm run mock-signal                    # Listens on port 9090 by default
 
 # Terminal 2: Start the bot pointed at the mock server
 cd bot
-npm run dev:test                       # Uses SIGNAL_CLI_URL=http://localhost:9090
+npm run dev:test                       # Uses SIGNAL_CLI_URL=http://localhost:9090 by default
 ```
 
 **Sending messages:** Type in the mock server terminal. Prefix with `claude:` to trigger the bot.
@@ -91,34 +119,11 @@ you> claude: what is 2+2?
 
 The mock server hardcodes the Bot Test group and sender `+61400111222`. The bot requires no code changes — it connects to the mock via the same JSON-RPC API it uses with real signal-cli.
 
-### With Real Signal
-
-1. Ensure signal-cli is running locally and `.env` exists in the project root with at least `BOT_PHONE_NUMBER` set:
-   ```bash
-   # .env
-   BOT_PHONE_NUMBER=+61XXXXXXXXXX
-   SIGNAL_CLI_URL=http://localhost:8080
-   MENTION_TRIGGERS=claude:
-   CLAUDE_MAX_TURNS=25
-   ```
-
-2. Run the bot in dev mode (hot reload via tsx):
-   ```bash
-   cd bot
-   npm run dev:test    # Test channel only (default for dev — prevents spamming family group)
-   npm run dev         # All channels (only if specifically needed)
-   ```
-
-   **Always use `npm run dev:test` for local development** unless specifically asked to test against all groups. This restricts the bot to the "Bot Test" group only.
-
-3. Send a message starting with the mention trigger (e.g. `claude: hello`) in the Bot Test Signal group.
-
 ### Troubleshooting
 
 - **Bot not receiving messages**: The `extractMessageData` method only processes group messages with `dataMessage.message` and `groupInfo.groupId`. DMs and reactions are silently dropped.
 - **MCP tools not working**: MCP servers run via `npx tsx` on the `.ts` source files. The `resolveMcpServerPath` helper in `mcp/registry.ts` handles path resolution.
 - **Port already in use**: The mock server defaults to port 9090 (to avoid conflicts with real signal-cli on 8080). Use `MOCK_SIGNAL_PORT=XXXX` and `SIGNAL_CLI_URL=http://localhost:XXXX` to change it.
-- **Switching from mock to real signal-cli**: `npm run dev:test` defaults `SIGNAL_CLI_URL` to port 9090 (mock). When switching to real signal-cli, you must explicitly set `SIGNAL_CLI_URL=http://localhost:8080` or the bot will try to connect to the mock port. Use `SIGNAL_CLI_URL=http://localhost:8080 npm run dev:test` or `npm run dev`.
 
 ## Testing
 

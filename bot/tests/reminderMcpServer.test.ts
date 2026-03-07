@@ -53,7 +53,7 @@ describe('Reminder MCP Server', () => {
     }
   });
 
-  it('should list 3 tools', async () => {
+  it('should list 6 tools', async () => {
     const proc = spawnMcpServer();
     try {
       await initializeServer(proc);
@@ -64,8 +64,15 @@ describe('Reminder MCP Server', () => {
       });
 
       const result = response.result as { tools: Array<{ name: string }> };
-      expect(result.tools).toHaveLength(3);
-      expect(result.tools.map(t => t.name)).toEqual(['set_reminder', 'list_reminders', 'cancel_reminder']);
+      expect(result.tools).toHaveLength(6);
+      expect(result.tools.map(t => t.name)).toEqual([
+        'set_reminder',
+        'list_reminders',
+        'cancel_reminder',
+        'set_recurring_reminder',
+        'list_recurring_reminders',
+        'cancel_recurring_reminder',
+      ]);
     } finally {
       proc.kill();
     }

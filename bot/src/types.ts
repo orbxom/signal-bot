@@ -36,6 +36,24 @@ export interface Reminder {
   failureReason: string | null;
 }
 
+export type RecurringReminderStatus = 'active' | 'cancelled';
+
+export interface RecurringReminder {
+  id: number;
+  groupId: string;
+  requester: string;
+  promptText: string;
+  cronExpression: string;
+  timezone: string;
+  nextDueAt: number;
+  status: RecurringReminderStatus;
+  consecutiveFailures: number;
+  lastFiredAt: number | null;
+  lastInFlightAt: number | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
 export interface Dossier {
   id: number;
   groupId: string;
