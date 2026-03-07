@@ -2,6 +2,7 @@
   "name": "factory-dashboard",
   "version": "1.0.0",
   "private": true,
+  "type": "commonjs",
   "description": "Real-time Dark Factory pipeline dashboard",
   "scripts": {
     "dev": "tsx watch src/server.ts",

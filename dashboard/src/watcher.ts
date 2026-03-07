@@ -1,12 +1,13 @@
 import { EventEmitter } from 'node:events';
 import fs from 'node:fs';
 import path from 'node:path';
-import { watch } from 'chokidar';
+import { type FSWatcher, watch } from 'chokidar';
 import type { EventFile, Run, StatusFile, UpdateMessage } from './types.js';
 
 export class RunWatcher extends EventEmitter {
   private runs: Map<string, Run> = new Map();
   private runsDir: string;
+  private fsWatcher?: FSWatcher;
 
   constructor(runsDir: string) {
     super();
@@ -14,15 +15,19 @@ export class RunWatcher extends EventEmitter {
   }
 
   start(): void {
-    const watcher = watch(this.runsDir, {
+    this.fsWatcher = watch(this.runsDir, {
       ignoreInitial: false,
       depth: 1,
       awaitWriteFinish: { stabilityThreshold: 300 },
     });
 
-    watcher.on('add', (filePath) => this.handleFile(filePath));
-    watcher.on('change', (filePath) => this.handleFile(filePath));
-    watcher.on('ready', () => this.emit('ready'));
+    this.fsWatcher.on('add', (filePath) => this.handleFile(filePath));
+    this.fsWatcher.on('change', (filePath) => this.handleFile(filePath));
+    this.fsWatcher.on('ready', () => this.emit('ready'));
+  }
+
+  async stop(): Promise<void> {
+    await this.fsWatcher?.close();
   }
 
   getSnapshot(): Record<string, Run> {
@@ -71,7 +76,7 @@ export class RunWatcher extends EventEmitter {
       run = {
         runId,
         event: { title: runId },
-        status: { runId, currentStage: 'unknown', stages: {} as any },
+        status: { runId, currentStage: 'unknown', stages: {} },
         diary: '',
       };
       this.runs.set(runId, run);

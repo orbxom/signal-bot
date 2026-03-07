@@ -17,7 +17,7 @@ export const STAGE_ORDER: (keyof StageMap)[] = [
 export interface StatusFile {
   runId: string;
   currentStage: string;
-  stages: StageMap;
+  stages: Partial<StageMap>;
   updatedAt?: string;
 }
 
