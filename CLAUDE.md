@@ -123,6 +123,19 @@ you> claude: what is 2+2?
 
 The mock server hardcodes the Bot Test group and sender `+61400111222`. The bot requires no code changes — it connects to the mock via the same JSON-RPC API it uses with real signal-cli.
 
+### Collaborative Testing Mode
+
+When running via `npm run dev:mock` (or with `COLLABORATIVE_TESTING=true`), the bot injects a **collaborative testing mode** section into its system prompt. This tells the inner Claude that it's being tested by another Claude instance and should:
+
+- Respond technically and precisely, not with casual family-chat tone
+- Confirm which tools it called and summarize results
+- Report tool errors, MCP failures, or unexpected inputs with full detail
+- Explain step-by-step what it did and why
+
+This is designed for the dark factory's integration test stage (Stage 6), where the outer Claude sends test messages and needs precise diagnostic feedback from the bot. Both sides are aware of the collaborative context.
+
+**Note:** `dev:test` does NOT enable this mode — it's for real Signal testing against the test group. Only `dev:mock` (or explicit `COLLABORATIVE_TESTING=true`) activates it.
+
 ### Troubleshooting
 
 - **Bot not receiving messages**: The `extractMessageData` method only processes group messages with `dataMessage.message` and `groupInfo.groupId`. DMs and reactions are silently dropped.

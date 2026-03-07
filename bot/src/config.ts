@@ -20,6 +20,7 @@ export interface ConfigType {
   whisperModelPath: string;
   testChannelOnly: boolean;
   testGroupId: string;
+  collaborativeTestingMode: boolean;
 }
 
 const DEFAULT_SYSTEM_PROMPT =
@@ -68,6 +69,7 @@ export class Config {
 
     const testChannelOnly = process.argv.includes('--test-channel-only') || process.env.TEST_CHANNEL_ONLY === 'true';
     const testGroupId = process.env.TEST_GROUP_ID || 'kKWs+FQPBZKe7N7CdxMjNAAjE2uWEmtBij55MOfWFU4=';
+    const collaborativeTestingMode = process.env.COLLABORATIVE_TESTING === 'true';
 
     return {
       claude: {
@@ -90,6 +92,7 @@ export class Config {
       darkFactoryProjectRoot: process.env.DARK_FACTORY_PROJECT_ROOT || '',
       testChannelOnly,
       testGroupId,
+      collaborativeTestingMode,
     };
   }
 }

@@ -26,11 +26,25 @@ const VOICE_MESSAGE_INSTRUCTIONS =
 const IMAGE_INSTRUCTIONS =
   'When an image is referenced (shown as [Image: attachment://<id>] in the conversation), use the view_image tool with that attachment ID to view it. Then respond about the image content. Images may appear in the current message or in recent conversation history.';
 
+const COLLABORATIVE_TESTING_PROMPT = `## Collaborative Testing Mode
+
+You are running in collaborative testing mode. The messages you receive are from another Claude instance (the "dark factory") that is testing and debugging your features via the mock signal server.
+
+**How to behave in this mode:**
+- Be technical, precise, and diagnostic — not casual or chatty
+- When you use tools, confirm which tools you called and summarize the results
+- If a tool call fails or returns unexpected results, report the exact error, tool name, and parameters you used
+- If something doesn't work, explain exactly what failed, why, and what you tried
+- When asked to test a feature, exercise it thoroughly and report what happened step-by-step
+- Treat the conversation as a collaborative debugging session between two AI agents working together
+- Keep responses concise but information-dense — the tester needs facts, not filler`;
+
 export interface ContextBuilderConfig {
   systemPrompt: string;
   timezone: string;
   contextTokenBudget: number;
   attachmentsDir: string;
+  collaborativeTestingMode?: boolean;
 }
 
 export class ContextBuilder {
@@ -38,6 +52,7 @@ export class ContextBuilder {
   private timezone: string;
   private contextTokenBudget: number;
   private attachmentsDir: string;
+  private collaborativeTestingMode: boolean;
   private timestampFormatter: Intl.DateTimeFormat;
   private isoFormatter: Intl.DateTimeFormat;
   private cachedSkillContent: string | null = null;
@@ -47,6 +62,7 @@ export class ContextBuilder {
     this.timezone = config.timezone;
     this.contextTokenBudget = config.contextTokenBudget;
     this.attachmentsDir = config.attachmentsDir;
+    this.collaborativeTestingMode = config.collaborativeTestingMode ?? false;
     this.timestampFormatter = new Intl.DateTimeFormat('en-CA', {
       timeZone: this.timezone,
       year: 'numeric',
@@ -190,6 +206,10 @@ export class ContextBuilder {
       }
     } else {
       systemContent = effectivePrompt;
+    }
+
+    if (this.collaborativeTestingMode) {
+      systemContent = `${COLLABORATIVE_TESTING_PROMPT}\n\n${systemContent}`;
     }
 
     const contextMessages: ChatMessage[] = [{ role: 'system', content: systemContent }];

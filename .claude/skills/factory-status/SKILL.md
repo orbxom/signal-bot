@@ -49,10 +49,11 @@ After the table, list issues found:
 - **Orphan worktrees** — worktrees for completed/merged runs that should be cleaned up
 - **Orphan agent branches** — `worktree-agent-*` branches with no worktree or run
 - **Genuinely in-progress runs** — runs that are actually active, with their current stage and what's next
+- **Integration tests needed** — runs where `integration-test` stage is "deferred" or "pending" (not "complete"). These need manual integration testing before merge.
 - **Stale non-factory branches** — feature branches not associated with any factory run
 
 ### Summary line
-End with a one-line summary: "N complete, N in-progress, N stuck, N abandoned. N branches to clean up."
+End with a one-line summary: "N complete, N in-progress, N stuck, N abandoned. N need integration tests. N branches to clean up."
 
 ## After presenting
 

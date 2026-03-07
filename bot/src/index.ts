@@ -73,6 +73,7 @@ async function main() {
       contextWindowSize: config.contextWindowSize,
       contextTokenBudget: config.contextTokenBudget,
       messageRetentionCount: config.messageRetentionCount,
+      collaborativeTestingMode: config.collaborativeTestingMode,
     },
   );
   logger.success(`Message handler initialized (triggers: ${config.mentionTriggers.join(', ')})`);

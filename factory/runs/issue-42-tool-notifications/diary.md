@@ -35,3 +35,5 @@
 **2026-03-08 00:45** — Code review found 2 important issues, 3 suggestions. Dispatched fix agent for 3 actionable findings: (1) recurringReminderExecutor missing toolNotificationsEnabled passthrough; (2) handlers with logical failure paths using static success messages instead of dynamic callbacks; (3) darkFactory double notification.
 
 **2026-03-08 00:50** — Fix agent complete. Commit b440d6e: all 3 findings addressed. 774 tests pass, lint clean. Review complete. PR ready for merge (integration tests deferred).
+
+**2026-03-08 10:00** — Deferred integration tests now running. Triggered by `/dark-factory integration test 42`.

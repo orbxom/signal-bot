@@ -286,9 +286,19 @@ Before running integration tests, check if any other factory run is active:
    - **Skip to Stage 7 (REVIEW)** — continue the pipeline without integration tests
 4. If no other run's integration test is in progress, proceed with integration tests below
 
+### Collaborative Testing Mode
+
+When running via `dev:mock`, the bot activates **collaborative testing mode**. The bot's inner Claude knows it's being tested by another Claude instance and will:
+- Respond technically and precisely, not with casual family-chat tone
+- Confirm which tools it called and summarize results
+- Report tool errors, MCP failures, or unexpected inputs with full detail
+- Explain step-by-step what it did and why
+
+**Leverage this**: Send targeted diagnostic messages. If a feature isn't working, ask the bot directly what happened — e.g., "claude: try setting a reminder for tomorrow and tell me exactly what tools you called and what they returned." The bot will give you a precise technical answer you can use to diagnose the issue.
+
 ### Steps 1-8: Run Integration Tests
 
-1. Use the `mock-signal-testing` skill to start the mock server and bot
+1. Use the `mock-signal-testing` skill to start the mock server and bot (use `dev:mock` to enable collaborative testing mode)
 2. Design test messages that exercise the feature built in this run (based on the plan's acceptance criteria)
 3. Send each test message via the mock server's `queueMessage` RPC and verify the bot responds correctly by checking the log output
 4. Log test messages, expected outcomes, and actual outcomes to `factory/runs/<run-id>/integration-test.log`

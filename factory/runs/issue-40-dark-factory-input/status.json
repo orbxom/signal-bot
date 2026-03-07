@@ -1,7 +1,7 @@
 {
   "issueNumber": 40,
   "runId": "issue-40-dark-factory-input",
-  "currentStage": "review",
+  "currentStage": "complete",
   "stages": {
     "plan": "complete",
     "build": "complete",
@@ -9,7 +9,7 @@
     "simplify": "complete",
     "pr": "complete",
     "integration-test": "complete",
-    "review": "pending"
+    "review": "complete"
   },
-  "updatedAt": "2026-03-08T00:45:00Z"
+  "updatedAt": "2026-03-08T00:55:00Z"
 }

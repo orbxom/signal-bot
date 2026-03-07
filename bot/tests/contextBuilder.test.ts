@@ -237,6 +237,55 @@ describe('ContextBuilder', () => {
       expect(systemContent).toContain('Current requester: uuid-zach');
       expect(systemContent).not.toContain('Current requester: Zach');
     });
+
+    it('should inject collaborative testing prompt when collaborativeTestingMode is true', () => {
+      const builder = new ContextBuilder({
+        ...defaultConfig,
+        systemPrompt: 'Default prompt.',
+        collaborativeTestingMode: true,
+      });
+      const chatMessages = builder.buildContext({
+        history: [],
+        query: 'Hello',
+        groupId: 'g1',
+        sender: '+61400000001',
+      });
+
+      const systemContent = chatMessages[0].content;
+      expect(systemContent).toContain('Collaborative Testing Mode');
+      expect(systemContent).toContain('technical, precise, and diagnostic');
+      expect(systemContent).toContain('Default prompt.');
+    });
+
+    it('should not inject collaborative testing prompt when collaborativeTestingMode is false', () => {
+      const builder = new ContextBuilder({
+        ...defaultConfig,
+        systemPrompt: 'Default prompt.',
+        collaborativeTestingMode: false,
+      });
+      const chatMessages = builder.buildContext({
+        history: [],
+        query: 'Hello',
+        groupId: 'g1',
+        sender: '+61400000001',
+      });
+
+      const systemContent = chatMessages[0].content;
+      expect(systemContent).not.toContain('Collaborative Testing Mode');
+    });
+
+    it('should not inject collaborative testing prompt by default', () => {
+      const builder = new ContextBuilder({ ...defaultConfig, systemPrompt: 'Default prompt.' });
+      const chatMessages = builder.buildContext({
+        history: [],
+        query: 'Hello',
+        groupId: 'g1',
+        sender: '+61400000001',
+      });
+
+      const systemContent = chatMessages[0].content;
+      expect(systemContent).not.toContain('Collaborative Testing Mode');
+    });
   });
 
   describe('fitToTokenBudget', () => {

@@ -15,6 +15,7 @@ export interface MessageHandlerOptions {
   contextWindowSize?: number;
   contextTokenBudget?: number;
   messageRetentionCount?: number;
+  collaborativeTestingMode?: boolean;
 }
 
 export class MessageHandler {
@@ -61,6 +62,7 @@ export class MessageHandler {
       timezone: this.appConfig.timezone,
       contextTokenBudget: options?.contextTokenBudget || 4000,
       attachmentsDir: this.appConfig.attachmentsDir,
+      collaborativeTestingMode: options?.collaborativeTestingMode,
     });
     this.deduplicator = new MessageDeduplicator();
     this.typingManager = new TypingIndicatorManager(deps.signalClient);

@@ -7,3 +7,6 @@
 - **2026-03-08 00:37** — Test 2 (non-existent session): PASS — tool returned "No session found" error, bot relayed to user.
 - **2026-03-08 00:38** — Test 3 (special_key ctrl-c): PASS — tool accepted special_key param, returned error for non-existent session.
 - **2026-03-08 00:45** — Integration tests complete. 3/3 passed. AC 1,5,6 verified. AC 2 requires live zellij (covered by unit tests). AC 3,4 out of scope per plan. Moving to REVIEW.
+- **2026-03-08 00:50** — Review: clean. No critical issues. Two important gaps in special_key test coverage — dispatched subagent to add tests.
+- **2026-03-08 00:53** — Subagent added 2 special_key validation tests (commit 6a5ca60). All 749 tests pass. Pushed to remote.
+- **2026-03-08 00:55** — PR #45 already marked ready for review. Issue linkage verified (Closes #40). Run complete.
