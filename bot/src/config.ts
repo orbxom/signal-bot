@@ -68,7 +68,10 @@ export class Config {
       .map(s => s.trimStart())
       .filter(s => s.length > 0);
 
-    const attachmentRetentionDays = parseInt(process.env.ATTACHMENT_RETENTION_DAYS || '30', 10) || 30;
+    const attachmentRetentionDays = parseInt(process.env.ATTACHMENT_RETENTION_DAYS || '30', 10);
+    if (Number.isNaN(attachmentRetentionDays) || attachmentRetentionDays <= 0) {
+      throw new Error('ATTACHMENT_RETENTION_DAYS must be a positive number');
+    }
 
     const testChannelOnly = process.argv.includes('--test-channel-only') || process.env.TEST_CHANNEL_ONLY === 'true';
     const testGroupId = process.env.TEST_GROUP_ID || 'kKWs+FQPBZKe7N7CdxMjNAAjE2uWEmtBij55MOfWFU4=';
