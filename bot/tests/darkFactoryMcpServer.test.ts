@@ -1,5 +1,8 @@
 import type { ChildProcess } from 'node:child_process';
-import { afterEach, describe, expect, it } from 'vitest';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { initializeServer, sendAndReceive, spawnMcpServer as spawnServer } from './helpers/mcpTestHelpers';
 
 describe('Dark Factory MCP Server', () => {
@@ -101,5 +104,97 @@ describe('Dark Factory MCP Server', () => {
     const result = response.result as { content: Array<{ text: string }>; isError?: boolean };
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toContain('Missing or invalid session_name');
+  });
+
+  describe('read_dark_factory with fake JSONL', () => {
+    let proc2: ChildProcess | null = null;
+    let tempDir: string;
+
+    beforeEach(() => {
+      tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'dark-factory-test-'));
+    });
+
+    afterEach(() => {
+      if (proc2) {
+        proc2.kill();
+        proc2 = null;
+      }
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    });
+
+    function spawnMcpServer2(env?: Record<string, string>): ChildProcess {
+      proc2 = spawnServer('mcp/servers/darkFactory.ts', env);
+      return proc2;
+    }
+
+    it('should parse assistant messages from JSONL', async () => {
+      // Create fake sessions dir and metadata
+      const sessionsPath = path.join(tempDir, 'factory', 'sessions');
+      fs.mkdirSync(sessionsPath, { recursive: true });
+
+      const sessionName = 'dark-factory-99-1234567890';
+      const metadata = {
+        sessionName,
+        issueNumber: 99,
+        launchedAt: new Date(Date.now() - 60000).toISOString(),
+      };
+      fs.writeFileSync(path.join(sessionsPath, `${sessionName}.json`), JSON.stringify(metadata));
+
+      // Create fake Claude projects dir with JSONL file
+      // Path encoding: tempDir (e.g., /tmp/dark-factory-test-abc) -> -tmp-dark-factory-test-abc
+      const projectKey = tempDir.replace(/\//g, '-');
+      const claudeProjectDir = path.join(tempDir, '.claude', 'projects', projectKey);
+      fs.mkdirSync(claudeProjectDir, { recursive: true });
+
+      const jsonlLines = [
+        JSON.stringify({
+          type: 'user',
+          timestamp: new Date().toISOString(),
+          message: { role: 'user', content: 'dark factory issue 99' },
+        }),
+        JSON.stringify({
+          type: 'assistant',
+          timestamp: new Date().toISOString(),
+          message: {
+            role: 'assistant',
+            content: [
+              { type: 'text', text: 'Starting dark factory for issue #99.' },
+              { type: 'tool_use', name: 'Bash' },
+            ],
+          },
+        }),
+        JSON.stringify({
+          type: 'assistant',
+          timestamp: new Date().toISOString(),
+          message: {
+            role: 'assistant',
+            content: [{ type: 'text', text: 'Research complete. Moving to planning.' }],
+          },
+        }),
+      ];
+      fs.writeFileSync(path.join(claudeProjectDir, 'test-session.jsonl'), jsonlLines.join('\n'));
+
+      // Spawn server with overridden paths and enabled flag
+      const server = spawnMcpServer2({
+        DARK_FACTORY_PROJECT_ROOT: tempDir,
+        HOME: tempDir,
+        DARK_FACTORY_ENABLED: '1',
+      });
+      await initializeServer(server);
+
+      const response = await sendAndReceive(server, {
+        jsonrpc: '2.0',
+        id: 10,
+        method: 'tools/call',
+        params: { name: 'read_dark_factory', arguments: { session_name: sessionName } },
+      });
+
+      const result = response.result as { content: Array<{ text: string }>; isError?: boolean };
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0].text).toContain('Issue: #99');
+      expect(result.content[0].text).toContain('Starting dark factory');
+      expect(result.content[0].text).toContain('Research complete');
+      expect(result.content[0].text).toContain('Bash');
+    });
   });
 });
