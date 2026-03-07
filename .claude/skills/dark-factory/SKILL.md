@@ -278,13 +278,13 @@ Verify the feature actually works end-to-end using the mock signal server.
 Before running integration tests, check if any other factory run is active:
 
 1. Scan all `factory/runs/*/status.json` files
-2. For each OTHER run (not the current one), check if `currentStage` is not `"complete"` — meaning the run is still active
-3. If any other run is active:
+2. For each OTHER run (not the current one), check if its `integration-test` stage is `"in-progress"`
+3. If any other run's integration test is in progress:
    - Set `integration-test` to `"deferred"` in status.json
-   - **Diary:** "Integration test deferred — other run(s) in progress: <list of active run-ids>."
-   - **Announce:** "Integration tests deferred (other runs in progress: <list>). Run `/dark-factory run integration tests` when ready."
+   - **Diary:** "Integration test deferred — other run(s) running integration tests: <list of run-ids>."
+   - **Announce:** "Integration tests deferred (other runs running integration tests: <list>). Run `/dark-factory run integration tests` when ready."
    - **Skip to Stage 7 (REVIEW)** — continue the pipeline without integration tests
-4. If no other runs are active, proceed with integration tests below
+4. If no other run's integration test is in progress, proceed with integration tests below
 
 ### Steps 1-8: Run Integration Tests
 
@@ -348,7 +348,7 @@ When the user says `/dark-factory run integration tests`:
 1. Scan all `factory/runs/*/status.json` files for runs where `integration-test` is `"deferred"`
 2. If none found, announce "No deferred integration tests found." and stop
 3. If multiple found, list them and ask the user which to run (or offer to run all sequentially)
-4. **Concurrency check:** For each OTHER run (excluding the selected one), check if `currentStage` is not `"complete"`. If any are active, announce which runs are blocking and stop
+4. **Concurrency check:** For each OTHER run (excluding the selected one), check if its `integration-test` stage is `"in-progress"`. If any are running integration tests, announce which runs are blocking and stop
 5. For each selected run:
    - Read `event.json` and `diary.md` for context
    - Update status.json: set `currentStage` to `"integration-test"` and `integration-test` to `"in-progress"`
