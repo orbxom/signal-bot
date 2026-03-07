@@ -69,7 +69,7 @@ describe('MentionDetector', () => {
       expect(detector.extractQuery('@bot    hello    world')).toBe('hello world');
     });
 
-    it('should remove all trigger patterns', () => {
+    it('should only remove the leading trigger pattern', () => {
       const detector = new MentionDetector(['@bot', 'bot:']);
       expect(detector.extractQuery('@bot bot: hello')).toBe('bot: hello');
     });
