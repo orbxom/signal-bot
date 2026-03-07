@@ -1,0 +1,15 @@
+# Build Log — Issue #35
+
+## Task 1-7: All tools implemented in single pass
+- Added 6 tool definitions to TOOLS array in github.ts
+- Added validateRepo() helper to DRY up repo validation
+- Refactored create_feature_request to use validateRepo()
+- Implemented all 6 handlers: list_pull_requests, view_pull_request, get_pr_diff, comment_on_pull_request, review_pull_request, merge_pull_request
+- Updated test tool count from 1 to 7
+- Added 9 validation tests for new tools
+- Fixed formatting with biome
+
+## Results
+- 693 tests passing (up from 684)
+- Lint + format clean
+- 16 GitHub MCP server tests passing

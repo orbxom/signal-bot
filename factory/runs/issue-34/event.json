@@ -1,0 +1,17 @@
+{
+  "source": "dark-factory",
+  "issueNumber": 34,
+  "issueUrl": "https://github.com/orbxom/signal-bot/issues/34",
+  "title": "MCP tools: launch and monitor dark factory sessions",
+  "description": "Add two new MCP tools so Signal users can trigger and monitor dark-factory runs from chat: start_dark_factory (opens kitty terminal with zellij + Claude) and read_dark_factory (parses Claude conversation JSONL files for progress).",
+  "acceptanceCriteria": [
+    "start_dark_factory takes an issue_number, opens kitty + zellij + interactive Claude, returns session name",
+    "read_dark_factory takes a session_name, parses JSONL conversation files, returns recent assistant messages and tool usage",
+    "Session metadata stored in factory/sessions/<name>.json for correlation",
+    "Both tools follow existing MCP server patterns (catchErrors, ok/error, validation)",
+    "Registered in bot/src/mcp/servers/index.ts",
+    "Unit tests for input validation and JSONL parsing",
+    "All existing tests continue to pass"
+  ],
+  "createdAt": "2026-03-07T10:39:52Z"
+}

@@ -200,7 +200,13 @@ Update `status.json`: simplify -> complete.
      ## Factory Run
      Artifacts: `factory/runs/<run-id>/`
      ```
-3. Log PR URL to `factory/runs/<run-id>/pr-url.txt`
+3. **Verify issue-PR linkage** (skip for plan-only mode — no issue to link):
+   Spawn a subagent to confirm the GitHub issue will auto-close when the PR merges:
+   - Fetch the PR via `gh api repos/orbxom/signal-bot/pulls/<number>` and verify the body contains `Closes #<issue-number>`
+   - Fetch the issue via `gh api repos/orbxom/signal-bot/issues/<issue-number>` and check for a cross-reference from the PR
+   - If linkage is missing, fix it by updating the PR body: `gh api -X PATCH repos/orbxom/signal-bot/pulls/<number> -f body="<updated body with Closes #N>"`
+   - Report whether linkage was verified as-is or had to be fixed
+4. Log PR URL to `factory/runs/<run-id>/pr-url.txt`
 
 Update `status.json`: pr -> complete.
 

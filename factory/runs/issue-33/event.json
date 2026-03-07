@@ -1,0 +1,17 @@
+{
+  "source": "github",
+  "issueNumber": 33,
+  "issueUrl": "https://github.com/orbxom/signal-bot/issues/33",
+  "title": "Recurring reminders with cron scheduling and Claude invocation",
+  "description": "Upgrade the reminder system to support repeating/recurring reminders with cron expressions. When fired, trigger full Claude CLI invocations with all MCP tools available.",
+  "acceptanceCriteria": [
+    "User can say 'set a daily reminder at 8am to check the weather' and a recurring reminder is created with cron expression",
+    "Recurring reminders fire at the correct times and trigger Claude with full tool access",
+    "Claude's response is sent to the group via Signal",
+    "Users can list and cancel recurring reminders",
+    "Concurrency guard prevents double-firing",
+    "All existing one-shot reminder functionality continues to work unchanged",
+    "Timezone-aware cron evaluation (defaults to Australia/Sydney)"
+  ],
+  "createdAt": "2026-03-07T10:39:21Z"
+}

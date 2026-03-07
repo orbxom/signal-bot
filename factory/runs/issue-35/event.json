@@ -1,0 +1,16 @@
+{
+  "source": "github",
+  "issueNumber": 35,
+  "issueUrl": "https://github.com/orbxom/signal-bot/issues/35",
+  "title": "feat: Add GitHub PR tools to MCP server",
+  "description": "Add MCP tools for working with GitHub Pull Requests, extending the existing github.ts server. Currently the bot can only create feature request issues — this adds full PR workflow capabilities from Signal.",
+  "acceptanceCriteria": [
+    "All 6 tools are implemented in bot/src/mcp/servers/github.ts",
+    "Uses gh api for viewing individual PRs (avoids GraphQL errors)",
+    "Uses gh pr commands for actions (list, comment, review, merge, diff)",
+    "Unit tests cover all handlers with mocked gh CLI calls",
+    "Lint and format checks pass",
+    "Bot can respond to PR queries via Signal"
+  ],
+  "createdAt": "2026-03-07T10:40:52Z"
+}

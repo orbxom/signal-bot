@@ -1,0 +1,13 @@
+{
+  "issueNumber": 35,
+  "currentStage": "simplify",
+  "stages": {
+    "plan": "complete",
+    "build": "complete",
+    "test": "complete",
+    "simplify": "in-progress",
+    "pr": "pending",
+    "integration-test": "pending",
+    "review": "pending"
+  }
+}
