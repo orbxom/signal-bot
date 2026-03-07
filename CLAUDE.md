@@ -103,8 +103,12 @@ npm run mock-signal                    # Listens on port 9090 by default
 
 # Terminal 2: Start the bot pointed at the mock server
 cd bot
-npm run dev:test                       # Uses SIGNAL_CLI_URL=http://localhost:9090 by default
+npm run dev:mock                       # Separate DB (data/mock-bot.db), port 9090
 ```
+
+Use `npm run dev:mock` instead of `npm run dev:test` so the mock bot uses a separate database (`data/mock-bot.db`). This lets you run mock testing **alongside** the real bot (`dev:test` on port 8080) without SQLite conflicts.
+
+If you only need mock testing (no real bot running), `npm run dev:test` also works — it defaults to port 9090 but shares the main database.
 
 **Sending messages:** Type in the mock server terminal. Prefix with `claude:` to trigger the bot.
 

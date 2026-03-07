@@ -16,7 +16,8 @@
     "format:check": "biome format ./src ./tests",
     "check": "biome check ./src ./tests",
     "check:fix": "biome check --write ./src ./tests",
-    "mock-signal": "tsx src/mock/signalServer.ts"
+    "mock-signal": "tsx src/mock/signalServer.ts",
+    "dev:mock": "DB_PATH=./data/mock-bot.db SIGNAL_CLI_URL=${SIGNAL_CLI_URL:-http://localhost:9090} tsx watch src/index.ts --test-channel-only"
   },
   "keywords": [
     "signal",

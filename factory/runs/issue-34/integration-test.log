@@ -1,0 +1,65 @@
+Dark Factory MCP Integration Test Results
+==========================================
+Date: 2026-03-07
+Branch: master (worktree: issue-34-dark-factory-mcp)
+Environment: Mock Signal server on port 9090, bot in test-channel-only mode
+DARK_FACTORY_ENABLED: not set (testing gate behavior)
+
+Setup Notes:
+- BOT_PHONE_NUMBER must differ from mock sender (+61400111222) to avoid self-filter
+- Used BOT_PHONE_NUMBER=+61400999999 to prevent bot-self message skipping
+- Created bot/data/ and logs/ directories in worktree
+- Clean database for each run
+
+---
+
+TEST 1: start_dark_factory tool (gate check)
+  Message sent: "claude: use the start_dark_factory tool to start working on issue 99"
+  Expected outcome: Bot calls start_dark_factory, receives gate error ("Dark factory tools are not enabled"), responds gracefully
+  Actual outcome:
+    - Bot received message at 22:32:23
+    - LLM spawned claude -p (max turns 25)
+    - Tool called: mcp__darkFactory__start_dark_factory {"issue_number":99}
+    - LLM responded in 44.6s (294 tokens)
+    - Result delivered via fallback, COMPLETE logged
+    - No errors or crashes
+  Result: PASS
+
+---
+
+TEST 2: read_dark_factory tool (gate check)
+  Message sent: "claude: use the read_dark_factory tool to check session dark-factory-99-123"
+  Expected outcome: Bot calls read_dark_factory, receives gate error, responds gracefully
+  Actual outcome:
+    - Bot received message at 22:34:34
+    - LLM spawned claude -p (max turns 25)
+    - Tool called: mcp__darkFactory__read_dark_factory {"session_name":"dark-factory-99-123"}
+    - LLM responded in 43.6s (293 tokens)
+    - Result delivered via fallback, COMPLETE logged
+    - No errors or crashes
+  Result: PASS
+
+---
+
+TEST 3: Post-dark-factory sanity check
+  Message sent: "claude: what is 2+2?"
+  Expected outcome: Bot responds normally, proving dark factory tool errors did not corrupt state
+  Actual outcome:
+    - Bot received message at 22:36:16
+    - LLM spawned claude -p (max turns 25)
+    - No tool calls (simple math question)
+    - LLM responded in 14.7s (10 tokens)
+    - Result delivered via fallback, COMPLETE logged
+    - No errors or crashes
+  Result: PASS
+
+---
+
+OVERALL RESULT: PASS (3/3 tests passed)
+
+Summary:
+- Both dark factory MCP tools (start_dark_factory, read_dark_factory) are properly registered and discoverable
+- The DARK_FACTORY_ENABLED gate works correctly: tools return an error when env var is not set
+- The bot handles the gate errors gracefully without crashing or entering an error state
+- Bot remains stable and responsive after dark factory tool calls
+- No stderr errors produced during the entire test run

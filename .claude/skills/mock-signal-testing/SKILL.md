@@ -1,6 +1,6 @@
 ---
 name: mock-signal-testing
-description: Use when testing the signal bot end-to-end with the mock signal server, running the bot locally, or debugging bot message handling. Trigger whenever the user says "test the bot", "run the mock", "try it locally", "send a test message", or anything involving the mock signal client or local bot testing.
+description: Use when testing the signal bot with the mock signal server specifically. Trigger on "run the mock", "mock testing", "send a test message to the mock", or "test with the mock server". Do NOT use for simply starting the bot — use run-bot or run-bot-test instead.
 ---
 
 # Mock Signal Testing
@@ -68,16 +68,27 @@ This returns `{"queued":true,"queueLength":1}`. The bot will pick it up on the n
 
 ## Starting the Bot
 
+### If the real bot is also running (recommended):
+
+Use `dev:mock` — it uses a separate database (`data/mock-bot.db`) so both instances can run simultaneously without SQLite conflicts:
+
+```bash
+cd /home/zknowles/personal/signal-bot/bot
+npm run dev:mock
+```
+
+### If no other bot instance is running:
+
+```bash
+cd /home/zknowles/personal/signal-bot/bot
+npm run dev:test                       # Shares the main DB, defaults to port 9090
+```
+
+Or manually:
+
 ```bash
 cd /home/zknowles/personal/signal-bot/bot
 SIGNAL_CLI_URL=http://localhost:9090 npx tsx src/index.ts --test-channel-only
-```
-
-Or via npm (which defaults SIGNAL_CLI_URL to 9090):
-
-```bash
-cd /home/zknowles/personal/signal-bot/bot
-npm run dev:test
 ```
 
 Wait for `Starting message polling...` in the output before sending messages.
