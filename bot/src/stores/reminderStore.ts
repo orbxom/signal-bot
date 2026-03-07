@@ -1,7 +1,7 @@
 import type Database from 'better-sqlite3';
 import type { DatabaseConnection } from '../db';
 import { wrapSqliteError } from '../db';
-import type { Reminder, ReminderStatus } from '../types';
+import type { Reminder, ReminderMode, ReminderStatus } from '../types';
 
 const STATUS = {
   pending: 'pending',
@@ -35,8 +35,8 @@ export class ReminderStore {
     this.conn = conn;
     this.stmts = {
       insert: conn.db.prepare(`
-        INSERT INTO reminders (groupId, requester, reminderText, dueAt, status, retryCount, createdAt)
-        VALUES (?, ?, ?, ?, '${STATUS.pending}', 0, ?)
+        INSERT INTO reminders (groupId, requester, reminderText, dueAt, status, retryCount, createdAt, mode)
+        VALUES (?, ?, ?, ?, '${STATUS.pending}', 0, ?, ?)
       `),
       getDueByGroup: conn.db.prepare(`
         SELECT * FROM reminders
@@ -79,7 +79,7 @@ export class ReminderStore {
     };
   }
 
-  create(groupId: string, requester: string, reminderText: string, dueAt: number): number {
+  create(groupId: string, requester: string, reminderText: string, dueAt: number, mode: ReminderMode = 'simple'): number {
     this.conn.ensureOpen();
     if (!groupId || groupId.trim() === '') {
       throw new Error('Invalid groupId: cannot be empty');
@@ -89,7 +89,7 @@ export class ReminderStore {
     }
 
     try {
-      const result = this.stmts.insert.run(groupId, requester, reminderText, dueAt, Date.now());
+      const result = this.stmts.insert.run(groupId, requester, reminderText, dueAt, Date.now(), mode);
       return Number(result.lastInsertRowid);
     } catch (error) {
       wrapSqliteError(error, 'create reminder');
