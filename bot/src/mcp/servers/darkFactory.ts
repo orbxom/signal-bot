@@ -167,7 +167,7 @@ const handlers = {
     if (sessionName.error) return sessionName.error;
 
     return catchErrors(() => {
-      const lastN = typeof args.last_n === 'number' ? args.last_n : 5;
+      const lastN = Math.max(1, Math.min(typeof args.last_n === 'number' ? args.last_n : 5, 50));
       const sessions = sessionsDir();
       const safeName = path.basename(sessionName.value);
       const metadataPath = path.join(sessions, `${safeName}.json`);
