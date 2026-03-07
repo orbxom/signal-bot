@@ -1,6 +1,6 @@
 ---
 name: dark-factory
-description: Use when the user says "work on issue #N", "dark factory", "run the pipeline", or asks you to plan and implement a GitHub issue end-to-end. This is the orchestrator for the full plan-build-test-simplify-PR-review pipeline.
+description: Use when the user says "work on issue #N", "dark factory", "run the pipeline", or asks you to plan and implement a GitHub issue end-to-end. Also use when the user has an existing plan file they want to run through the pipeline, with or without a GitHub issue.
 ---
 
 # Dark Factory — Orchestrator Skill
@@ -10,26 +10,59 @@ This is a RIGID skill. Follow every stage in order. Do not skip stages. Do not t
 ## Trigger
 
 The user says something like:
-- "work on issue #42"
-- "dark factory issue 42"
-- "run the pipeline for issue 42"
+- "work on issue #42" — full pipeline (has issue, no plan)
+- "dark factory with plan docs/plans/foo.md" — has plan, no issue
+- "work on issue #42, plan is at plan.md" — has both issue and plan
+- "resume issue-42" — resume interrupted run
+
+## Entry Modes
+
+Detect what the user provides and select the mode:
+
+| Mode | Has Issue | Has Plan | What Happens |
+|------|-----------|----------|--------------|
+| Full | Yes | No | Fetch issue, full planning pipeline |
+| Plan-only | No | Yes | Copy plan, skip issue fetch + plan drafting, run research + review |
+| Fast-start | Yes | Yes | Fetch issue, copy plan, skip plan drafting, run research + review |
+
+In all modes, **research, devil's advocate review, plan revision, and human checkpoint still happen**. Only plan drafting (Step 2) is skipped when a plan is provided.
 
 ## Prerequisites
 
 Before starting, verify:
 1. The `factory/runs/` directory exists (create it if not)
-2. The GitHub issue exists and has enough detail to work from
-3. You are on the `master` branch with a clean working tree
+2. The GitHub issue exists and has enough detail to work from (full and fast-start modes only)
+3. The plan file exists and is readable (plan-only and fast-start modes only)
+4. You are on the `master` branch with a clean working tree
 
 ## Stage 0 — INITIALIZE
 
+Determine the entry mode from what the user provided, then initialize accordingly.
+
+### Full mode (issue, no plan)
 1. Fetch the GitHub issue details using `gh api repos/orbxom/signal-bot/issues/<N>`
-2. Create the run directory: `factory/runs/issue-<N>/`
-3. Write `event.json` with: source, issueNumber, issueUrl, title, description, acceptanceCriteria, createdAt
+2. Create the run directory: `factory/runs/<run-id>/`
+3. Write `event.json` with: source, issueNumber, issueUrl, title, description, acceptanceCriteria, mode ("full"), createdAt
 4. Write `status.json` with all stages set to `pending` (plan, build, test, simplify, pr, integration-test, review)
 5. Update `status.json` to set current stage to `plan`
 
-**Announce:** "Initialized run for issue #N. Starting planning stage."
+### Plan-only mode (plan, no issue)
+1. Choose a run ID from the plan filename or content (e.g., `plan-<slug>`)
+2. Create the run directory: `factory/runs/<run-id>/`
+3. Copy the user's plan file to `factory/runs/<run-id>/plan.md`
+4. Write `event.json` synthesized from the plan content: source ("local"), title, description, acceptanceCriteria (extracted from plan), mode ("plan-only"), createdAt. No issueNumber or issueUrl.
+5. Write `status.json` with all stages set to `pending`
+6. Update `status.json` to set current stage to `plan`
+
+### Fast-start mode (issue + plan)
+1. Fetch the GitHub issue details using `gh api repos/orbxom/signal-bot/issues/<N>`
+2. Create the run directory: `factory/runs/<run-id>/`
+3. Copy the user's plan file to `factory/runs/<run-id>/plan.md`
+4. Write `event.json` with: source, issueNumber, issueUrl, title, description, acceptanceCriteria, mode ("fast-start"), createdAt
+5. Write `status.json` with all stages set to `pending`
+6. Update `status.json` to set current stage to `plan`
+
+**Announce:** "Initialized run for <run-id>. Mode: <mode>. Starting planning stage."
 
 ## Stage 1 — PLAN
 
@@ -38,7 +71,7 @@ Before starting, verify:
 Dispatch parallel subagents (use `dispatching-parallel-agents` skill). Each subagent should check what skills they have available. Three agents:
 
 **Codebase Analyst:**
-- Read all files relevant to the issue
+- Read all files relevant to the issue (or plan, if no issue)
 - Map out what needs to change and what's affected
 - Identify integration points and risk areas
 - Write findings as structured notes
@@ -54,9 +87,13 @@ Dispatch parallel subagents (use `dispatching-parallel-agents` skill). Each suba
 - Check open GitHub issues for conflicts or related work
 - Write findings as structured notes
 
-Combine all findings into `factory/runs/issue-<N>/research.md`.
+Combine all findings into `factory/runs/<run-id>/research.md`.
+
+**This step always runs**, even when a plan is provided. Research validates the plan against the current state of the codebase.
 
 ### Step 2: Plan Drafting
+
+**Skip this step if `plan.md` already exists in the run directory** (plan-only or fast-start mode). Jump to Step 3.
 
 Use the `writing-plans` skill to create the implementation plan. The plan MUST include:
 - Goal (tied to acceptance criteria from the issue)
@@ -65,7 +102,7 @@ Use the `writing-plans` skill to create the implementation plan. The plan MUST i
 - Test strategy (what tests, TDD approach)
 - Tasks (ordered, each small enough for one focused session)
 
-Write to `factory/runs/issue-<N>/plan.md`.
+Write to `factory/runs/<run-id>/plan.md`.
 
 ### Step 3: Devil's Advocate Review
 
@@ -73,14 +110,14 @@ Spawn a subagent with this mandate:
 - Read the plan and research
 - Challenge every decision: Is this too complex? Are we missing edge cases? Does this violate YAGNI? Could this break existing functionality? Is the test strategy sufficient?
 - Be constructive but thorough
-- Write critique to `factory/runs/issue-<N>/plan-review.md`
+- Write critique to `factory/runs/<run-id>/plan-review.md`
 
 ### Step 4: Plan Revision
 
 - Review the devil's advocate critique
 - Address valid concerns by updating the plan
 - Dismiss invalid concerns with clear reasoning
-- Update `factory/runs/issue-<N>/plan.md` with the final version
+- Update `factory/runs/<run-id>/plan.md` with the final version
 - Add a "Revisions" section at the bottom noting what changed and why
 
 ### Step 5: Human Checkpoint
@@ -91,7 +128,7 @@ In your plan mode message, present:
 - Summary of what you're building and why
 - Key architectural decisions
 - What the devil's advocate raised and how you addressed it
-- The full plan (or a link to `factory/runs/issue-<N>/plan.md`)
+- The full plan (or a link to `factory/runs/<run-id>/plan.md`)
 
 This launches the Plannotator UI where the human can review and annotate the plan interactively. When they approve exiting plan mode, proceed to the next stage.
 
@@ -102,10 +139,10 @@ Update `status.json`: plan -> complete.
 ## Stage 2 — BUILD
 
 1. Use the `using-git-worktrees` skill to create an isolated worktree
-2. Create feature branch: `feature/issue-<N>-<slug>` (slug from issue title, lowercase, hyphens)
+2. Create feature branch: `feature/<run-id>-<slug>` (slug from title, lowercase, hyphens)
 3. Use the `test-driven-development` skill to implement the plan task by task
 4. Report progress at natural milestones: "Completed task 3/7 — <description>"
-5. Log progress notes to `factory/runs/issue-<N>/build.log`
+5. Log progress notes to `factory/runs/<run-id>/build.log`
 
 Update `status.json`: build -> complete.
 
@@ -116,7 +153,7 @@ Update `status.json`: build -> complete.
 1. Run the full test suite: `cd bot && npm test`
 2. Run lint: `cd bot && npm run lint`
 3. Run format/check: `cd bot && npm run check`
-4. Capture all output to `factory/runs/issue-<N>/test.log`
+4. Capture all output to `factory/runs/<run-id>/test.log`
 5. If any failures:
    - Use the `systematic-debugging` skill to diagnose
    - Fix the issue
@@ -132,7 +169,7 @@ Update `status.json`: test -> complete.
 ## Stage 4 — SIMPLIFY
 
 1. Use the `simplify` skill on all changed files
-2. Log what was changed to `factory/runs/issue-<N>/simplify.log`
+2. Log what was changed to `factory/runs/<run-id>/simplify.log`
 3. Re-run tests to confirm nothing broke
 4. If tests break, revert the simplify changes and note it in the log
 
@@ -150,7 +187,7 @@ Update `status.json`: simplify -> complete.
      ## Summary
      <what changed and why, 2-3 bullets>
 
-     Closes #<issue-number>
+     Closes #<issue-number> (omit if plan-only mode)
 
      ## Changes
      <list of files changed with brief description>
@@ -161,9 +198,9 @@ Update `status.json`: simplify -> complete.
      - [ ] <specific test scenarios>
 
      ## Factory Run
-     Artifacts: `factory/runs/issue-<N>/`
+     Artifacts: `factory/runs/<run-id>/`
      ```
-3. Log PR URL to `factory/runs/issue-<N>/pr-url.txt`
+3. Log PR URL to `factory/runs/<run-id>/pr-url.txt`
 
 Update `status.json`: pr -> complete.
 
@@ -176,7 +213,7 @@ Verify the feature actually works end-to-end using the mock signal server.
 1. Use the `mock-signal-testing` skill to start the mock server and bot
 2. Design test messages that exercise the feature built in this run (based on the plan's acceptance criteria)
 3. Send each test message via the mock server's `queueMessage` RPC and verify the bot responds correctly by checking the log output
-4. Log test messages, expected outcomes, and actual outcomes to `factory/runs/issue-<N>/integration-test.log`
+4. Log test messages, expected outcomes, and actual outcomes to `factory/runs/<run-id>/integration-test.log`
 5. If a test fails:
    - Dispatch a subagent to diagnose and fix the issue
    - The subagent should run unit tests after fixing to ensure nothing else broke
@@ -204,19 +241,20 @@ Update `status.json`: integration-test -> complete.
 3. If review finds issues:
    - Leave PR as draft
    - Post findings as a PR comment
-   - Write findings to `factory/runs/issue-<N>/review.md`
+   - Write findings to `factory/runs/<run-id>/review.md`
    - **Tell the human:** "Review found issues. See PR comments. Want me to address them?"
 
 Update `status.json`: review -> complete (or back to build if fixing issues).
 
 ## Resuming a Run
 
-If a conversation is interrupted, the human can say "resume issue-42". To resume:
+If a conversation is interrupted, the human can say "resume issue-42" (or "resume plan-foo" for plan-only runs). To resume:
 
-1. Read `factory/runs/issue-42/status.json`
-2. Find the first non-complete stage
-3. Announce: "Resuming issue-42 from <stage> stage."
-4. Continue from that stage
+1. Read `factory/runs/<run-id>/status.json`
+2. Read `factory/runs/<run-id>/event.json` to determine the entry mode
+3. Find the first non-complete stage
+4. Announce: "Resuming <run-id> from <stage> stage. Mode: <mode>."
+5. Continue from that stage, respecting the original entry mode
 
 ## Rules
 
