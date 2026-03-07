@@ -79,7 +79,13 @@ export class ReminderStore {
     };
   }
 
-  create(groupId: string, requester: string, reminderText: string, dueAt: number, mode: ReminderMode = 'simple'): number {
+  create(
+    groupId: string,
+    requester: string,
+    reminderText: string,
+    dueAt: number,
+    mode: ReminderMode = 'simple',
+  ): number {
     this.conn.ensureOpen();
     if (!groupId || groupId.trim() === '') {
       throw new Error('Invalid groupId: cannot be empty');

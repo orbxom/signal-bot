@@ -406,7 +406,10 @@ describe('ReminderScheduler', () => {
       mockStore.getGroupsWithDueReminders.mockReturnValue(['group1']);
       mockStore.getDueByGroup.mockReturnValue([reminder]);
       const promptScheduler = new ReminderScheduler(
-        mockStore as any, mockSignalClient as any, undefined, mockExecutor as any,
+        mockStore as any,
+        mockSignalClient as any,
+        undefined,
+        mockExecutor as any,
       );
       await promptScheduler.processDueReminders();
       expect(mockSignalClient.sendMessage).toHaveBeenCalled();
@@ -418,7 +421,10 @@ describe('ReminderScheduler', () => {
       mockStore.getGroupsWithDueReminders.mockReturnValue(['group1']);
       mockStore.getDueByGroup.mockReturnValue([reminder]);
       const promptScheduler = new ReminderScheduler(
-        mockStore as any, mockSignalClient as any, undefined, mockExecutor as any,
+        mockStore as any,
+        mockSignalClient as any,
+        undefined,
+        mockExecutor as any,
       );
       await promptScheduler.processDueReminders();
       expect(mockExecutor.execute).toHaveBeenCalledWith(
@@ -436,7 +442,10 @@ describe('ReminderScheduler', () => {
       mockStore.getGroupsWithDueReminders.mockReturnValue(['group1']);
       mockStore.getDueByGroup.mockReturnValue([reminder]);
       const promptScheduler = new ReminderScheduler(
-        mockStore as any, mockSignalClient as any, undefined, mockExecutor as any,
+        mockStore as any,
+        mockSignalClient as any,
+        undefined,
+        mockExecutor as any,
       );
       await promptScheduler.processDueReminders();
       expect(mockStore.markSent).toHaveBeenCalledWith(reminder.id);
@@ -448,7 +457,10 @@ describe('ReminderScheduler', () => {
       mockStore.getDueByGroup.mockReturnValue([reminder]);
       mockExecutor.execute.mockRejectedValue(new Error('Claude timeout'));
       const promptScheduler = new ReminderScheduler(
-        mockStore as any, mockSignalClient as any, undefined, mockExecutor as any,
+        mockStore as any,
+        mockSignalClient as any,
+        undefined,
+        mockExecutor as any,
       );
       const result = await promptScheduler.processDueReminders();
       expect(result).toBe(0);
@@ -459,9 +471,7 @@ describe('ReminderScheduler', () => {
       mockStore.getGroupsWithDueReminders.mockReturnValue(['group1']);
       mockStore.getDueByGroup.mockReturnValue([reminder]);
       // scheduler without executor (only 2 args)
-      const noExecutorScheduler = new ReminderScheduler(
-        mockStore as any, mockSignalClient as any,
-      );
+      const noExecutorScheduler = new ReminderScheduler(mockStore as any, mockSignalClient as any);
       const result = await noExecutorScheduler.processDueReminders();
       // Should fail (no executor), return 0
       expect(result).toBe(0);

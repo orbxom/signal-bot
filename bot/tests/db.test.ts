@@ -217,7 +217,7 @@ describe('DatabaseConnection', () => {
       const cols = db.conn.db.pragma('table_info(reminders)') as Array<{ name: string; dflt_value: string | null }>;
       const modeCol = cols.find(c => c.name === 'mode');
       expect(modeCol).toBeDefined();
-      expect(modeCol!.dflt_value).toBe("'simple'");
+      expect(modeCol?.dflt_value).toBe("'simple'");
     });
   });
 
