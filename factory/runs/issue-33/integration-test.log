@@ -1,0 +1,33 @@
+## Stage 6 — Integration Test Results
+
+All tests run against mock signal server + bot from worktree.
+
+### Test 1: Set Recurring Reminder
+- **Message**: "claude: set a recurring reminder for every day at 9am to check the weather and give a morning briefing. Use cron expression 0 9 * * *"
+- **Expected**: Claude calls `set_recurring_reminder` with cron expression "0 9 * * *"
+- **Actual**: Claude called `mcp__reminders__set_recurring_reminder {"cronExpression":"0 9 * * *","promptText":"Check the weather and give a morning briefing"}`
+- **Result**: PASS
+
+### Test 2: List Recurring Reminders
+- **Message**: "claude: list my recurring reminders"
+- **Expected**: Claude calls `list_recurring_reminders` and shows the reminder created in test 1
+- **Actual**: Claude called `mcp__reminders__list_recurring_reminders {}` and returned results
+- **Result**: PASS
+
+### Test 3: Cancel Recurring Reminder
+- **Message**: "claude: cancel recurring reminder #1"
+- **Expected**: Claude calls `cancel_recurring_reminder` with reminderId 1
+- **Actual**: Claude called `mcp__reminders__cancel_recurring_reminder {"reminderId":1}`
+- **Result**: PASS
+
+### Test 4: One-Shot Reminder (Backward Compatibility)
+- **Message**: "claude: set a reminder in 5 minutes to take out the bins"
+- **Expected**: Claude calls existing `set_reminder` tool (not new recurring tool)
+- **Actual**: Claude called `mcp__reminders__set_reminder {"reminderText":"Take out the bins","dueAt":1772882764941}`
+- **Result**: PASS
+
+### Notes
+- Bot log showed "Recurring reminder executor initialized" confirming new code loaded
+- All new MCP tools (set/list/cancel recurring) were discovered and used correctly by Claude
+- Existing one-shot reminder functionality unaffected
+- No errors or unexpected behavior in logs

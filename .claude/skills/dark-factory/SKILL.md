@@ -1,6 +1,6 @@
 ---
 name: dark-factory
-description: Use when the user says "work on issue #N", "dark factory", "run the pipeline", or asks you to plan and implement a GitHub issue end-to-end. Also use when the user has an existing plan file they want to run through the pipeline, with or without a GitHub issue.
+description: Use when the user says "work on issue #N", "dark factory", "run the pipeline", "dark-factory run integration tests", or asks you to plan and implement a GitHub issue end-to-end. Also use when the user has an existing plan file they want to run through the pipeline, with or without a GitHub issue.
 ---
 
 # Dark Factory — Orchestrator Skill
@@ -16,6 +16,7 @@ The user says something like:
 - "dark factory with plan docs/plans/foo.md" — has plan, no issue
 - "work on issue #42, plan is at plan.md" — has both issue and plan
 - "resume issue-42" — resume interrupted run
+- "/dark-factory run integration tests" — run deferred integration tests
 
 ## Entry Modes
 
@@ -26,6 +27,7 @@ Detect what the user provides and select the mode:
 | Full | Yes | No | Fetch issue, full planning pipeline |
 | Plan-only | No | Yes | Copy plan, skip issue fetch + plan drafting, run research + review |
 | Fast-start | Yes | Yes | Fetch issue, copy plan, skip plan drafting, run research + review |
+| Integration-test | N/A | N/A | Find runs with deferred integration tests, run them, finish up |
 
 In all modes, **research, devil's advocate review, plan revision, and human checkpoint still happen**. Only plan drafting (Step 2) is skipped when a plan is provided.
 
@@ -251,6 +253,21 @@ Update `status.json`: pr -> complete.
 
 Verify the feature actually works end-to-end using the mock signal server.
 
+### Step 0: Concurrency Check
+
+Before running integration tests, check if any other factory run is active:
+
+1. Scan all `factory/runs/*/status.json` files
+2. For each OTHER run (not the current one), check if `currentStage` is not `"complete"` — meaning the run is still active
+3. If any other run is active:
+   - Set `integration-test` to `"deferred"` in status.json
+   - **Diary:** "Integration test deferred — other run(s) in progress: <list of active run-ids>."
+   - **Announce:** "Integration tests deferred (other runs in progress: <list>). Run `/dark-factory run integration tests` when ready."
+   - **Skip to Stage 7 (REVIEW)** — continue the pipeline without integration tests
+4. If no other runs are active, proceed with integration tests below
+
+### Steps 1-8: Run Integration Tests
+
 1. Use the `mock-signal-testing` skill to start the mock server and bot
 2. Design test messages that exercise the feature built in this run (based on the plan's acceptance criteria)
 3. Send each test message via the mock server's `queueMessage` RPC and verify the bot responds correctly by checking the log output
@@ -303,6 +320,23 @@ If a conversation is interrupted, the human can say "resume issue-42" (or "resum
 6. Continue from that stage, respecting the original entry mode
 
 **Diary:** Append entry — "Resumed from <stage>. Previous session ended at: <last entry context>."
+
+## Running Deferred Integration Tests
+
+When the user says `/dark-factory run integration tests`:
+
+1. Scan all `factory/runs/*/status.json` files for runs where `integration-test` is `"deferred"`
+2. If none found, announce "No deferred integration tests found." and stop
+3. If multiple found, list them and ask the user which to run (or offer to run all sequentially)
+4. **Concurrency check:** For each OTHER run (excluding the selected one), check if `currentStage` is not `"complete"`. If any are active, announce which runs are blocking and stop
+5. For each selected run:
+   - Read `event.json` and `diary.md` for context
+   - Update status.json: set `currentStage` to `"integration-test"` and `integration-test` to `"in-progress"`
+   - Run Stage 6 Steps 1-8 (the full integration test flow)
+   - On completion, update `integration-test` to `"complete"`
+   - If `review` is already `"complete"`, announce "Run <run-id> fully complete." and stop
+   - If `review` is still `"pending"`, continue to Stage 7 (REVIEW)
+6. **Diary:** Append entry — "Deferred integration tests now running. Triggered by `/dark-factory run integration tests`."
 
 ## Rules
 
