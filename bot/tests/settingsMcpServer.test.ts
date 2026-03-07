@@ -61,10 +61,7 @@ describe('Settings MCP Server', () => {
 
       const result = response.result as { tools: Array<{ name: string }> };
       expect(result.tools).toHaveLength(2);
-      expect(result.tools.map(t => t.name)).toEqual([
-        'toggle_tool_notifications',
-        'get_tool_notification_status',
-      ]);
+      expect(result.tools.map(t => t.name)).toEqual(['toggle_tool_notifications', 'get_tool_notification_status']);
     } finally {
       proc.kill();
     }

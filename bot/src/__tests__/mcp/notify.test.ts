@@ -127,7 +127,7 @@ describe('withNotification', () => {
 
   it('supports callback for dynamic success messages', async () => {
     const result = await withNotification(
-      (r) => {
+      r => {
         const text = r.content[0] && 'text' in r.content[0] ? r.content[0].text : '';
         return `completed: ${text}`;
       },

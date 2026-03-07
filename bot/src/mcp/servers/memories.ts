@@ -1,7 +1,8 @@
 import { DatabaseConnection } from '../../db';
 import { MemoryStore } from '../../stores/memoryStore';
 import { readStorageEnv } from '../env';
-import { catchErrors, estimateTokens, ok } from '../result';
+import { withNotification } from '../notify';
+import { estimateTokens, ok } from '../result';
 import { runServer } from '../runServer';
 import type { McpServerDefinition } from '../types';
 import { requireGroupId, requireString } from '../validate';
@@ -81,10 +82,15 @@ export const memoryServer: McpServerDefinition = {
       const groupErr = requireGroupId(groupId);
       if (groupErr) return groupErr;
 
-      return catchErrors(() => {
-        store.upsert(groupId, topic.value, content.value);
-        return ok(`Saved memory "${topic.value}". Content: ~${estimateTokens(content.value)} tokens used.`);
-      }, 'Failed to save memory');
+      return withNotification(
+        `Memory saved: "${topic.value}"`,
+        'save memory',
+        () => {
+          store.upsert(groupId, topic.value, content.value);
+          return ok(`Saved memory "${topic.value}". Content: ~${estimateTokens(content.value)} tokens used.`);
+        },
+        'Failed to save memory',
+      );
     },
 
     get_memory(args) {
@@ -121,11 +127,18 @@ export const memoryServer: McpServerDefinition = {
       const groupErr = requireGroupId(groupId);
       if (groupErr) return groupErr;
 
-      const deleted = store.delete(groupId, topic.value);
-      if (!deleted) {
-        return ok(`No memory found for topic "${topic.value}" to delete.`);
-      }
-      return ok(`Deleted memory "${topic.value}".`);
+      return withNotification(
+        `Memory deleted: "${topic.value}"`,
+        'delete memory',
+        () => {
+          const deleted = store.delete(groupId, topic.value);
+          if (!deleted) {
+            return ok(`No memory found for topic "${topic.value}" to delete.`);
+          }
+          return ok(`Deleted memory "${topic.value}".`);
+        },
+        'Failed to delete memory',
+      );
     },
   },
   onInit() {

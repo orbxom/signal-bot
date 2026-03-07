@@ -2,36 +2,11 @@ import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { sendToolNotification, withNotification } from '../notify';
 import { catchErrors, error, ok } from '../result';
 import { runServer } from '../runServer';
 import type { McpServerDefinition } from '../types';
 import { requireNumber, requireString } from '../validate';
-
-let signalCliUrl = '';
-let signalAccount = '';
-let groupId = '';
-
-async function sendSignalNotification(message: string): Promise<void> {
-  if (!signalCliUrl || !signalAccount || !groupId) return;
-  try {
-    const response = await fetch(`${signalCliUrl}/api/v1/rpc`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        method: 'send',
-        params: { account: signalAccount, groupId, message },
-        id: `dark-factory-${Date.now()}`,
-      }),
-      signal: AbortSignal.timeout(10000),
-    });
-    if (!response.ok) {
-      console.error(`Signal notification failed: ${response.statusText}`);
-    }
-  } catch (err) {
-    console.error(`Signal notification failed: ${err}`);
-  }
-}
 
 function projectRoot(): string {
   return process.env.DARK_FACTORY_PROJECT_ROOT || path.resolve(__dirname, '..', '..', '..', '..');
@@ -130,47 +105,52 @@ const handlers = {
     const issueNumber = requireNumber(args, 'issue_number');
     if (issueNumber.error) return issueNumber.error;
 
-    return catchErrors(async () => {
-      await sendSignalNotification(`Dark factory starting for issue #${issueNumber.value}...`);
+    return withNotification(
+      `Dark factory started for issue #${issueNumber.value}`,
+      'start dark factory',
+      async () => {
+        sendToolNotification(`Dark factory starting for issue #${issueNumber.value}...`);
 
-      const now = new Date();
-      const sessionName = `dark-factory-${issueNumber.value}-${now.getTime()}`;
-      const root = projectRoot();
-      const sessions = sessionsDir();
+        const now = new Date();
+        const sessionName = `dark-factory-${issueNumber.value}-${now.getTime()}`;
+        const root = projectRoot();
+        const sessions = sessionsDir();
 
-      // Ensure sessions directory exists
-      fs.mkdirSync(sessions, { recursive: true });
+        // Ensure sessions directory exists
+        fs.mkdirSync(sessions, { recursive: true });
 
-      // Write zellij KDL layout file to temp location
-      const layoutPath = path.join(os.tmpdir(), `${sessionName}.kdl`);
-      const escapedRoot = root.replace(/'/g, "'\\''");
-      const layoutContent = `layout {\n  pane command="bash" {\n    args "-c" "cd '${escapedRoot}' && claude \\"/dark-factory issue ${issueNumber.value}\\""\n    close_on_exit false\n  }\n}\n`;
-      fs.writeFileSync(layoutPath, layoutContent);
+        // Write zellij KDL layout file to temp location
+        const layoutPath = path.join(os.tmpdir(), `${sessionName}.kdl`);
+        const escapedRoot = root.replace(/'/g, "'\\''");
+        const layoutContent = `layout {\n  pane command="bash" {\n    args "-c" "cd '${escapedRoot}' && claude \\"/dark-factory issue ${issueNumber.value}\\""\n    close_on_exit false\n  }\n}\n`;
+        fs.writeFileSync(layoutPath, layoutContent);
 
-      // Launch a new kitty window with zellij inside it
-      const child = spawn(
-        'kitty',
-        ['--title', sessionName, 'zellij', '-s', sessionName, '--new-session-with-layout', layoutPath],
-        { detached: true, stdio: 'ignore', env: { ...process.env, CLAUDECODE: '' } },
-      );
-      child.unref();
+        // Launch a new kitty window with zellij inside it
+        const child = spawn(
+          'kitty',
+          ['--title', sessionName, 'zellij', '-s', sessionName, '--new-session-with-layout', layoutPath],
+          { detached: true, stdio: 'ignore', env: { ...process.env, CLAUDECODE: '' } },
+        );
+        child.unref();
 
-      // Write session metadata
-      const metadata = {
-        sessionName,
-        issueNumber: issueNumber.value,
-        launchedAt: now.toISOString(),
-        layoutPath,
-      };
-      fs.writeFileSync(path.join(sessions, `${sessionName}.json`), JSON.stringify(metadata, null, 2));
+        // Write session metadata
+        const metadata = {
+          sessionName,
+          issueNumber: issueNumber.value,
+          launchedAt: now.toISOString(),
+          layoutPath,
+        };
+        fs.writeFileSync(path.join(sessions, `${sessionName}.json`), JSON.stringify(metadata, null, 2));
 
-      return ok(
-        `Dark factory session started.\n` +
-          `Session: ${sessionName}\n` +
-          `Issue: #${issueNumber.value}\n` +
-          `Use read_dark_factory with session_name "${sessionName}" to monitor progress.`,
-      );
-    }, 'Failed to start dark factory session');
+        return ok(
+          `Dark factory session started.\n` +
+            `Session: ${sessionName}\n` +
+            `Issue: #${issueNumber.value}\n` +
+            `Use read_dark_factory with session_name "${sessionName}" to monitor progress.`,
+        );
+      },
+      'Failed to start dark factory session',
+    );
   },
 
   async read_dark_factory(args: Record<string, unknown>) {
@@ -278,9 +258,6 @@ export const darkFactoryServer: McpServerDefinition = {
     MCP_GROUP_ID: 'groupId',
   },
   onInit() {
-    signalCliUrl = process.env.SIGNAL_CLI_URL || '';
-    signalAccount = process.env.SIGNAL_ACCOUNT || '';
-    groupId = process.env.MCP_GROUP_ID || '';
     console.error('Dark Factory MCP server started');
   },
 };

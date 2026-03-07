@@ -3,7 +3,8 @@ import { RecurringReminderStore } from '../../stores/recurringReminderStore';
 import { ReminderStore } from '../../stores/reminderStore';
 import { computeNextDue, describeCron, isValidCron } from '../../utils/cron';
 import { readStorageEnv, readTimezone } from '../env';
-import { catchErrors, error, ok } from '../result';
+import { withNotification } from '../notify';
+import { error, ok } from '../result';
 import { runServer } from '../runServer';
 import type { McpServerDefinition } from '../types';
 import { requireGroupId, requireNumber, requireString } from '../validate';
@@ -114,11 +115,19 @@ export const reminderServer: McpServerDefinition = {
         return error('The reminder time must be in the future.');
       }
 
-      return catchErrors(() => {
-        const id = store.create(groupId, sender, reminderText.value, dueAt.value);
-        const formatted = new Date(dueAt.value).toLocaleString('en-AU', { timeZone: tz });
-        return ok(`Reminder #${id} set for ${formatted}: "${reminderText.value}"`);
-      }, 'Failed to set reminder');
+      return withNotification(
+        result => {
+          const text = result.content[0] && 'text' in result.content[0] ? result.content[0].text : '';
+          return text.split('\n')[0];
+        },
+        'set reminder',
+        () => {
+          const id = store.create(groupId, sender, reminderText.value, dueAt.value);
+          const formatted = new Date(dueAt.value).toLocaleString('en-AU', { timeZone: tz });
+          return ok(`Reminder #${id} set for ${formatted}: "${reminderText.value}"`);
+        },
+        'Failed to set reminder',
+      );
     },
 
     list_reminders() {
@@ -143,12 +152,19 @@ export const reminderServer: McpServerDefinition = {
       const groupErr = requireGroupId(groupId);
       if (groupErr) return groupErr;
 
-      const success = store.cancel(reminderId.value, groupId);
-      if (success) {
-        return ok(`Reminder #${reminderId.value} has been cancelled.`);
-      }
-      return ok(
-        `Could not cancel reminder #${reminderId.value}. It may not exist, belong to a different group, or already be sent/cancelled.`,
+      return withNotification(
+        `Reminder #${reminderId.value} cancelled`,
+        'cancel reminder',
+        () => {
+          const success = store.cancel(reminderId.value, groupId);
+          if (success) {
+            return ok(`Reminder #${reminderId.value} has been cancelled.`);
+          }
+          return ok(
+            `Could not cancel reminder #${reminderId.value}. It may not exist, belong to a different group, or already be sent/cancelled.`,
+          );
+        },
+        'Failed to cancel reminder',
       );
     },
 
@@ -166,12 +182,20 @@ export const reminderServer: McpServerDefinition = {
         );
       }
 
-      return catchErrors(() => {
-        const nextDueAt = computeNextDue(cronExpr.value, tz);
-        const id = recurringStore.create(groupId, sender, promptText.value, cronExpr.value, tz, nextDueAt);
-        const desc = describeCron(cronExpr.value, tz);
-        return ok(`Recurring reminder #${id} set (${cronExpr.value}).\n\nNext 3 occurrences:\n${desc}`);
-      }, 'Failed to set recurring reminder');
+      return withNotification(
+        result => {
+          const text = result.content[0] && 'text' in result.content[0] ? result.content[0].text : '';
+          return text.split('\n')[0];
+        },
+        'set recurring reminder',
+        () => {
+          const nextDueAt = computeNextDue(cronExpr.value, tz);
+          const id = recurringStore.create(groupId, sender, promptText.value, cronExpr.value, tz, nextDueAt);
+          const desc = describeCron(cronExpr.value, tz);
+          return ok(`Recurring reminder #${id} set (${cronExpr.value}).\n\nNext 3 occurrences:\n${desc}`);
+        },
+        'Failed to set recurring reminder',
+      );
     },
 
     list_recurring_reminders() {
@@ -196,12 +220,19 @@ export const reminderServer: McpServerDefinition = {
       const groupErr = requireGroupId(groupId);
       if (groupErr) return groupErr;
 
-      const success = recurringStore.cancel(reminderId.value, groupId);
-      if (success) {
-        return ok(`Recurring reminder #${reminderId.value} has been cancelled.`);
-      }
-      return ok(
-        `Could not cancel recurring reminder #${reminderId.value}. It may not exist, belong to a different group, or already be cancelled.`,
+      return withNotification(
+        `Recurring reminder #${reminderId.value} cancelled`,
+        'cancel recurring reminder',
+        () => {
+          const success = recurringStore.cancel(reminderId.value, groupId);
+          if (success) {
+            return ok(`Recurring reminder #${reminderId.value} has been cancelled.`);
+          }
+          return ok(
+            `Could not cancel recurring reminder #${reminderId.value}. It may not exist, belong to a different group, or already be cancelled.`,
+          );
+        },
+        'Failed to cancel recurring reminder',
       );
     },
   },
