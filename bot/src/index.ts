@@ -34,6 +34,7 @@ async function main() {
       whisperModelPath: config.whisperModelPath,
       darkFactoryEnabled: config.darkFactoryEnabled,
       darkFactoryProjectRoot: config.darkFactoryProjectRoot,
+      botStartTime: config.botStartTime,
     },
     signalClient,
     config.claude.maxTurns,
@@ -65,6 +66,7 @@ async function main() {
         whisperModelPath: config.whisperModelPath,
         darkFactoryEnabled: config.darkFactoryEnabled,
         darkFactoryProjectRoot: config.darkFactoryProjectRoot,
+        botStartTime: config.botStartTime,
       },
     },
     {
