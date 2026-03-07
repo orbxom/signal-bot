@@ -148,6 +148,39 @@ describe('Dark Factory MCP Server', () => {
     expect(result.content[0].text).toContain('Missing or invalid input');
   });
 
+  it('should accept special_key without input (bypasses input validation)', async () => {
+    const server = spawnMcpServer({ DARK_FACTORY_ENABLED: '1' });
+    await initializeServer(server);
+    const response = await sendAndReceive(server, {
+      jsonrpc: '2.0',
+      id: 24,
+      method: 'tools/call',
+      params: { name: 'send_dark_factory_input', arguments: { session_name: 'nonexistent', special_key: 'ctrl-c' } },
+    });
+    const result = response.result as { content: Array<{ text: string }>; isError?: boolean };
+    expect(result.isError).toBe(true);
+    // Should fail at session lookup, NOT at input validation
+    expect(result.content[0].text).toContain('No session found');
+    expect(result.content[0].text).not.toContain('Missing or invalid input');
+  });
+
+  it('should accept special_key as a valid parameter without session metadata', async () => {
+    const server = spawnMcpServer({ DARK_FACTORY_ENABLED: '1' });
+    await initializeServer(server);
+    const response = await sendAndReceive(server, {
+      jsonrpc: '2.0',
+      id: 25,
+      method: 'tools/call',
+      params: {
+        name: 'send_dark_factory_input',
+        arguments: { session_name: 'no-such-session', special_key: 'ctrl-c' },
+      },
+    });
+    const result = response.result as { content: Array<{ text: string }>; isError?: boolean };
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('No session found');
+  });
+
   it('should return "no session found" for nonexistent session on send_input', async () => {
     const server = spawnMcpServer({ DARK_FACTORY_ENABLED: '1' });
     await initializeServer(server);
