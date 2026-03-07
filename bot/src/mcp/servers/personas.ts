@@ -2,7 +2,7 @@ import { DatabaseConnection } from '../../db';
 import { PersonaStore } from '../../stores/personaStore';
 import { readStorageEnv } from '../env';
 import { withNotification } from '../notify';
-import { error, ok } from '../result';
+import { error, ok, resultText } from '../result';
 import { runServer } from '../runServer';
 import type { McpServerDefinition } from '../types';
 import { optionalString, requireGroupId, requireNumber, requireString } from '../validate';
@@ -218,10 +218,7 @@ export const personaServer: McpServerDefinition = {
       if (groupErr) return groupErr;
 
       return withNotification(
-        result => {
-          const text = result.content[0] && 'text' in result.content[0] ? result.content[0].text : '';
-          return text.split('.')[0];
-        },
+        result => resultText(result).split('.')[0],
         'switch persona',
         () => {
           const lowerIdent = identifier.value.toLowerCase();

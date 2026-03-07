@@ -4,7 +4,7 @@ import { ReminderStore } from '../../stores/reminderStore';
 import { computeNextDue, describeCron, isValidCron } from '../../utils/cron';
 import { readStorageEnv, readTimezone } from '../env';
 import { withNotification } from '../notify';
-import { error, ok } from '../result';
+import { error, ok, resultText } from '../result';
 import { runServer } from '../runServer';
 import type { McpServerDefinition } from '../types';
 import { requireGroupId, requireNumber, requireString } from '../validate';
@@ -116,10 +116,7 @@ export const reminderServer: McpServerDefinition = {
       }
 
       return withNotification(
-        result => {
-          const text = result.content[0] && 'text' in result.content[0] ? result.content[0].text : '';
-          return text.split('\n')[0];
-        },
+        result => resultText(result).split('\n')[0],
         'set reminder',
         () => {
           const id = store.create(groupId, sender, reminderText.value, dueAt.value);
@@ -183,10 +180,7 @@ export const reminderServer: McpServerDefinition = {
       }
 
       return withNotification(
-        result => {
-          const text = result.content[0] && 'text' in result.content[0] ? result.content[0].text : '';
-          return text.split('\n')[0];
-        },
+        result => resultText(result).split('\n')[0],
         'set recurring reminder',
         () => {
           const nextDueAt = computeNextDue(cronExpr.value, tz);

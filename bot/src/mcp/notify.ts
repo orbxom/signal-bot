@@ -1,4 +1,4 @@
-import { catchErrors } from './result';
+import { catchErrors, resultText } from './result';
 import type { ToolResult } from './types';
 
 export async function sendToolNotification(message: string, success = true): Promise<void> {
@@ -38,8 +38,7 @@ export async function withNotification(
   const result = await catchErrors(fn, errorPrefix);
 
   if (result.isError) {
-    const errText = result.content[0] && 'text' in result.content[0] ? result.content[0].text : 'unknown error';
-    sendToolNotification(`${onError}: ${errText}`, false);
+    sendToolNotification(`${onError}: ${resultText(result) || 'unknown error'}`, false);
   } else {
     const msg = typeof onSuccess === 'function' ? onSuccess(result) : onSuccess;
     sendToolNotification(msg);
