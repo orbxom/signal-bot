@@ -609,14 +609,14 @@
         <div class="pipeline">
           ${STAGE_ORDER.map(stage => {
             const status = (stages && stages[stage]) || 'pending';
-            return html`<div class="pipeline-segment ${status}" title="${STAGE_LABELS[stage]}: ${status}"></div>`;
+            return html`<div key=${stage} class="pipeline-segment ${status}" title="${STAGE_LABELS[stage]}: ${status}"></div>`;
           })}
         </div>
         <div class="pipeline-labels">
           ${STAGE_ORDER.map(stage => {
             const status = (stages && stages[stage]) || 'pending';
             const isActive = status === 'in-progress' || status === 'complete' || status === 'deferred' || status === 'abandoned';
-            return html`<span class="${isActive ? 'active-label' : ''}">${STAGE_LABELS[stage]}</span>`;
+            return html`<span key=${stage} class="${isActive ? 'active-label' : ''}">${STAGE_LABELS[stage]}</span>`;
           })}
         </div>
       `;
@@ -761,6 +761,12 @@
           }
         };
       }, [connect]);
+
+      const [, setTick] = useState(0);
+      useEffect(() => {
+        const id = setInterval(() => setTick(t => t + 1), 30000);
+        return () => clearInterval(id);
+      }, []);
 
       // Compute summary
       const runList = runs ? sortRuns(runs) : [];
