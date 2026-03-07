@@ -1,3 +1,4 @@
 .env
 .worktrees/
 logs/
+factory/sessions/
