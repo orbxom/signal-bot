@@ -394,6 +394,80 @@ describe('ReminderScheduler', () => {
     });
   });
 
+  describe('prompt mode reminders', () => {
+    let mockExecutor: { execute: ReturnType<typeof vi.fn> };
+
+    beforeEach(() => {
+      mockExecutor = { execute: vi.fn().mockResolvedValue(undefined) };
+    });
+
+    it('sends simple mode reminders as text messages (existing behavior)', async () => {
+      const reminder = makeReminder({ mode: 'simple' });
+      mockStore.getGroupsWithDueReminders.mockReturnValue(['group1']);
+      mockStore.getDueByGroup.mockReturnValue([reminder]);
+      const promptScheduler = new ReminderScheduler(
+        mockStore as any, mockSignalClient as any, undefined, mockExecutor as any,
+      );
+      await promptScheduler.processDueReminders();
+      expect(mockSignalClient.sendMessage).toHaveBeenCalled();
+      expect(mockExecutor.execute).not.toHaveBeenCalled();
+    });
+
+    it('spawns Claude session for prompt mode reminders', async () => {
+      const reminder = makeReminder({ mode: 'prompt' });
+      mockStore.getGroupsWithDueReminders.mockReturnValue(['group1']);
+      mockStore.getDueByGroup.mockReturnValue([reminder]);
+      const promptScheduler = new ReminderScheduler(
+        mockStore as any, mockSignalClient as any, undefined, mockExecutor as any,
+      );
+      await promptScheduler.processDueReminders();
+      expect(mockExecutor.execute).toHaveBeenCalledWith(
+        expect.objectContaining({
+          groupId: reminder.groupId,
+          promptText: reminder.reminderText,
+          requester: reminder.requester,
+        }),
+      );
+      expect(mockSignalClient.sendMessage).not.toHaveBeenCalled();
+    });
+
+    it('marks prompt mode reminder as sent after successful execution', async () => {
+      const reminder = makeReminder({ mode: 'prompt' });
+      mockStore.getGroupsWithDueReminders.mockReturnValue(['group1']);
+      mockStore.getDueByGroup.mockReturnValue([reminder]);
+      const promptScheduler = new ReminderScheduler(
+        mockStore as any, mockSignalClient as any, undefined, mockExecutor as any,
+      );
+      await promptScheduler.processDueReminders();
+      expect(mockStore.markSent).toHaveBeenCalledWith(reminder.id);
+    });
+
+    it('does not crash when executor throws for prompt mode (retry on next cycle)', async () => {
+      const reminder = makeReminder({ mode: 'prompt' });
+      mockStore.getGroupsWithDueReminders.mockReturnValue(['group1']);
+      mockStore.getDueByGroup.mockReturnValue([reminder]);
+      mockExecutor.execute.mockRejectedValue(new Error('Claude timeout'));
+      const promptScheduler = new ReminderScheduler(
+        mockStore as any, mockSignalClient as any, undefined, mockExecutor as any,
+      );
+      const result = await promptScheduler.processDueReminders();
+      expect(result).toBe(0);
+    });
+
+    it('falls back to simple send when executor is not configured for prompt mode', async () => {
+      const reminder = makeReminder({ mode: 'prompt' });
+      mockStore.getGroupsWithDueReminders.mockReturnValue(['group1']);
+      mockStore.getDueByGroup.mockReturnValue([reminder]);
+      // scheduler without executor (only 2 args)
+      const noExecutorScheduler = new ReminderScheduler(
+        mockStore as any, mockSignalClient as any,
+      );
+      const result = await noExecutorScheduler.processDueReminders();
+      // Should fail (no executor), return 0
+      expect(result).toBe(0);
+    });
+  });
+
   describe('error resilience', () => {
     it('should continue processing after individual reminder failure', async () => {
       const reminders = [

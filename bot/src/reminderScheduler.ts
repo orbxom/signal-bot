@@ -3,7 +3,7 @@ import type { RecurringReminderExecutor } from './recurringReminderExecutor';
 import type { SignalClient } from './signalClient';
 import { MAX_CONSECUTIVE_FAILURES, type RecurringReminderStore } from './stores/recurringReminderStore';
 import type { ReminderStore } from './stores/reminderStore';
-import type { RecurringReminder, Reminder } from './types';
+import type { PromptExecution, RecurringReminder, Reminder } from './types';
 import { computeNextDue } from './utils/cron';
 
 const MAX_RETRIES = 3;
@@ -127,13 +127,26 @@ export class ReminderScheduler {
     // Claim-then-send: record attempt BEFORE sending
     this.reminderStore.recordAttempt(reminder.id);
 
-    const messageText = this.formatReminderMessage(reminder, staleness);
     try {
-      await this.signalClient.sendMessage(reminder.groupId, messageText);
+      if (reminder.mode === 'prompt') {
+        if (!this.recurringExecutor) {
+          throw new Error('Prompt mode reminder but no executor configured');
+        }
+        const execution: PromptExecution = {
+          id: reminder.id,
+          groupId: reminder.groupId,
+          requester: reminder.requester,
+          promptText: reminder.reminderText,
+        };
+        await this.recurringExecutor.execute(execution);
+      } else {
+        const messageText = this.formatReminderMessage(reminder, staleness);
+        await this.signalClient.sendMessage(reminder.groupId, messageText);
+      }
       this.reminderStore.markSent(reminder.id);
       return true;
     } catch (error) {
-      logger.error(`Failed to send reminder ${reminder.id}:`, error);
+      logger.error(`Failed to ${reminder.mode === 'prompt' ? 'execute' : 'send'} reminder ${reminder.id}:`, error);
       // Don't mark failed — recordAttempt already incremented retryCount
       // Will retry on next cycle (with backoff)
       return false;
