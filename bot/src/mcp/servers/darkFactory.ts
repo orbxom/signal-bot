@@ -108,8 +108,8 @@ const handlers = {
     if (issueNumber.error) return issueNumber.error;
 
     return catchErrors(async () => {
-      const timestamp = Date.now();
-      const sessionName = `dark-factory-${issueNumber.value}-${timestamp}`;
+      const now = new Date();
+      const sessionName = `dark-factory-${issueNumber.value}-${now.getTime()}`;
       const root = projectRoot();
       const sessions = sessionsDir();
 
@@ -145,7 +145,7 @@ const handlers = {
       const metadata = {
         sessionName,
         issueNumber: issueNumber.value,
-        launchedAt: new Date().toISOString(),
+        launchedAt: now.toISOString(),
         layoutPath,
       };
       fs.writeFileSync(path.join(sessions, `${sessionName}.json`), JSON.stringify(metadata, null, 2));
@@ -172,23 +172,26 @@ const handlers = {
       const safeName = path.basename(sessionName.value);
       const metadataPath = path.join(sessions, `${safeName}.json`);
 
-      if (!fs.existsSync(metadataPath)) {
+      let metadata: { sessionName: string; issueNumber: number; launchedAt: string };
+      try {
+        metadata = JSON.parse(fs.readFileSync(metadataPath, 'utf-8'));
+      } catch {
         return error(`No session found: ${sessionName.value}`);
       }
-
-      const metadata = JSON.parse(fs.readFileSync(metadataPath, 'utf-8'));
       const launchedAt = new Date(metadata.launchedAt).getTime();
 
       // Path encoding: /home/user/project → -home-user-project
       const claudeDir = path.join(os.homedir(), '.claude', 'projects', projectRoot().replace(/\//g, '-'));
 
-      if (!fs.existsSync(claudeDir)) {
+      // Find JSONL files modified after launch, then match by issue number
+      let dirEntries: string[];
+      try {
+        dirEntries = fs.readdirSync(claudeDir);
+      } catch {
         return ok(`Session: ${sessionName.value}\nNo Claude conversation directory found.`);
       }
 
-      // Find JSONL files modified after launch, then match by issue number
-      const candidates = fs
-        .readdirSync(claudeDir)
+      const candidates = dirEntries
         .filter(f => f.endsWith('.jsonl'))
         .map(f => ({ name: f, mtime: fs.statSync(path.join(claudeDir, f)).mtimeMs }))
         .filter(f => f.mtime >= launchedAt - 5000)
@@ -207,8 +210,11 @@ const handlers = {
       let jsonlPath = path.join(claudeDir, candidates[0].name); // fallback to newest
       for (const candidate of candidates) {
         const filePath = path.join(claudeDir, candidate.name);
-        const head = fs.readFileSync(filePath, 'utf-8').slice(0, 5000);
-        if (head.includes(issuePattern)) {
+        const buf = Buffer.alloc(5000);
+        const fd = fs.openSync(filePath, 'r');
+        const bytesRead = fs.readSync(fd, buf, 0, 5000, 0);
+        fs.closeSync(fd);
+        if (buf.subarray(0, bytesRead).toString('utf-8').includes(issuePattern)) {
           jsonlPath = filePath;
           break;
         }
