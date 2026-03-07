@@ -57,7 +57,8 @@ export class DatabaseConnection {
           status TEXT NOT NULL DEFAULT 'pending',
           retryCount INTEGER NOT NULL DEFAULT 0,
           createdAt INTEGER NOT NULL,
-          sentAt INTEGER
+          sentAt INTEGER,
+          mode TEXT NOT NULL DEFAULT 'simple'
         );
 
         CREATE INDEX IF NOT EXISTS idx_reminders_due
@@ -139,6 +140,11 @@ export class DatabaseConnection {
       if (currentVersion < 5) {
         this.migrateToV5();
         this.setSchemaVersion(5);
+      }
+
+      if (currentVersion < 6) {
+        this.migrateToV6();
+        this.setSchemaVersion(6);
       }
     } catch (error) {
       wrapSqliteError(error, 'run migrations');
@@ -245,6 +251,13 @@ export class DatabaseConnection {
       CREATE INDEX IF NOT EXISTS idx_recurring_group
       ON recurring_reminders(groupId, status);
     `);
+  }
+
+  private migrateToV6(): void {
+    const cols = this.db.pragma('table_info(reminders)') as Array<{ name: string }>;
+    if (!cols.some(c => c.name === 'mode')) {
+      this.db.exec("ALTER TABLE reminders ADD COLUMN mode TEXT NOT NULL DEFAULT 'simple'");
+    }
   }
 
   runOp<T>(name: string, fn: () => T): T {
