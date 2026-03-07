@@ -118,6 +118,7 @@ The mock server hardcodes the Bot Test group and sender `+61400111222`. The bot 
 - **Bot not receiving messages**: The `extractMessageData` method only processes group messages with `dataMessage.message` and `groupInfo.groupId`. DMs and reactions are silently dropped.
 - **MCP tools not working**: MCP servers run via `npx tsx` on the `.ts` source files. The `resolveMcpServerPath` helper in `mcp/registry.ts` handles path resolution.
 - **Port already in use**: The mock server defaults to port 9090 (to avoid conflicts with real signal-cli on 8080). Use `MOCK_SIGNAL_PORT=XXXX` and `SIGNAL_CLI_URL=http://localhost:XXXX` to change it.
+- **Switching from mock to real signal-cli**: `npm run dev:test` defaults `SIGNAL_CLI_URL` to port 9090 (mock). When switching to real signal-cli, you must explicitly set `SIGNAL_CLI_URL=http://localhost:8080` or the bot will try to connect to the mock port. Use `SIGNAL_CLI_URL=http://localhost:8080 npm run dev:test` or `npm run dev`.
 
 ## Testing
 

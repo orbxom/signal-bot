@@ -85,13 +85,15 @@ Spawn a subagent with this mandate:
 
 ### Step 5: Human Checkpoint
 
-**STOP. Present to the human:**
+**STOP. Switch to plan mode using `EnterPlanMode`.**
+
+In your plan mode message, present:
 - Summary of what you're building and why
 - Key architectural decisions
 - What the devil's advocate raised and how you addressed it
-- The full plan (or a link to it)
+- The full plan (or a link to `factory/runs/issue-<N>/plan.md`)
 
-Ask: "Plan is ready. Approve, request changes, or scrap?"
+This launches the Plannotator UI where the human can review and annotate the plan interactively. When they approve exiting plan mode, proceed to the next stage.
 
 **Do NOT proceed until the human explicitly approves.**
 
