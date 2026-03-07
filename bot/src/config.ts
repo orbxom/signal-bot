@@ -63,7 +63,7 @@ export class Config {
     const mentionTriggersRaw = process.env.MENTION_TRIGGERS || '@bot';
     const mentionTriggers = mentionTriggersRaw
       .split(',')
-      .map(s => s.trim())
+      .map(s => s.trimStart())
       .filter(s => s.length > 0);
 
     const testChannelOnly = process.argv.includes('--test-channel-only') || process.env.TEST_CHANNEL_ONLY === 'true';
