@@ -225,7 +225,7 @@ export const githubServer: McpServerDefinition = {
             '--limit',
             String(limit),
             '--json',
-            'number,title,state,author,url,isDraft,createdAt,updatedAt',
+            'number,title,state,author,url,isDraft',
           ],
           { timeout: GH_TIMEOUT },
         );
@@ -259,7 +259,7 @@ export const githubServer: McpServerDefinition = {
 
       return catchErrors(async () => {
         const { stdout } = await execFileAsync('gh', ['api', `repos/${githubRepo}/pulls/${num.value}`], {
-          timeout: 30000,
+          timeout: GH_TIMEOUT,
         });
 
         const pr = JSON.parse(stdout) as {

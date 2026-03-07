@@ -279,6 +279,21 @@ describe('GitHub MCP Server', () => {
 
   // --- merge_pull_request ---
 
+  it('should return error for merge_pull_request with invalid strategy', async () => {
+    const server = spawnMcpServer({ GITHUB_REPO: 'owner/repo' });
+    await initializeServer(server);
+    const response = await sendAndReceive(server, {
+      jsonrpc: '2.0',
+      id: 18,
+      method: 'tools/call',
+      params: { name: 'merge_pull_request', arguments: { number: 1, strategy: 'fast-forward' } },
+    });
+
+    const result = response.result as { content: Array<{ text: string }>; isError?: boolean };
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('Invalid strategy');
+  });
+
   it('should return error for merge_pull_request when number is missing', async () => {
     const server = spawnMcpServer({ GITHUB_REPO: 'owner/repo' });
     await initializeServer(server);
