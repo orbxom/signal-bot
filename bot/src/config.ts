@@ -18,6 +18,9 @@ export interface ConfigType {
   sourceRoot: string;
   attachmentsDir: string;
   whisperModelPath: string;
+  darkFactoryEnabled: string;
+  darkFactoryProjectRoot: string;
+  botStartTime: string;
   testChannelOnly: boolean;
   testGroupId: string;
 }

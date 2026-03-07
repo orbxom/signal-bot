@@ -64,13 +64,7 @@ async function checkSignal(): Promise<{ status: string; error?: string }> {
 }
 
 function getMemory() {
-  const mem = process.memoryUsage();
-  return {
-    heapUsed: mem.heapUsed,
-    heapTotal: mem.heapTotal,
-    rss: mem.rss,
-    external: mem.external,
-  };
+  return process.memoryUsage();
 }
 
 function getMcpRegistry() {
