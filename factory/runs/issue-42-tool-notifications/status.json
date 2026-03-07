@@ -1,14 +1,14 @@
 {
   "runId": "issue-42-tool-notifications",
-  "currentStage": "integration-test",
+  "currentStage": "complete",
   "stages": {
     "plan": "complete",
     "build": "complete",
     "test": "complete",
     "simplify": "complete",
     "pr": "complete",
-    "integration-test": "in-progress",
+    "integration-test": "complete",
     "review": "complete"
   },
-  "updatedAt": "2026-03-08T10:00:00Z"
+  "updatedAt": "2026-03-08T10:51:00Z"
 }

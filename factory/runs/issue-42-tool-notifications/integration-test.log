@@ -1,0 +1,50 @@
+# Integration Test Log — issue-42-tool-notifications
+# Date: 2026-03-08
+
+## Test 1: Default notification status (disabled)
+Message: "claude: check my tool notification status for this group"
+Expected: Bot reports notifications are disabled by default
+Actual: Bot called get_tool_notification_status, responded "Tool notifications are currently **disabled** for this group."
+Result: PASS
+
+## Test 2: Enable tool notifications
+Message: "claude: please enable tool notifications for this group"
+Expected: Bot calls toggle_tool_notifications with enabled=true, no notification sent (toggle tool excluded)
+Actual: Bot called toggle_tool_notifications with {"group_id":"kKWs+...","enabled":true}. No notification message sent (toggle tool uses catchErrors, not withNotification). Bot responded "Tool notifications are now **enabled**"
+Result: PASS
+
+## Test 3: State-changing tool with notifications enabled
+Message: "claude: set a reminder for 5pm today to walk the dog"
+Expected: Bot sets reminder AND sends a separate notification message prefixed with "Done"
+Actual: Two separate messages sent to mock server:
+  1. Notification: "Done — Reminder #2 set for 09/03/2026, 5:00:00 pm: "Walk the dog"" (from withNotification)
+  2. Bot response: "Done! I've set a reminder for **today (Sunday 9 March) at 5:00 PM** to walk the dog" (from Claude's send_message)
+Result: PASS — notification clearly distinguishable from regular response
+
+## Test 4: Disable tool notifications
+Message: "claude: disable tool notifications for this group"
+Expected: Bot calls toggle_tool_notifications with enabled=false, no notification sent
+Actual: Bot called toggle_tool_notifications with {"enabled":false}. No notification. Bot responded "Tool notifications are now **disabled**"
+Result: PASS
+
+## Test 5: State-changing tool with notifications disabled
+Message: "claude: set a reminder for 6pm to feed the cat"
+Expected: Bot sets reminder but NO notification message sent
+Actual: Only one [BOT] message in mock server log (the regular response). Zero "Done —" notifications. Bot responded normally.
+Result: PASS — confirmed no notification when disabled
+
+## Summary
+All 5 tests PASSED.
+
+Acceptance criteria verified:
+- [x] Default off (Test 1)
+- [x] Toggle tool enables/disables per group (Tests 2, 4)
+- [x] Notifications sent when enabled (Test 3)
+- [x] Notifications clearly distinguishable — "Done —" prefix (Test 3)
+- [x] No notification for toggle tool itself (Tests 2, 4)
+- [x] No notification when disabled (Test 5)
+
+## Notes
+- Initial bot startup had MENTION_TRIGGERS quoting issue (literal double quotes in env var). Fixed by using single quotes without inner double quotes.
+- Claude CLI response times: 14-85 seconds per request (normal for complex MCP queries)
+- The notification arrives before the bot's main response (fire-and-forget from MCP server)

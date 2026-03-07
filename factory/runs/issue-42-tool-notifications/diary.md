@@ -37,3 +37,17 @@
 **2026-03-08 00:50** — Fix agent complete. Commit b440d6e: all 3 findings addressed. 774 tests pass, lint clean. Review complete. PR ready for merge (integration tests deferred).
 
 **2026-03-08 10:00** — Deferred integration tests now running. Triggered by `/dark-factory integration test 42`.
+
+**2026-03-08 10:36** — Integration test setup: mock server and bot started from worktree. Initial MENTION_TRIGGERS quoting issue (literal double quotes in env var) caused mention detection to fail — fixed by removing inner double quotes.
+
+**2026-03-08 10:41** — Test 1: "check tool notification status" — PASS. Default disabled. Bot called get_tool_notification_status.
+
+**2026-03-08 10:43** — Test 2: "enable tool notifications" — PASS. Bot called toggle_tool_notifications(enabled=true). No notification from toggle tool itself (correct).
+
+**2026-03-08 10:47** — Test 3: "set a reminder" (notifications enabled) — PASS. Two separate messages: notification "Done — Reminder #2 set for 09/03/2026, 5:00:00 pm" + regular bot response. Notification clearly distinguishable.
+
+**2026-03-08 10:48** — Test 4: "disable tool notifications" — PASS. Bot called toggle_tool_notifications(enabled=false).
+
+**2026-03-08 10:50** — Test 5: "set a reminder" (notifications disabled) — PASS. Only regular bot response, zero notifications in mock server log.
+
+**2026-03-08 10:51** — Integration tests complete. All 5/5 tests passed. Run fully complete. PR #48 ready for merge.
