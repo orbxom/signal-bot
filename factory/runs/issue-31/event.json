@@ -1,0 +1,14 @@
+{
+  "source": "github",
+  "issueNumber": 31,
+  "issueUrl": "https://github.com/orbxom/signal-bot/issues/31",
+  "title": "Add \"c \" as a short mention trigger",
+  "description": "Add \"c \" (lowercase c followed by a space) as a mention trigger so users can type `c what's the weather` instead of `claude: what's the weather`.",
+  "acceptanceCriteria": [
+    "Messages starting with `c ` (lowercase c, then space) trigger the bot, with the `c ` prefix stripped from the query",
+    "Existing `claude:` trigger continues to work unchanged",
+    "The trigger is added to the default `MENTION_TRIGGERS` config",
+    "Works in both real Signal and mock signal server environments"
+  ],
+  "createdAt": "2026-03-07T09:44:30Z"
+}

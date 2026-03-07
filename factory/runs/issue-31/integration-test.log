@@ -1,0 +1,26 @@
+Integration Test Run: 2026-03-07
+Environment: worktree .worktrees/issue-31, mock signal server on :9090
+MENTION_TRIGGERS=claude:,c
+
+Test 1: "c " trigger activates bot
+  Sent: "c what is 2+2"
+  Expected: Bot detects mention, extracts query "what is 2+2", processes via LLM
+  Actual: PASS — query: "what is 2+2", LLM responded, COMPLETE
+
+Test 2: Non-mention starting with "c" (no space) is ignored
+  Sent: "can you believe this weather"
+  Expected: Message stored but NOT processed (no LLM)
+  Actual: PASS — RECV logged, no LLM processing lines
+
+Test 3: Existing "claude:" trigger still works
+  Sent: "claude: hello there"
+  Expected: Bot detects mention, extracts query "hello there"
+  Actual: PASS — query: "hello there", LLM responded, COMPLETE
+
+Test 4: Mid-message "c " not corrupted (regression test)
+  Sent: "c tell me about music scenes in melbourne"
+  Expected: Query "tell me about music scenes in melbourne" (no corruption)
+  Actual: PASS — query: "tell me about music scenes in melbourne" (correct!)
+  Note: Old code would have produced "tell me about musiscenes in melbourne"
+
+All 4 tests PASSED.

@@ -1,0 +1,13 @@
+Simplify review: 2026-03-07
+
+Three agents reviewed: Code Reuse, Code Quality, Efficiency.
+
+Fixed:
+- Renamed misleading test "should remove all trigger patterns" → "should only remove the leading trigger pattern"
+
+Skipped (YAGNI):
+- Extract shared getMatchingTriggerIndex helper — only 2 lines duplicated, not worth abstracting
+- Inline lowerContent variable — readability is fine as-is
+
+Efficiency: No issues. New extractQuery is O(k) vs old O(n*m).
+Tests: 19/19 passing after fix.
