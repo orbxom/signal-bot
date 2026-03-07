@@ -1,10 +1,69 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { readTimezone } from '../env';
 import { catchErrors, error, ok } from '../result';
 import { runServer } from '../runServer';
 import type { McpServerDefinition } from '../types';
-import { requireString, type StringResult } from '../validate';
+import { optionalString, requireString, type StringResult } from '../validate';
 
 const BOM_BASE_URL = 'https://api.weather.bom.gov.au/v1';
+const BOM_RADAR_BASE = 'https://reg.bom.gov.au/radar';
+
+// Hardcoded BOM radar station data. BOM has no discovery API;
+// adding new stations requires a code change.
+const RADAR_STATION_LIST = [
+  { code: '71', name: 'Sydney (Terrey Hills)', aliases: ['sydney', 'terrey hills'] },
+  { code: '02', name: 'Melbourne', aliases: ['melbourne'] },
+  { code: '66', name: 'Brisbane (Mt Stapylton)', aliases: ['brisbane', 'mt stapylton'] },
+  { code: '64', name: 'Adelaide (Buckland Park)', aliases: ['adelaide', 'buckland park'] },
+  { code: '70', name: 'Perth (Serpentine)', aliases: ['perth', 'serpentine'] },
+  { code: '37', name: 'Hobart', aliases: ['hobart'] },
+  { code: '63', name: 'Darwin (Berrimah)', aliases: ['darwin', 'berrimah'] },
+  { code: '40', name: 'Canberra (Captains Flat)', aliases: ['canberra', 'captains flat'] },
+  { code: '04', name: 'Newcastle (Lemon Tree Passage)', aliases: ['newcastle', 'lemon tree passage'] },
+  { code: '19', name: 'Cairns', aliases: ['cairns'] },
+  { code: '73', name: 'Townsville (Hervey Range)', aliases: ['townsville', 'hervey range'] },
+  { code: '28', name: 'Gold Coast (Mt Tamborine)', aliases: ['gold coast', 'mt tamborine'] },
+  { code: '03', name: 'Wollongong (Appin)', aliases: ['wollongong', 'appin'] },
+  { code: '25', name: 'Alice Springs', aliases: ['alice springs'] },
+  { code: '23', name: 'Gladstone', aliases: ['gladstone'] },
+  { code: '22', name: 'Mackay', aliases: ['mackay'] },
+  { code: '72', name: 'Rockhampton', aliases: ['rockhampton'] },
+] as const;
+
+const RADAR_STATIONS: Record<string, { code: string; name: string }> = Object.fromEntries(
+  RADAR_STATION_LIST.flatMap(s => s.aliases.map(a => [a, s])),
+);
+
+const RANGE_MAP: Record<string, string> = {
+  '512km': '1',
+  '256km': '2',
+  '128km': '3',
+  '64km': '4',
+};
+
+const AVAILABLE_STATIONS = RADAR_STATION_LIST.map(s => s.name)
+  .sort()
+  .join(', ');
+
+function cleanupOldRadarFiles(): void {
+  const tmpDir = os.tmpdir();
+  const oneHourAgo = Date.now() - 60 * 60 * 1000;
+  try {
+    for (const file of fs.readdirSync(tmpDir)) {
+      if (file.startsWith('radar-IDR') && file.endsWith('.gif')) {
+        const filePath = path.join(tmpDir, file);
+        const stat = fs.statSync(filePath);
+        if (stat.mtimeMs < oneHourAgo) {
+          fs.unlinkSync(filePath);
+        }
+      }
+    }
+  } catch {
+    // Best-effort cleanup; ignore errors
+  }
+}
 
 const TOOLS = [
   {
@@ -70,6 +129,28 @@ const TOOLS = [
         },
       },
       required: ['geohash'],
+    },
+  },
+  {
+    name: 'get_radar_image',
+    title: 'Get BOM Radar Image',
+    description:
+      'Fetch the current BOM weather radar image for an Australian location. Returns a file path to a GIF image that can be sent using send_image. Use this when someone asks for a radar image or weather radar.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        location: {
+          type: 'string',
+          description:
+            'Location name (e.g. "Sydney", "Melbourne", "Brisbane"). Use list of available stations in error message if unsure.',
+        },
+        range: {
+          type: 'string',
+          description: 'Radar range: "64km", "128km", "256km", or "512km". Defaults to "128km".',
+          enum: ['64km', '128km', '256km', '512km'],
+        },
+      },
+      required: ['location'],
     },
   },
 ];
@@ -283,6 +364,44 @@ export const weatherServer: McpServerDefinition = {
 
         return ok(`Active warnings:\n${lines.join('\n')}`);
       }, 'Weather API error');
+    },
+    async get_radar_image(args) {
+      const location = requireString(args, 'location');
+      if (location.error) return location.error;
+
+      const key = location.value.toLowerCase();
+      const station = RADAR_STATIONS[key];
+      if (!station) {
+        return error(`Unknown location "${location.value}". Available stations: ${AVAILABLE_STATIONS}`);
+      }
+
+      const range = optionalString(args, 'range', '128km');
+      const suffix = RANGE_MAP[range];
+      if (!suffix) {
+        return error(`Invalid range "${range}". Valid ranges: ${Object.keys(RANGE_MAP).join(', ')}`);
+      }
+
+      return catchErrors(async () => {
+        const productId = `IDR${station.code}${suffix}`;
+        const url = `${BOM_RADAR_BASE}/${productId}.gif`;
+        const response = await fetch(url, { signal: AbortSignal.timeout(30000) });
+        if (!response.ok) {
+          throw new Error(`BOM radar error (${response.status}): radar image not available for ${station.name}`);
+        }
+
+        const buffer = Buffer.from(await response.arrayBuffer());
+        const magic = buffer.subarray(0, 6).toString('ascii');
+        if (magic !== 'GIF89a' && magic !== 'GIF87a') {
+          throw new Error(`BOM returned invalid data for ${station.name} radar (expected GIF image)`);
+        }
+
+        cleanupOldRadarFiles();
+
+        const filePath = path.join(os.tmpdir(), `radar-${productId}-${Date.now()}.gif`);
+        await fs.promises.writeFile(filePath, buffer);
+
+        return ok(`Radar image saved: ${filePath}\nStation: ${station.name} (${range} range)`);
+      }, 'Radar fetch error');
     },
   },
   onInit() {
