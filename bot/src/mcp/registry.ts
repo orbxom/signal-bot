@@ -84,12 +84,26 @@ export function buildAllowedTools(): string {
   return [BASE_TOOLS, ...mcpTools, ...externalTools].join(',');
 }
 
-export function buildMcpConfig(context: MessageContext): { mcpServers: Record<string, unknown> } {
+export interface BuildMcpConfigOptions {
+  toolNotificationsEnabled?: boolean;
+}
+
+export function buildMcpConfig(
+  context: MessageContext,
+  options?: BuildMcpConfigOptions,
+): { mcpServers: Record<string, unknown> } {
   const mcpServers: Record<string, unknown> = {};
+
+  // Common env vars injected into every MCP server
+  const commonEnv: Record<string, string> = {
+    TOOL_NOTIFICATIONS_ENABLED: options?.toolNotificationsEnabled ? '1' : '0',
+    SIGNAL_CLI_URL: context.signalCliUrl || '',
+    SIGNAL_ACCOUNT: context.botPhoneNumber || '',
+  };
 
   for (const server of ALL_SERVERS) {
     const resolved = resolveMcpServerPath(`servers/${server.entrypoint}`);
-    const env: Record<string, string> = {};
+    const env: Record<string, string> = { ...commonEnv };
     for (const [envKey, contextField] of Object.entries(server.envMapping)) {
       const value = context[contextField];
       if (value !== undefined) env[envKey] = String(value);

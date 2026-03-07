@@ -60,6 +60,7 @@ describe('MessageHandler.handleMessageBatch', () => {
       getDossiersByGroup: vi.fn().mockReturnValue([]),
       getMemoriesByGroup: vi.fn().mockReturnValue([]),
       getActivePersonaForGroup: vi.fn().mockReturnValue(null),
+      toolNotifications: { isEnabled: vi.fn().mockReturnValue(false) },
     } as any;
 
     mockLLM = {

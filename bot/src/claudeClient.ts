@@ -195,7 +195,9 @@ export class ClaudeCLIClient implements LLMClient {
     ];
 
     if (context) {
-      const mcpConfig = JSON.stringify(buildMcpConfig(context));
+      const mcpConfig = JSON.stringify(
+        buildMcpConfig(context, { toolNotificationsEnabled: context.toolNotificationsEnabled }),
+      );
       args.push('--mcp-config', mcpConfig, '--strict-mcp-config');
 
       const agentsConfig = JSON.stringify({

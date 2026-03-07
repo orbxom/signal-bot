@@ -107,6 +107,7 @@ export interface AppConfig {
 export interface RequestContext {
   groupId: string;
   sender: string;
+  toolNotificationsEnabled?: boolean;
 }
 
 /** Combined context — backward-compatible alias. */

@@ -143,4 +143,59 @@ describe('buildMcpConfig', () => {
     expect(transcription.env.WHISPER_MODEL_PATH).toBe('');
     expect(transcription.env.ATTACHMENTS_DIR).toBe('');
   });
+
+  describe('tool notification env vars', () => {
+    it('should include TOOL_NOTIFICATIONS_ENABLED=1 for all servers when enabled', () => {
+      const context = makeContext();
+      const config = buildMcpConfig(context, { toolNotificationsEnabled: true });
+      for (const server of ALL_SERVERS) {
+        const entry = config.mcpServers[server.configKey] as { env: Record<string, string> };
+        expect(entry.env.TOOL_NOTIFICATIONS_ENABLED).toBe('1');
+      }
+    });
+
+    it('should include TOOL_NOTIFICATIONS_ENABLED=0 for all servers when disabled', () => {
+      const context = makeContext();
+      const config = buildMcpConfig(context, { toolNotificationsEnabled: false });
+      for (const server of ALL_SERVERS) {
+        const entry = config.mcpServers[server.configKey] as { env: Record<string, string> };
+        expect(entry.env.TOOL_NOTIFICATIONS_ENABLED).toBe('0');
+      }
+    });
+
+    it('should default TOOL_NOTIFICATIONS_ENABLED=0 when option not provided', () => {
+      const context = makeContext();
+      const config = buildMcpConfig(context);
+      for (const server of ALL_SERVERS) {
+        const entry = config.mcpServers[server.configKey] as { env: Record<string, string> };
+        expect(entry.env.TOOL_NOTIFICATIONS_ENABLED).toBe('0');
+      }
+    });
+
+    it('should include SIGNAL_CLI_URL for all servers', () => {
+      const context = makeContext({ signalCliUrl: 'http://localhost:9999' });
+      const config = buildMcpConfig(context);
+      for (const server of ALL_SERVERS) {
+        const entry = config.mcpServers[server.configKey] as { env: Record<string, string> };
+        expect(entry.env.SIGNAL_CLI_URL).toBe('http://localhost:9999');
+      }
+    });
+
+    it('should include SIGNAL_ACCOUNT for all servers', () => {
+      const context = makeContext({ botPhoneNumber: '+61499999999' });
+      const config = buildMcpConfig(context);
+      for (const server of ALL_SERVERS) {
+        const entry = config.mcpServers[server.configKey] as { env: Record<string, string> };
+        expect(entry.env.SIGNAL_ACCOUNT).toBe('+61499999999');
+      }
+    });
+
+    it('should not conflict with servers that already have SIGNAL_CLI_URL in envMapping', () => {
+      const context = makeContext({ signalCliUrl: 'http://localhost:8080' });
+      const config = buildMcpConfig(context);
+      // The signal server already maps SIGNAL_CLI_URL via envMapping
+      const signal = config.mcpServers.signal as { env: Record<string, string> };
+      expect(signal.env.SIGNAL_CLI_URL).toBe('http://localhost:8080');
+    });
+  });
 });
