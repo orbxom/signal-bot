@@ -101,6 +101,7 @@ export interface AppConfig {
   whisperModelPath: string;
   darkFactoryEnabled: string;
   darkFactoryProjectRoot: string;
+  botStartTime: string;
 }
 
 /** Per-message request context. */

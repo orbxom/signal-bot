@@ -88,6 +88,7 @@ export class Config {
       whisperModelPath: process.env.WHISPER_MODEL_PATH || './models/ggml-base.en.bin',
       darkFactoryEnabled: process.env.DARK_FACTORY_ENABLED || '',
       darkFactoryProjectRoot: process.env.DARK_FACTORY_PROJECT_ROOT || '',
+      botStartTime: Date.now().toString(),
       testChannelOnly,
       testGroupId,
     };
