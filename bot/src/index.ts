@@ -2,6 +2,7 @@ import { ClaudeCLIClient } from './claudeClient';
 import { Config } from './config';
 import { logger } from './logger';
 import { MessageHandler } from './messageHandler';
+import { RecurringReminderExecutor } from './recurringReminderExecutor';
 import { ReminderScheduler } from './reminderScheduler';
 import { SignalClient } from './signalClient';
 import { Storage } from './storage';
@@ -21,7 +22,28 @@ async function main() {
   const signalClient = new SignalClient(config.signalCliUrl, config.botPhoneNumber);
   logger.success('Signal client initialized');
 
-  const reminderScheduler = new ReminderScheduler(storage.reminders, signalClient);
+  const recurringExecutor = new RecurringReminderExecutor(
+    {
+      dbPath: config.dbPath,
+      timezone: config.timezone,
+      githubRepo: config.githubRepo,
+      sourceRoot: config.sourceRoot,
+      signalCliUrl: config.signalCliUrl,
+      botPhoneNumber: config.botPhoneNumber,
+      attachmentsDir: config.attachmentsDir,
+      whisperModelPath: config.whisperModelPath,
+    },
+    signalClient,
+    config.claude.maxTurns,
+  );
+  logger.success('Recurring reminder executor initialized');
+
+  const reminderScheduler = new ReminderScheduler(
+    storage.reminders,
+    signalClient,
+    storage.recurringReminders,
+    recurringExecutor,
+  );
   logger.success('Reminder scheduler initialized');
 
   const messageHandler = new MessageHandler(

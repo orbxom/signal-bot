@@ -6,7 +6,7 @@ const { mockSpawnPromise } = vi.hoisted(() => {
   return { mockSpawnPromise };
 });
 
-vi.mock('../src/claudeClient', async (importOriginal) => {
+vi.mock('../src/claudeClient', async importOriginal => {
   const actual = await importOriginal<typeof import('../src/claudeClient')>();
   return {
     ...actual,
@@ -50,9 +50,7 @@ function makeMcpSendOutput() {
     {
       type: 'assistant',
       message: {
-        content: [
-          { type: 'tool_use', name: 'mcp__signal__send_message', input: { message: 'Good morning!' } },
-        ],
+        content: [{ type: 'tool_use', name: 'mcp__signal__send_message', input: { message: 'Good morning!' } }],
       },
     },
     { type: 'result', result: 'Good morning!', is_error: false, usage: { input_tokens: 100, output_tokens: 50 } },
@@ -67,7 +65,12 @@ function makeDirectOutput() {
         content: [{ type: 'text', text: 'Good morning everyone!' }],
       },
     },
-    { type: 'result', result: 'Good morning everyone!', is_error: false, usage: { input_tokens: 80, output_tokens: 30 } },
+    {
+      type: 'result',
+      result: 'Good morning everyone!',
+      is_error: false,
+      usage: { input_tokens: 80, output_tokens: 30 },
+    },
   ]);
 }
 

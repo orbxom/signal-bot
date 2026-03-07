@@ -1,5 +1,5 @@
-import { logger } from './logger';
 import { parseClaudeOutput, spawnPromise } from './claudeClient';
+import { logger } from './logger';
 import { buildAllowedTools, buildMcpConfig } from './mcp/registry';
 import type { SignalClient } from './signalClient';
 import type { AppConfig, RecurringReminder } from './types';
@@ -37,15 +37,22 @@ export class RecurringReminderExecutor {
     });
 
     const args = [
-      '-p', reminder.promptText,
-      '--output-format', 'json',
-      '--max-turns', String(this.maxTurns),
+      '-p',
+      reminder.promptText,
+      '--output-format',
+      'json',
+      '--max-turns',
+      String(this.maxTurns),
       '--no-session-persistence',
-      '--allowedTools', buildAllowedTools(),
-      '--mcp-config', JSON.stringify(mcpConfig),
+      '--allowedTools',
+      buildAllowedTools(),
+      '--mcp-config',
+      JSON.stringify(mcpConfig),
       '--strict-mcp-config',
-      '--system-prompt', systemPrompt,
-      '--agents', agentsConfig,
+      '--system-prompt',
+      systemPrompt,
+      '--agents',
+      agentsConfig,
     ];
 
     logger.step(`recurring: executing reminder #${reminder.id}: "${reminder.promptText.substring(0, 60)}"`);

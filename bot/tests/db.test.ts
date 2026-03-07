@@ -204,12 +204,12 @@ describe('DatabaseConnection', () => {
       expect(indexNames).toContain('idx_attachment_data_group');
     });
 
-    it('should set schema version to 4 after migrations', () => {
+    it('should set schema version to 5 after migrations', () => {
       db = createTestDb('signal-bot-db-test-');
       const row = db.conn.db.prepare("SELECT value FROM schema_meta WHERE key = 'schema_version'").get() as {
         value: string;
       };
-      expect(Number.parseInt(row.value, 10)).toBe(4);
+      expect(Number.parseInt(row.value, 10)).toBe(5);
     });
   });
 
