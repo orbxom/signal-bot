@@ -40,7 +40,7 @@ Image attachments sent in Signal messages are stored as BLOBs in the `attachment
 - `index.ts` — Barrel: ALL_SERVERS array (add new server = add one import here)
 - `reminders.ts` — set/list/cancel reminders (3 tools)
 - `weather.ts` — BOM weather: search, observations, forecast, warnings (4 tools)
-- `github.ts` — Create GitHub issues from feature requests (1 tool)
+- `github.ts` — GitHub integration: feature request issues, PR list/view/diff/comment/review/merge (7 tools)
 - `dossiers.ts` — Person dossier CRUD (3 tools)
 - `sourceCode.ts` — List/read/search source files (3 tools). Paths are relative to `bot/`, not the repo root (e.g., use `src/index.ts` not `bot/src/index.ts`)
 - `messageHistory.ts` — Search and date-range message queries (2 tools)
