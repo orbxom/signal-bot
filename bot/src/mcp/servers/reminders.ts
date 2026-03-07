@@ -1,6 +1,7 @@
 import { DatabaseConnection } from '../../db';
 import { RecurringReminderStore } from '../../stores/recurringReminderStore';
 import { ReminderStore } from '../../stores/reminderStore';
+import type { ReminderMode } from '../../types';
 import { computeNextDue, describeCron, isValidCron } from '../../utils/cron';
 import { readStorageEnv, readTimezone } from '../env';
 import { catchErrors, error, ok } from '../result';
@@ -21,6 +22,12 @@ const TOOLS = [
         dueAt: {
           type: 'number',
           description: 'When to deliver the reminder, as a Unix timestamp in milliseconds',
+        },
+        mode: {
+          type: 'string',
+          enum: ['simple', 'prompt'],
+          description:
+            'Reminder mode: "simple" (default) sends the text as a message. "prompt" spawns a full Claude session with MCP tools to process the text as an instruction (use for tasks that need reasoning or tool access, e.g. "check the weather and report").',
         },
       },
       required: ['reminderText', 'dueAt'],
@@ -114,10 +121,16 @@ export const reminderServer: McpServerDefinition = {
         return error('The reminder time must be in the future.');
       }
 
+      const mode = args.mode as string | undefined;
+      if (mode !== undefined && mode !== 'simple' && mode !== 'prompt') {
+        return error(`Invalid mode: "${mode}". Must be "simple" or "prompt".`);
+      }
+
       return catchErrors(() => {
-        const id = store.create(groupId, sender, reminderText.value, dueAt.value);
+        const id = store.create(groupId, sender, reminderText.value, dueAt.value, (mode as ReminderMode) ?? 'simple');
         const formatted = new Date(dueAt.value).toLocaleString('en-AU', { timeZone: tz });
-        return ok(`Reminder #${id} set for ${formatted}: "${reminderText.value}"`);
+        const modeInfo = mode === 'prompt' ? ' (prompt mode — will spawn a Claude session)' : '';
+        return ok(`Reminder #${id} set for ${formatted}: "${reminderText.value}"${modeInfo}`);
       }, 'Failed to set reminder');
     },
 
@@ -132,7 +145,8 @@ export const reminderServer: McpServerDefinition = {
 
       const lines = reminders.map(r => {
         const due = new Date(r.dueAt).toLocaleString('en-AU', { timeZone: tz });
-        return `#${r.id} | Due: ${due} | "${r.reminderText}" (set by ${r.requester})`;
+        const modeLabel = r.mode === 'prompt' ? ' [prompt]' : '';
+        return `#${r.id} | Due: ${due}${modeLabel} | "${r.reminderText}" (set by ${r.requester})`;
       });
       return ok(`Pending reminders:\n${lines.join('\n')}`);
     },

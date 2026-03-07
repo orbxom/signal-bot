@@ -6,7 +6,7 @@ import { MessageStore } from './stores/messageStore';
 import { PersonaStore } from './stores/personaStore';
 import { RecurringReminderStore } from './stores/recurringReminderStore';
 import { ReminderStore } from './stores/reminderStore';
-import type { Attachment, Dossier, Memory, Message, Persona, Reminder } from './types';
+import type { Attachment, Dossier, Memory, Message, Persona, Reminder, ReminderMode } from './types';
 
 export class Storage {
   private conn: DatabaseConnection;
@@ -64,8 +64,8 @@ export class Storage {
 
   // === Reminder methods (delegate to ReminderStore) ===
 
-  createReminder(groupId: string, requester: string, reminderText: string, dueAt: number): number {
-    return this.reminders.create(groupId, requester, reminderText, dueAt);
+  createReminder(groupId: string, requester: string, reminderText: string, dueAt: number, mode?: ReminderMode): number {
+    return this.reminders.create(groupId, requester, reminderText, dueAt, mode);
   }
 
   getDueReminders(now?: number, limit = 50): Reminder[] {
