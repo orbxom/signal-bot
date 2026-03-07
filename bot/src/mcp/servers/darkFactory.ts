@@ -24,6 +24,25 @@ function checkEnabled() {
   return null;
 }
 
+interface SessionMetadata {
+  sessionName: string;
+  issueNumber: number;
+  launchedAt: string;
+}
+
+function loadSessionMetadata(
+  rawName: string,
+): { safeName: string; metadata: SessionMetadata; error?: undefined } | { error: ReturnType<typeof error> } {
+  const safeName = path.basename(rawName);
+  const metadataPath = path.join(sessionsDir(), `${safeName}.json`);
+  try {
+    const metadata: SessionMetadata = JSON.parse(fs.readFileSync(metadataPath, 'utf-8'));
+    return { safeName, metadata };
+  } catch {
+    return { error: error(`No session found: ${rawName}`) };
+  }
+}
+
 const TOOLS = [
   {
     name: 'start_dark_factory',
@@ -190,16 +209,10 @@ const handlers = {
 
     return catchErrors(() => {
       const lastN = Math.max(1, Math.min(typeof args.last_n === 'number' ? args.last_n : 5, 50));
-      const sessions = sessionsDir();
-      const safeName = path.basename(sessionName.value);
-      const metadataPath = path.join(sessions, `${safeName}.json`);
 
-      let metadata: { sessionName: string; issueNumber: number; launchedAt: string };
-      try {
-        metadata = JSON.parse(fs.readFileSync(metadataPath, 'utf-8'));
-      } catch {
-        return error(`No session found: ${sessionName.value}`);
-      }
+      const session = loadSessionMetadata(sessionName.value);
+      if (session.error) return session.error;
+      const { metadata } = session;
       const launchedAt = new Date(metadata.launchedAt).getTime();
 
       // Path encoding: /home/user/project → -home-user-project
@@ -285,16 +298,9 @@ const handlers = {
     }
 
     return catchErrors(() => {
-      const sessions = sessionsDir();
-      const safeName = path.basename(sessionName.value);
-      const metadataPath = path.join(sessions, `${safeName}.json`);
-
-      // Verify session metadata exists
-      try {
-        fs.readFileSync(metadataPath, 'utf-8');
-      } catch {
-        return error(`No session found: ${sessionName.value}`);
-      }
+      const session = loadSessionMetadata(sessionName.value);
+      if (session.error) return session.error;
+      const { safeName } = session;
 
       // Read current terminal viewport via dump-screen
       const dumpFile = path.join(os.tmpdir(), `dump-${safeName}-${crypto.randomUUID()}.txt`);
