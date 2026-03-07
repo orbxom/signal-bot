@@ -89,4 +89,36 @@ describe('MentionDetector', () => {
       expect(detector.extractQuery('[bot] help me')).toBe('help me');
     });
   });
+
+  describe('short trigger "c "', () => {
+    const detector = new MentionDetector(['claude:', 'c ']);
+
+    it('should detect "c " at start of message', () => {
+      expect(detector.isMentioned('c what is the weather')).toBe(true);
+    });
+
+    it('should not match words starting with c without space', () => {
+      expect(detector.isMentioned('cat is here')).toBe(false);
+      expect(detector.isMentioned('can you help')).toBe(false);
+    });
+
+    it('should be case-insensitive', () => {
+      expect(detector.isMentioned('C what is 2+2')).toBe(true);
+    });
+
+    it('should extract query without corrupting mid-message text', () => {
+      expect(detector.extractQuery('c what is the weather')).toBe('what is the weather');
+      expect(detector.extractQuery('c tell me about music scenes')).toBe('tell me about music scenes');
+      expect(detector.extractQuery('c describe the basic stuff')).toBe('describe the basic stuff');
+    });
+
+    it('should work alongside other triggers', () => {
+      expect(detector.isMentioned('claude: hello')).toBe(true);
+      expect(detector.extractQuery('claude: hello')).toBe('hello');
+    });
+
+    it('should handle just "c " with no query', () => {
+      expect(detector.extractQuery('c ')).toBe('');
+    });
+  });
 });
