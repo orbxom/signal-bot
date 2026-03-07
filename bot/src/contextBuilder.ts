@@ -24,7 +24,7 @@ const VOICE_MESSAGE_INSTRUCTIONS =
   'When a voice message is attached (shown as [Voice message attached: <path>] in the conversation), use the transcribe_audio tool to transcribe it, then respond to the transcribed content as if the user had typed it. Voice messages may appear in the current message or in recent conversation history.';
 
 const IMAGE_INSTRUCTIONS =
-  'When an image is attached (shown as [Image attached: <path>] in the conversation), use the Read tool to view it, then respond about the image content. Images may appear in the current message or in recent conversation history.';
+  'When an image is referenced (shown as [Image: attachment://<id>] in the conversation), use the view_image tool with that attachment ID to view it. Then respond about the image content. Images may appear in the current message or in recent conversation history.';
 
 export interface ContextBuilderConfig {
   systemPrompt: string;
@@ -95,7 +95,7 @@ export class ContextBuilder {
   }
 
   formatImageAttachment(attachmentId: string): string {
-    return `[Image attached: ${path.join(this.attachmentsDir, attachmentId)}]`;
+    return `[Image: attachment://${attachmentId}]`;
   }
 
   formatMessageForContext(msg: Message, nameMap?: Map<string, string>): string {

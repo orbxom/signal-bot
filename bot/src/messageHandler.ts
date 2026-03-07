@@ -109,6 +109,8 @@ export class MessageHandler {
       attachments: attachments.length > 0 ? attachments : undefined,
     });
 
+    this.ingestImageAttachments(groupId, sender, attachments, timestamp);
+
     if (options?.storeOnly || !mentioned) {
       return;
     }
@@ -159,6 +161,10 @@ export class MessageHandler {
         isBot: false,
         attachments: msg.attachments.length > 0 ? msg.attachments : undefined,
       });
+    }
+
+    for (const msg of validMessages) {
+      this.ingestImageAttachments(groupId, msg.sender, msg.attachments, msg.timestamp);
     }
 
     if (options?.storeOnly || mentionMessages.length === 0) {
@@ -271,6 +277,33 @@ export class MessageHandler {
       nameMap,
       personaPrompt,
     };
+  }
+
+  private ingestImageAttachments(
+    groupId: string,
+    sender: string,
+    attachments: SignalAttachment[],
+    timestamp: number,
+  ): void {
+    for (const att of attachments) {
+      if (att.contentType.startsWith('image/')) {
+        const file = this.signalClient.readAttachmentFile(this.appConfig.attachmentsDir, att.id);
+        if (!file) {
+          logger.debug(`Attachment file not found on disk: ${att.id}`);
+          continue;
+        }
+        this.storage.saveAttachment({
+          id: att.id,
+          groupId,
+          sender,
+          contentType: att.contentType,
+          size: att.size,
+          filename: att.filename,
+          data: file.data,
+          timestamp,
+        });
+      }
+    }
   }
 
   private async processLlmRequest(

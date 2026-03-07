@@ -1,7 +1,9 @@
 import type { MessageContext } from '../types';
 
+export type ToolResultContent = { type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string };
+
 export type ToolResult = {
-  content: Array<{ type: 'text'; text: string }>;
+  content: ToolResultContent[];
   isError?: boolean;
 };
 

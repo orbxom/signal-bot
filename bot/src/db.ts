@@ -130,6 +130,11 @@ export class DatabaseConnection {
         this.migrateToV3();
         this.setSchemaVersion(3);
       }
+
+      if (currentVersion < 4) {
+        this.migrateToV4();
+        this.setSchemaVersion(4);
+      }
     } catch (error) {
       wrapSqliteError(error, 'run migrations');
     }
@@ -190,6 +195,24 @@ export class DatabaseConnection {
 
       CREATE INDEX IF NOT EXISTS idx_memories_group
       ON memories(groupId);
+    `);
+  }
+
+  private migrateToV4(): void {
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS attachment_data (
+        id TEXT PRIMARY KEY,
+        groupId TEXT NOT NULL,
+        sender TEXT NOT NULL,
+        contentType TEXT NOT NULL,
+        size INTEGER NOT NULL,
+        filename TEXT,
+        data BLOB NOT NULL,
+        timestamp INTEGER NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_attachment_data_group
+      ON attachment_data(groupId, timestamp DESC);
     `);
   }
 

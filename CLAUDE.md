@@ -23,6 +23,10 @@ Claude-powered Signal bot for family group chat. Responds to mention triggers in
 - `bot/src/stores/reminderStore.ts` — Per-group reminders with idempotent markSent, retry tracking
 - `bot/src/stores/dossierStore.ts` — Person dossiers scoped by group
 - `bot/src/stores/personaStore.ts` — Bot personas with active-per-group management
+- `bot/src/stores/attachmentStore.ts` — Image attachment BLOB storage and cleanup
+
+### Image Attachments
+Image attachments sent in Signal messages are stored as BLOBs in the `attachment_data` SQLite table on receipt. Conversation context references them as `[Image: attachment://<id>]`. Claude uses the `view_image` MCP tool to retrieve and view images from the DB.
 
 ### MCP Framework
 - `bot/src/mcp/types.ts` — McpServerDefinition, ToolDefinition, ToolHandler interfaces
@@ -41,6 +45,7 @@ Claude-powered Signal bot for family group chat. Responds to mention triggers in
 - `sourceCode.ts` — List/read/search source files (3 tools). Paths are relative to `bot/`, not the repo root (e.g., use `src/index.ts` not `bot/src/index.ts`)
 - `messageHistory.ts` — Search and date-range message queries (2 tools)
 - `signal.ts` — Send messages and images via Signal (2 tools)
+- `images.ts` — View image attachments stored in DB (1 tool)
 - `personas.ts` — Bot persona CRUD + switching (6 tools)
 
 ### Adding a New MCP Server

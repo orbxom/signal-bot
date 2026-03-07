@@ -566,6 +566,32 @@ describe('SignalClient', () => {
     });
   });
 
+  describe('readAttachmentFile', () => {
+    it('should read file from attachments directory and return Buffer', () => {
+      const fs = require('node:fs');
+      const os = require('node:os');
+      const path = require('node:path');
+      const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'signal-test-'));
+      const attachmentId = 'test-attachment-id';
+      fs.writeFileSync(path.join(tmpDir, attachmentId), Buffer.from('fake image data'));
+
+      const client = new SignalClient('http://localhost:8080', '+1234567890');
+      const result = client.readAttachmentFile(tmpDir, attachmentId);
+
+      expect(result).not.toBeNull();
+      expect(Buffer.isBuffer(result?.data)).toBe(true);
+      expect(result?.data.toString()).toBe('fake image data');
+
+      fs.rmSync(tmpDir, { recursive: true });
+    });
+
+    it('should return null when file does not exist', () => {
+      const client = new SignalClient('http://localhost:8080', '+1234567890');
+      const result = client.readAttachmentFile('/nonexistent/path', 'missing-id');
+      expect(result).toBeNull();
+    });
+  });
+
   describe('waitForReady', () => {
     let fetchMock: ReturnType<typeof vi.fn>;
 

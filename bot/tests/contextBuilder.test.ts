@@ -350,7 +350,7 @@ describe('ContextBuilder', () => {
       };
 
       const result = builder.formatMessageForContext(msg);
-      expect(result).toContain('[Image attached: /data/attachments/img-123]');
+      expect(result).toContain('[Image: attachment://img-123]');
     });
   });
 
@@ -363,10 +363,10 @@ describe('ContextBuilder', () => {
   });
 
   describe('formatImageAttachment', () => {
-    it('should format image attachment path', () => {
+    it('should format image attachment as attachment:// URI', () => {
       const builder = new ContextBuilder({ ...defaultConfig, attachmentsDir: '/data/attachments' });
       const result = builder.formatImageAttachment('img-abc');
-      expect(result).toBe('[Image attached: /data/attachments/img-abc]');
+      expect(result).toBe('[Image: attachment://img-abc]');
     });
   });
 });

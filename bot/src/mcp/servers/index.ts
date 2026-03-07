@@ -1,6 +1,7 @@
 import type { McpServerDefinition } from '../types';
 import { dossierServer } from './dossiers';
 import { githubServer } from './github';
+import { imagesServer } from './images';
 import { memoryServer } from './memories';
 import { messageHistoryServer } from './messageHistory';
 import { personaServer } from './personas';
@@ -13,6 +14,7 @@ export const ALL_SERVERS: McpServerDefinition[] = [
   githubServer,
   reminderServer,
   dossierServer,
+  imagesServer,
   memoryServer,
   messageHistoryServer,
   weatherServer,

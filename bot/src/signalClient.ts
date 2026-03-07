@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { logger } from './logger';
 import type { ExtractedMessage, SignalMessage } from './types';
 
@@ -83,6 +85,17 @@ export class SignalClient {
     }
 
     throw new Error(`signal-cli not reachable at ${this.baseUrl} after ${maxRetries} attempts`);
+  }
+
+  readAttachmentFile(attachmentsDir: string, attachmentId: string): { data: Buffer } | null {
+    const filePath = path.resolve(attachmentsDir, attachmentId);
+    if (!filePath.startsWith(path.resolve(attachmentsDir))) return null;
+    try {
+      const data = fs.readFileSync(filePath);
+      return { data };
+    } catch {
+      return null;
+    }
   }
 
   extractMessageData(signalMsg: SignalMessage): ExtractedMessage | null {
