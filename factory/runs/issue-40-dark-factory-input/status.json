@@ -1,8 +1,8 @@
 {
-  "currentStage": "build",
+  "currentStage": "plan",
   "stages": {
-    "plan": "complete",
-    "build": "in-progress",
+    "plan": "in-progress",
+    "build": "pending",
     "test": "pending",
     "simplify": "pending",
     "pr": "pending",

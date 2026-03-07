@@ -1,0 +1,17 @@
+{
+  "source": "github",
+  "issueNumber": 40,
+  "issueUrl": "https://github.com/orbxom/signal-bot/issues/40",
+  "title": "Dark factory: send input to running sessions",
+  "description": "Add a new MCP tool that allows the bot to send keyboard input to a running dark factory session. This enables the bot to respond to interactive prompts (option selection, tool-use confirmations, etc.) without requiring a human to find and type into the terminal.",
+  "acceptanceCriteria": [
+    "New MCP tool that accepts a session identifier and input text, and sends that input to the running dark factory terminal session",
+    "Tool reads recent session output before sending input so the bot understands context",
+    "Safe prompts (tool-use confirmations, continue/proceed) are auto-handled without user intervention",
+    "Non-obvious prompts (option selection, open-ended questions) are surfaced to the user for decision",
+    "Works with the existing start_dark_factory / read_dark_factory session naming convention",
+    "Error handling for sessions that don't exist or have already exited"
+  ],
+  "mode": "full",
+  "createdAt": "2026-03-07T13:10:00Z"
+}
