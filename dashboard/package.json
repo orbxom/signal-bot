@@ -1,0 +1,20 @@
+{
+  "name": "factory-dashboard",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Real-time Dark Factory pipeline dashboard",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "tsx src/server.ts"
+  },
+  "dependencies": {
+    "chokidar": "^5.0.0",
+    "ws": "^8.19.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/ws": "^8.18.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.0"
+  }
+}
