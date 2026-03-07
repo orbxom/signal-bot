@@ -135,6 +135,11 @@ export class DatabaseConnection {
         this.migrateToV4();
         this.setSchemaVersion(4);
       }
+
+      if (currentVersion < 5) {
+        this.migrateToV5();
+        this.setSchemaVersion(5);
+      }
     } catch (error) {
       wrapSqliteError(error, 'run migrations');
     }
@@ -213,6 +218,32 @@ export class DatabaseConnection {
 
       CREATE INDEX IF NOT EXISTS idx_attachment_data_group
       ON attachment_data(groupId, timestamp DESC);
+    `);
+  }
+
+  private migrateToV5(): void {
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS recurring_reminders (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        groupId TEXT NOT NULL,
+        requester TEXT NOT NULL,
+        promptText TEXT NOT NULL,
+        cronExpression TEXT NOT NULL,
+        timezone TEXT NOT NULL,
+        nextDueAt INTEGER NOT NULL,
+        status TEXT NOT NULL DEFAULT 'active',
+        consecutiveFailures INTEGER NOT NULL DEFAULT 0,
+        lastFiredAt INTEGER,
+        lastInFlightAt INTEGER,
+        createdAt INTEGER NOT NULL,
+        updatedAt INTEGER NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_recurring_status_due
+      ON recurring_reminders(status, nextDueAt);
+
+      CREATE INDEX IF NOT EXISTS idx_recurring_group
+      ON recurring_reminders(groupId, status);
     `);
   }
 
