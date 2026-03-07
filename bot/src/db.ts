@@ -140,6 +140,11 @@ export class DatabaseConnection {
         this.migrateToV5();
         this.setSchemaVersion(5);
       }
+
+      if (currentVersion < 6) {
+        this.migrateToV6();
+        this.setSchemaVersion(6);
+      }
     } catch (error) {
       wrapSqliteError(error, 'run migrations');
     }
@@ -244,6 +249,16 @@ export class DatabaseConnection {
 
       CREATE INDEX IF NOT EXISTS idx_recurring_group
       ON recurring_reminders(groupId, status);
+    `);
+  }
+
+  private migrateToV6(): void {
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS tool_notification_settings (
+        groupId TEXT NOT NULL PRIMARY KEY,
+        enabled INTEGER NOT NULL DEFAULT 0,
+        updatedAt INTEGER NOT NULL
+      );
     `);
   }
 
