@@ -112,9 +112,7 @@ describe('Images MCP Server', () => {
         data: Buffer.from('fake jpeg data').toString('base64'),
         mimeType: 'image/jpeg',
       });
-      expect(result.content[1]).toEqual(
-        expect.objectContaining({ type: 'text' }),
-      );
+      expect(result.content[1]).toEqual(expect.objectContaining({ type: 'text' }));
       expect((result.content[1] as { text: string }).text).toContain('photo.jpg');
       expect((result.content[1] as { text: string }).text).toContain('image/jpeg');
     } finally {

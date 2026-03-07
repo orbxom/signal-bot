@@ -28,9 +28,14 @@ export class AttachmentStore {
     this.conn.ensureOpen();
     try {
       this.stmts.upsert.run(
-        attachment.id, attachment.groupId, attachment.sender,
-        attachment.contentType, attachment.size, attachment.filename,
-        attachment.data, attachment.timestamp,
+        attachment.id,
+        attachment.groupId,
+        attachment.sender,
+        attachment.contentType,
+        attachment.size,
+        attachment.filename,
+        attachment.data,
+        attachment.timestamp,
       );
     } catch (error) {
       wrapSqliteError(error, 'save attachment');

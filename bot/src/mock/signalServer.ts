@@ -3,10 +3,57 @@ import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
 import readline from 'node:readline';
+import zlib from 'node:zlib';
 
 const PORT = parseInt(process.env.MOCK_SIGNAL_PORT || '9090', 10);
 const GROUP_ID = 'kKWs+FQPBZKe7N7CdxMjNAAjE2uWEmtBij55MOfWFU4=';
 const SENDER = '+61400111222';
+
+/** Generate a 50x50 gradient PNG at runtime — complex enough for Claude's vision API. */
+function generateTestPng(): Buffer {
+  const w = 50;
+  const h = 50;
+  const raw = Buffer.alloc(h * (1 + w * 4));
+  for (let y = 0; y < h; y++) {
+    const row = y * (1 + w * 4);
+    raw[row] = 0; // filter byte
+    for (let x = 0; x < w; x++) {
+      const px = row + 1 + x * 4;
+      raw[px] = Math.floor((255 * x) / w); // R
+      raw[px + 1] = Math.floor((255 * y) / h); // G
+      raw[px + 2] = 128 + Math.floor(64 * (((x * 7 + y * 11) % 20) / 20)); // B
+      raw[px + 3] = 255; // A
+    }
+  }
+  const idat = zlib.deflateSync(raw);
+
+  function chunk(type: string, data: Buffer): Buffer {
+    const typeData = Buffer.concat([Buffer.from(type, 'ascii'), data]);
+    const len = Buffer.alloc(4);
+    len.writeUInt32BE(data.length);
+    const crc = Buffer.alloc(4);
+    crc.writeUInt32BE(zlib.crc32(typeData) >>> 0);
+    return Buffer.concat([len, typeData, crc]);
+  }
+
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(w, 0);
+  ihdr.writeUInt32BE(h, 4);
+  ihdr[8] = 8; // bit depth
+  ihdr[9] = 6; // RGBA
+  ihdr[10] = 0; // compression
+  ihdr[11] = 0; // filter
+  ihdr[12] = 0; // interlace
+
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), // PNG signature
+    chunk('IHDR', ihdr),
+    chunk('IDAT', idat),
+    chunk('IEND', Buffer.alloc(0)),
+  ]);
+}
+
+const TEST_PNG = generateTestPng();
 
 const CYAN = '\x1b[36m';
 const YELLOW = '\x1b[33m';
@@ -36,25 +83,9 @@ interface Envelope {
 const messageQueue: Envelope[] = [];
 let isTyping = false;
 
-function createEnvelope(text: string): Envelope {
-  const now = Date.now();
-  return {
-    envelope: {
-      sourceNumber: SENDER,
-      sourceUuid: 'mock-uuid-1234',
-      timestamp: now,
-      dataMessage: {
-        timestamp: now,
-        message: text,
-        groupInfo: { groupId: GROUP_ID },
-      },
-    },
-  };
-}
-
-function createEnvelopeWithAttachments(
+function createEnvelope(
   text: string,
-  attachments: Array<{ id: string; contentType: string; size: number; filename: string | null }>,
+  attachments?: Array<{ id: string; contentType: string; size: number; filename: string | null }>,
 ): Envelope {
   const now = Date.now();
   return {
@@ -77,6 +108,19 @@ function clearTypingLine() {
     process.stdout.write(`\r${' '.repeat(40)}\r`);
     isTyping = false;
   }
+}
+
+function queueImageMessage(text: string): { attachmentId: string } {
+  const attachmentId = `mock-img-${Date.now()}`;
+  const attachDir = process.env.ATTACHMENTS_DIR || './data/signal-attachments';
+  fs.mkdirSync(attachDir, { recursive: true });
+  fs.writeFileSync(path.join(attachDir, attachmentId), TEST_PNG);
+  const envelope = createEnvelope(text, [
+    { id: attachmentId, contentType: 'image/png', size: TEST_PNG.length, filename: 'test-image.png' },
+  ]);
+  messageQueue.push(envelope);
+  console.log(`${GREEN}[QUEUED]${RESET} image message with attachment ${attachmentId}`);
+  return { attachmentId };
 }
 
 type RpcHandler = (params: Record<string, unknown>) => unknown;
@@ -107,9 +151,16 @@ const handlers: Record<string, RpcHandler> = {
     return [{ id: GROUP_ID, name: 'Bot Test', isMember: true }];
   },
   // Allows queuing messages via HTTP (useful for headless/background testing)
+  // Pass { image: true } to attach a test PNG image (same as /image stdin command)
   queueMessage: params => {
     const text = (params.message as string) || '';
     if (!text) return { error: 'message is required' };
+
+    if (params.image) {
+      const { attachmentId } = queueImageMessage(text);
+      return { queued: true, queueLength: messageQueue.length, attachmentId };
+    }
+
     messageQueue.push(createEnvelope(text));
     console.log(`${GREEN}[QUEUED]${RESET} "${text}"`);
     return { queued: true, queueLength: messageQueue.length };
@@ -166,25 +217,7 @@ function handleCommand(line: string) {
     process.exit(0);
   }
   if (cmd === '/image') {
-    // Create a tiny 10x10 red PNG for testing
-    const fakePng =
-      'iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAYAAACNMs+9AAAAFklEQVQYV2P8z8BQz0AEYBxVOHIUAgBGWAgE/dLkBAAAAABJRU5ErkJggg==';
-    const attachmentId = `mock-img-${Date.now()}`;
-    const attachDir = process.env.ATTACHMENTS_DIR || './data/signal-attachments';
-    fs.mkdirSync(attachDir, { recursive: true });
-    const pngBuffer = Buffer.from(fakePng, 'base64');
-    fs.writeFileSync(path.join(attachDir, attachmentId), pngBuffer);
-
-    const envelope = createEnvelopeWithAttachments('claude: what is this image?', [
-      {
-        id: attachmentId,
-        contentType: 'image/png',
-        size: pngBuffer.length,
-        filename: 'test-image.png',
-      },
-    ]);
-    messageQueue.push(envelope);
-    console.log(`${GREEN}[QUEUED]${RESET} image message with attachment ${attachmentId}`);
+    queueImageMessage('claude: what is this image?');
     rl.prompt();
   } else if (cmd === '/clear') {
     messageQueue.length = 0;
