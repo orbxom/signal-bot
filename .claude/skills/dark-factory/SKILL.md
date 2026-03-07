@@ -45,13 +45,14 @@ Determine the entry mode from what the user provided, then initialize accordingl
 
 ### Full mode (issue, no plan)
 1. Fetch the GitHub issue details using `gh api repos/orbxom/signal-bot/issues/<N>`
-2. Create the run directory: `factory/runs/<run-id>/`
-3. Write `event.json` with: source, issueNumber, issueUrl, title, description, acceptanceCriteria, mode ("full"), createdAt
-4. Write `status.json` with all stages set to `pending` (plan, build, test, simplify, pr, integration-test, review)
-5. Create `diary.md` with header `# Diary — <run-id>`
-6. Update `status.json` to set current stage to `plan`
+2. **Interview check** (see "Interview Check" section below)
+3. Create the run directory: `factory/runs/<run-id>/`
+4. Write `event.json` with: source, issueNumber, issueUrl, title, description, acceptanceCriteria, interviewReport (if found), mode ("full"), createdAt
+5. Write `status.json` with all stages set to `pending` (plan, build, test, simplify, pr, integration-test, review)
+6. Create `diary.md` with header `# Diary — <run-id>`
+7. Update `status.json` to set current stage to `plan`
 
-**Diary:** Append entry — "Initialized. Mode: full. Issue #N: <title>."
+**Diary:** Append entry — "Initialized. Mode: full. Issue #N: <title>. Interview: <found/not needed/required but missing>."
 
 ### Plan-only mode (plan, no issue)
 1. Choose a run ID from the plan filename or content (e.g., `plan-<slug>`)
@@ -66,14 +67,29 @@ Determine the entry mode from what the user provided, then initialize accordingl
 
 ### Fast-start mode (issue + plan)
 1. Fetch the GitHub issue details using `gh api repos/orbxom/signal-bot/issues/<N>`
-2. Create the run directory: `factory/runs/<run-id>/`
-3. Copy the user's plan file to `factory/runs/<run-id>/plan.md`
-4. Write `event.json` with: source, issueNumber, issueUrl, title, description, acceptanceCriteria, mode ("fast-start"), createdAt
-5. Write `status.json` with all stages set to `pending`
-6. Create `diary.md` with header `# Diary — <run-id>`
-7. Update `status.json` to set current stage to `plan`
+2. **Interview check** (see "Interview Check" section below)
+3. Create the run directory: `factory/runs/<run-id>/`
+4. Copy the user's plan file to `factory/runs/<run-id>/plan.md`
+5. Write `event.json` with: source, issueNumber, issueUrl, title, description, acceptanceCriteria, interviewReport (if found), mode ("fast-start"), createdAt
+6. Write `status.json` with all stages set to `pending`
+7. Create `diary.md` with header `# Diary — <run-id>`
+8. Update `status.json` to set current stage to `plan`
 
-**Diary:** Append entry — "Initialized. Mode: fast-start. Issue #N: <title>. Plan: <filename>."
+**Diary:** Append entry — "Initialized. Mode: fast-start. Issue #N: <title>. Plan: <filename>. Interview: <found/not needed/required but missing>."
+
+### Interview Check
+
+This check runs during initialization for Full and Fast-start modes (not Plan-only, which has no issue).
+
+1. Fetch issue comments: `gh api repos/orbxom/signal-bot/issues/<N>/comments`
+2. Scan for a comment whose body starts with `## Issue Interview Report`
+3. **Evaluate whether an interview is needed** based on the issue content:
+   - **Interview NOT needed** (proceed normally): bug fixes, simple/clear requests with well-defined acceptance criteria, small scope changes, issues with labels like `bug` or `chore`
+   - **Interview REQUIRED** (hard stop if missing): major features, ambiguous requirements, large scope, missing or vague acceptance criteria, issues with labels like `feature` or `enhancement`
+4. Decision outcomes:
+   - **Interview found:** Extract the report text. Store it in `event.json` as `interviewReport`. Diary: "Interview check: report found (posted <date>)."
+   - **Interview not needed:** Diary: "Interview check: skipped (<reason — e.g., bug fix, clear acceptance criteria>)." Proceed normally.
+   - **Interview required but missing:** Announce: "Issue #N looks like a major feature / ambiguous request but has no interview report. Please run `interview issue #N` first." **STOP the pipeline.** Do not proceed.
 
 **Announce:** "Initialized run for <run-id>. Mode: <mode>. Starting planning stage."
 
@@ -104,15 +120,19 @@ Combine all findings into `factory/runs/<run-id>/research.md`.
 
 **This step always runs**, even when a plan is provided. Research validates the plan against the current state of the codebase.
 
+**If `event.json` contains `interviewReport`:** All research agents should receive the interview report as additional context. It contains clarified requirements, agreed approach, constraints, and success criteria from the issue interviewer.
+
 **Diary:** Append entry when dispatching agents, then another when research completes (summarize key findings in one line).
 
 ### Step 2: Plan Drafting
 
 **Skip this step if `plan.md` already exists in the run directory** (plan-only or fast-start mode). Jump to Step 3.
 
-Use the `writing-plans` skill to create the implementation plan. The plan MUST include:
-- Goal (tied to acceptance criteria from the issue)
-- Approach (architecture decisions, trade-offs considered)
+Use the `writing-plans` skill to create the implementation plan. If `event.json` contains `interviewReport`, use it as primary input — the interview has already clarified requirements, agreed on an approach, and defined success criteria. The plan should build on these rather than re-derive them.
+
+The plan MUST include:
+- Goal (tied to acceptance criteria from the issue and/or interview report)
+- Approach (architecture decisions, trade-offs considered — honor the approach agreed in the interview)
 - File changes (which files are created/modified/deleted)
 - Test strategy (what tests, TDD approach)
 - Tasks (ordered, each small enough for one focused session)

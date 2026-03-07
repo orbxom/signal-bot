@@ -1,0 +1,183 @@
+
+ RUN  v1.6.1 /home/zknowles/personal/signal-bot/.worktrees/issue-41-prompt-reminders/bot
+
+ ✓ tests/reminderScheduler.recurring.test.ts  (5 tests) 7ms
+ ✓ tests/signalClient.test.ts  (38 tests) 33ms
+ ✓ tests/reminderScheduler.test.ts  (31 tests) 21ms
+ ✓ tests/contextBuilder.test.ts  (26 tests) 30ms
+ ✓ tests/messageHandler.batch.test.ts  (13 tests) 19ms
+ ✓ tests/messageHandler.test.ts  (47 tests) 139ms
+[2m23:49:44[0m [36m│[0m llm: spawning claude -p (max turns: 1)
+[2m23:49:44[0m [36m│[0m llm: system prompt 0.0k chars, conversation 0.0k chars
+[2m23:49:44[0m [36m│[0m llm: 0 input / 10 output tokens
+[2m23:49:44[0m [36m│[0m llm: result via result field
+[2m23:49:44[0m [36m│[0m llm: spawning claude -p (max turns: 1)
+[2m23:49:44[0m [36m│[0m llm: system prompt 0.0k chars, conversation 0.0k chars
+[2m23:49:44[0m [36m│[0m llm: result via result field
+[2m23:49:44[0m [36m│[0m llm: spawning claude -p (max turns: 1)
+[2m23:49:44[0m [36m│[0m llm: system prompt 0.0k chars, conversation 0.0k chars
+[2m23:49:44[0m [36m│[0m llm: result via result field
+[2m23:49:44[0m [36m│[0m llm: spawning claude -p (max turns: 1)
+[2m23:49:44[0m [36m│[0m llm: system prompt 0.0k chars, conversation 0.0k chars
+[2m23:49:44[0m [36m│[0m llm: 0 input / 15 output tokens
+[2m23:49:44[0m [36m│[0m llm: result via result field
+[2m23:49:44[0m [36m│[0m llm: spawning claude -p (max turns: 1)
+[2m23:49:44[0m [36m│[0m llm: system prompt 0.0k chars, conversation 0.0k chars
+[2m23:49:44[0m [36m│[0m llm: result via result field
+[2m23:49:44[0m [36m│[0m llm: spawning claude -p (max turns: 1)
+[2m23:49:44[0m [36m│[0m llm: system prompt 0.0k chars, conversation 0.0k chars
+[2m23:49:44[0m [33mResult has is_error=true, subtype=error. Falling back to assistant text.[0m
+[2m23:49:44[0m [2mUsed fallback: extracted 13 chars from assistant message[0m
+[2m23:49:44[0m [36m│[0m llm: result via result field
+[2m23:49:44[0m [36m│[0m llm: spawning claude -p (max turns: 1)
+[2m23:49:44[0m [36m│[0m llm: system prompt 0.0k chars, conversation 0.0k chars
+[2m23:49:44[0m [31mNo result line in output. Entry types: system[0m
+[2m23:49:44[0m [36m│[0m llm: spawning claude -p (max turns: 1)
+[2m23:49:44[0m [36m│[0m llm: system prompt 0.0k chars, conversation 0.0k chars
+[2m23:49:44[0m [36m│[0m llm: spawning claude -p (max turns: 1)
+[2m23:49:44[0m [36m│[0m llm: system prompt 0.0k chars, conversation 0.0k chars
+[2m23:49:44[0m [36m│[0m llm: spawning claude -p (max turns: 1)
+[2m23:49:44[0m [36m│[0m llm: system prompt 0.0k chars, conversation 0.0k chars
+[2m23:49:44[0m [36m│[0m llm: spawning claude -p (max turns: 3)
+[2m23:49:44[0m [36m│[0m llm: system prompt 0.0k chars, conversation 0.0k chars
+[2m23:49:44[0m [36m│[0m llm: result via result field
+[2m23:49:44[0m [36m│[0m llm: spawning claude -p (max turns: 1)
+[2m23:49:44[0m [36m│[0m llm: system prompt 0.0k chars, conversation 0.0k chars
+[2m23:49:44[0m [36m│[0m llm: result via result field
+[2m23:49:44[0m [36m│[0m llm: spawning claude -p (max turns: 1)
+[2m23:49:44[0m [36m│[0m llm: system prompt 0.0k chars, conversation 0.0k chars
+[2m23:49:44[0m [36m│[0m llm: result via result field
+[2m23:49:44[0m [36m│[0m llm: spawning claude -p (max turns: 1)
+[2m23:49:44[0m [36m│[0m llm: system prompt 0.0k chars, conversation 0.0k chars
+[2m23:49:44[0m [36m│[0m llm: result via result field
+[2m23:49:44[0m [36m│[0m llm: spawning claude -p (max turns: 1)
+[2m23:49:44[0m [36m│[0m llm: system prompt 0.0k chars, conversation 0.0k chars
+[2m23:49:44[0m [36m│[0m llm: result via result field
+[2m23:49:44[0m [36m│[0m llm: spawning claude -p (max turns: 1)
+[2m23:49:44[0m [36m│[0m llm: system prompt 0.0k chars, conversation 0.0k chars
+[2m23:49:44[0m [36m│[0m llm: result via result field
+[2m23:49:44[0m [36m│[0m llm: spawning claude -p (max turns: 1)
+[2m23:49:44[0m [36m│[0m llm: system prompt 0.0k chars, conversation 0.0k chars
+[2m23:49:44[0m [36m│[0m llm: result via result field
+[2m23:49:44[0m [36m│[0m llm: spawning claude -p (max turns: 1)
+[2m23:49:44[0m [36m│[0m llm: system prompt 0.0k chars, conversation 0.0k chars
+[2m23:49:44[0m [36m│[0m llm: result via result field
+[2m23:49:44[0m [36m│[0m llm: spawning claude -p (max turns: 1)
+[2m23:49:44[0m [36m│[0m llm: system prompt 0.0k chars, conversation 0.0k chars
+[2m23:49:44[0m [36m│[0m llm: result via result field
+[2m23:49:44[0m [36m│[0m llm: spawning claude -p (max turns: 1)
+[2m23:49:44[0m [36m│[0m llm: system prompt 0.0k chars, conversation 0.0k chars
+[2m23:49:44[0m [36m│[0m llm: result via result field
+[2m23:49:44[0m [36m│[0m llm: spawning claude -p (max turns: 1)
+[2m23:49:44[0m [36m│[0m llm: system prompt 0.0k chars, conversation 0.0k chars
+[2m23:49:44[0m [36m│[0m llm: result via result field
+[2m23:49:44[0m [36m│[0m llm: spawning claude -p (max turns: 1)
+[2m23:49:44[0m [36m│[0m llm: system prompt 0.0k chars, conversation 0.0k chars
+[2m23:49:44[0m [36m│[0m tools called:
+[2m23:49:44[0m [36m│[0m   mcp__signal__send_message  {"message":"Looking into it..."}
+[2m23:49:44[0m [36m│[0m   mcp__signal__send_message  {"message":"Here is the answer!"}
+[2m23:49:44[0m [36m│[0m llm: 0 input / 20 output tokens
+[2m23:49:44[0m [36m│[0m llm: result via MCP send_message
+[2m23:49:44[0m [36m│[0m llm: spawning claude -p (max turns: 1)
+[2m23:49:44[0m [36m│[0m llm: system prompt 0.0k chars, conversation 0.0k chars
+[2m23:49:44[0m [36m│[0m tools called:
+[2m23:49:44[0m [36m│[0m   mcp__signal__send_message  {"message":"Here is the answer!"}
+[2m23:49:44[0m [36m│[0m llm: 0 input / 10 output tokens
+[2m23:49:44[0m [36m│[0m llm: result via MCP send_message
+[2m23:49:44[0m [36m│[0m llm: spawning claude -p (max turns: 1)
+[2m23:49:44[0m [36m│[0m llm: system prompt 0.0k chars, conversation 0.0k chars
+[2m23:49:44[0m [36m│[0m llm: result via result field
+[2m23:49:44[0m [36m│[0m llm: spawning claude -p (max turns: 1)
+[2m23:49:44[0m [36m│[0m llm: system prompt 0.0k chars, conversation 0.0k chars
+[2m23:49:44[0m [36m│[0m llm: result via result field
+[2m23:49:44[0m [36m│[0m llm: spawning claude -p (max turns: 1)
+[2m23:49:44[0m [36m│[0m llm: system prompt 0.0k chars, conversation 0.0k chars
+[2m23:49:44[0m [36m│[0m llm: result via result field
+[2m23:49:44[0m [36m│[0m llm: spawning claude -p (max turns: 1)
+[2m23:49:44[0m [36m│[0m llm: system prompt 0.0k chars, conversation 0.0k chars
+[2m23:49:44[0m [36m│[0m llm: 0 input / 5 output tokens
+[2m23:49:44[0m [36m│[0m llm: result via result field
+[2m23:49:44[0m [36m│[0m llm: spawning claude -p (max turns: 1)
+[2m23:49:44[0m [36m│[0m llm: system prompt 0.0k chars, conversation 0.0k chars
+[2m23:49:44[0m [36m│[0m llm: result via result field
+[2m23:49:44[0m [36m│[0m llm: spawning claude -p (max turns: 1)
+[2m23:49:44[0m [36m│[0m llm: system prompt 0.0k chars, conversation 0.0k chars
+[2m23:49:44[0m [36m│[0m llm: result via result field
+[2m23:49:44[0m [36m│[0m llm: spawning claude -p (max turns: 1)
+[2m23:49:44[0m [36m│[0m llm: system prompt 0.0k chars, conversation 0.0k chars
+[2m23:49:44[0m [36m│[0m llm: result via result field
+[2m23:49:44[0m [36m│[0m llm: spawning claude -p (max turns: 1)
+[2m23:49:44[0m [36m│[0m llm: system prompt 0.0k chars, conversation 0.0k chars
+[2m23:49:44[0m [36m│[0m tools called:
+[2m23:49:44[0m [36m│[0m   mcp__signal__send_image  {"imagePath":"/tmp/screenshot.png","caption":"Here is the page"}
+[2m23:49:44[0m [36m│[0m llm: 0 input / 15 output tokens
+[2m23:49:44[0m [36m│[0m llm: result via MCP send_message
+[2m23:49:44[0m [36m│[0m llm: spawning claude -p (max turns: 1)
+[2m23:49:44[0m [36m│[0m llm: system prompt 0.0k chars, conversation 0.0k chars
+[2m23:49:44[0m [36m│[0m tools called:
+[2m23:49:44[0m [36m│[0m   mcp__signal__send_image  {"imagePath":"/tmp/screenshot.png"}
+[2m23:49:44[0m [36m│[0m llm: 0 input / 10 output tokens
+[2m23:49:44[0m [36m│[0m llm: result via MCP send_message
+[2m23:49:44[0m [36m│[0m llm: spawning claude -p (max turns: 1)
+[2m23:49:44[0m [36m│[0m llm: system prompt 0.0k chars, conversation 0.0k chars
+[2m23:49:44[0m [36m│[0m llm: result via result field
+[2m23:49:44[0m [36m│[0m llm: spawning claude -p (max turns: 1)
+[2m23:49:44[0m [36m│[0m llm: system prompt 0.0k chars, conversation 0.0k chars
+[2m23:49:44[0m [36m│[0m llm: result via result field
+[2m23:49:44[0m [31mNo result line in output. Entry types: system[0m
+[2m23:49:44[0m [33mResult has is_error=true, subtype=error. Falling back to assistant text.[0m
+[2m23:49:44[0m [2mUsed fallback: extracted 13 chars from assistant message[0m
+ ✓ tests/claudeClient.test.ts  (44 tests) 56ms
+ ✓ tests/config.test.ts  (18 tests) 12ms
+ ✓ tests/logger.test.ts  (16 tests) 16ms
+ ✓ tests/mcp/registry.test.ts  (13 tests) 12ms
+ ✓ tests/integration.test.ts  (7 tests) 119ms
+ ✓ tests/mentionDetector.test.ts  (19 tests) 7ms
+ ✓ tests/recurringReminderExecutor.test.ts  (6 tests) 13ms
+[2m23:49:44[0m [31mFailed to start typing indicator:[0m [31m(Typing failed)[0m
+[2m23:49:44[0m [31mFailed to stop typing indicator:[0m [31m(Stop failed)[0m
+ ✓ tests/typingIndicator.test.ts  (8 tests) 16ms
+ ✓ tests/db.test.ts  (18 tests) 1523ms
+ ✓ tests/imageAttachment.integration.test.ts  (3 tests) 18ms
+ ✓ tests/storage.test.ts  (10 tests) 819ms
+ ✓ tests/stores/recurringReminderStore.test.ts  (23 tests) 1819ms
+ ✓ tests/stores/dossierStore.test.ts  (16 tests) 1326ms
+ ✓ tests/stores/attachmentStore.test.ts  (4 tests) 16ms
+ ✓ tests/stores/memoryStore.test.ts  (16 tests) 1295ms
+ ✓ tests/stores/reminderStore.test.ts  (25 tests) 2100ms
+ ✓ tests/messageDeduplicator.test.ts  (7 tests) 3ms
+ ✓ tests/mcp/validate.test.ts  (12 tests) 6ms
+ ✓ tests/storage.personas.test.ts  (12 tests) 975ms
+ ✓ tests/storage.reminders.test.ts  (28 tests) 2408ms
+ ✓ tests/mcp/result.test.ts  (9 tests) 7ms
+ ✓ tests/utils/cron.test.ts  (6 tests) 41ms
+ ✓ tests/mcp/env.test.ts  (4 tests) 3ms
+ ✓ tests/stores/personaStore.test.ts  (33 tests) 2692ms
+ ✓ tests/stores/messageStore.test.ts  (34 tests) 2770ms
+ ✓ tests/storage.groupIds.test.ts  (4 tests) 342ms
+ ✓ tests/storage.dossiers.test.ts  (8 tests) 654ms
+ ✓ tests/storage.memories.test.ts  (8 tests) 610ms
+ ✓ tests/storage.history.test.ts  (40 tests) 3239ms
+ ✓ tests/mcp/runServer.test.ts  (5 tests) 2903ms
+ ✓ tests/darkFactoryMcpServer.test.ts  (7 tests) 4192ms
+ ✓ tests/imagesMcpServer.test.ts  (7 tests) 4656ms
+ ✓ tests/signalMcpServer.test.ts  (8 tests) 4764ms
+ ✓ tests/memoryMcpServer.test.ts  (10 tests) 6334ms
+ ✓ tests/reminderMcpServer.test.ts  (11 tests) 6682ms
+ ✓ tests/dossierMcpServer.test.ts  (13 tests) 7867ms
+ ✓ tests/messageHistoryMcpServer.test.ts  (13 tests) 7870ms
+ ✓ tests/githubMcpServer.test.ts  (18 tests) 8764ms
+ ✓ tests/personaMcpServer.test.ts  (16 tests) 8844ms
+ ✓ tests/weatherMcpServer.test.ts  (17 tests) 9383ms
+ ✓ tests/sourceCodeMcpServer.test.ts  (19 tests) 9440ms
+
+ Test Files  47 passed (47)
+      Tests  755 passed (755)
+   Start at  23:49:43
+   Duration  10.10s (transform 3.97s, setup 3ms, collect 7.44s, tests 104.86s, environment 8ms, prepare 6.64s)
+
+
+--- LINT ---
+biome lint: 95 files checked, no issues
+--- CHECK ---
+biome check: 95 files checked, no issues

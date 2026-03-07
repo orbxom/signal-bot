@@ -1,0 +1,42 @@
+Plannotator Verification — 2026-03-07
+======================================
+
+1. which plannotator
+   Expected: /home/zknowles/.local/bin/plannotator
+   Actual:   /home/zknowles/.local/bin/plannotator
+   Result:   PASS
+
+2. bash -c 'which plannotator' (non-interactive shell PATH)
+   Expected: /home/zknowles/.local/bin/plannotator
+   Actual:   /home/zknowles/.local/bin/plannotator
+   Result:   PASS
+
+3. grep plannotator ~/.claude/settings.json (plugin enabled)
+   Expected: plannotator entry in settings
+   Actual:   "plannotator@plannotator": true,
+   Result:   PASS
+
+4. cat ~/.claude/plugins/cache/plannotator/plannotator/*/hooks/hooks.json (ExitPlanMode hook)
+   Expected: ExitPlanMode hook definition
+   Actual:
+   {
+     "hooks": {
+       "PermissionRequest": [
+         {
+           "matcher": "ExitPlanMode",
+           "hooks": [
+             {
+               "type": "command",
+               "command": "plannotator",
+               "timeout": 345600
+             }
+           ]
+         }
+       ]
+     }
+   }
+   Result:   PASS
+
+All 4 checks passed. Plannotator is correctly installed, accessible in both
+interactive and non-interactive shell PATH, enabled as a Claude plugin, and
+has the ExitPlanMode hook configured to invoke the plannotator command.

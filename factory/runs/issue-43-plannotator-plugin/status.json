@@ -1,12 +1,12 @@
 {
-  "currentStage": "complete",
+  "currentStage": "test",
   "stages": {
-    "plan": "abandoned",
-    "build": "abandoned",
-    "test": "abandoned",
-    "simplify": "abandoned",
-    "pr": "abandoned",
-    "integration-test": "abandoned",
-    "review": "abandoned"
+    "plan": "complete",
+    "build": "complete",
+    "test": "in-progress",
+    "simplify": "pending",
+    "pr": "pending",
+    "integration-test": "pending",
+    "review": "pending"
   }
 }

@@ -8,3 +8,7 @@
 - **Plan drafted.** 4 tasks: (1) document plannotator in CLAUDE.md, (2) add /plannotator-annotate to dark factory Step 5, (3) add /plannotator-review to Stage 7, (4) verify binary/hook configuration. Documentation + skill enhancement approach.
 - **Devil's advocate: 8 concerns raised** (3 HIGH: double popup UX in Step 5, YAGNI Stage 7 review, scope creep; 3 MEDIUM: PATH in subagents, test strategy inadequate, bot-spawned sessions; 2 LOW: CLAUDE.md content priority, port conflicts).
 - **Plan revised.** Addressed all 8 concerns. Dropped Tasks 2+3 (ExitPlanMode hook already handles plannotator, Stage 7 review is YAGNI). Reduced to 2 tasks: document in CLAUDE.md + verify binary/hook/PATH. Enhanced PATH verification with non-interactive shell check. Restructured docs to lead with behavior. None dismissed.
+- **Human checkpoint (plan review).** Plan approved via plannotator. Status restored — continuing pipeline.
+- **Moving to BUILD.** Creating worktree and dispatching implementation subagent.
+- **Worktree created** at `.worktrees/issue-43-plannotator/` on branch `feature/issue-43-plannotator-plugin`. Baseline: 748 tests passing.
+- **Task 1/1 done** — CLAUDE.md updated with plannotator docs (lines 66-69). Verification: binary PATH (pass), non-interactive shell PATH (pass), plugin enabled (pass), ExitPlanMode hook (pass). All 4 checks passed. Committed at `1721b7f`.
