@@ -118,4 +118,105 @@ describe('Health Check MCP Server', () => {
       proc = null;
     }
   }, 15000);
+
+  it('should return degraded status when signal-cli is unreachable', async () => {
+    // Port 19999 has nothing listening — signal check should fail
+    const server = spawnHealthCheckServer({ SIGNAL_CLI_URL: 'http://localhost:19999' });
+    try {
+      await initializeServer(server);
+      const response = await sendAndReceive(server, {
+        jsonrpc: '2.0',
+        id: 4,
+        method: 'tools/call',
+        params: { name: 'health_check', arguments: {} },
+      });
+
+      const result = response.result as { content: Array<{ text: string }>; isError?: boolean };
+      expect(result.isError).toBeFalsy();
+
+      const health = JSON.parse(result.content[0].text);
+      expect(health.status).toBe('degraded');
+      expect(health.database.status).toBe('ok');
+      expect(health.signal.status).toBe('unreachable');
+      expect(health.signal.error).toBeDefined();
+    } finally {
+      server.kill();
+      proc = null;
+    }
+  }, 15000);
+
+  it('should return degraded when SIGNAL_CLI_URL is not configured', async () => {
+    const server = spawnHealthCheckServer({ SIGNAL_CLI_URL: '' });
+    try {
+      await initializeServer(server);
+      const response = await sendAndReceive(server, {
+        jsonrpc: '2.0',
+        id: 5,
+        method: 'tools/call',
+        params: { name: 'health_check', arguments: {} },
+      });
+
+      const result = response.result as { content: Array<{ text: string }>; isError?: boolean };
+      expect(result.isError).toBeFalsy();
+
+      const health = JSON.parse(result.content[0].text);
+      expect(health.status).toBe('degraded');
+      expect(health.signal.status).toBe('unreachable');
+      expect(health.signal.error).toContain('not configured');
+    } finally {
+      server.kill();
+      proc = null;
+    }
+  }, 15000);
+
+  it('should return unhealthy when database path is invalid', async () => {
+    const server = spawnHealthCheckServer({ DB_PATH: '/nonexistent/path/db.sqlite' });
+    try {
+      await initializeServer(server);
+      const response = await sendAndReceive(server, {
+        jsonrpc: '2.0',
+        id: 6,
+        method: 'tools/call',
+        params: { name: 'health_check', arguments: {} },
+      });
+
+      const result = response.result as { content: Array<{ text: string }>; isError?: boolean };
+      expect(result.isError).toBeFalsy();
+
+      const health = JSON.parse(result.content[0].text);
+      expect(health.status).toBe('unhealthy');
+      expect(health.database.status).toBe('error');
+      expect(health.database.error).toBeDefined();
+    } finally {
+      server.kill();
+      proc = null;
+    }
+  }, 15000);
+
+  it('should return unhealthy when both DB and signal are down', async () => {
+    const server = spawnHealthCheckServer({
+      DB_PATH: '/nonexistent/path/db.sqlite',
+      SIGNAL_CLI_URL: 'http://localhost:19999',
+    });
+    try {
+      await initializeServer(server);
+      const response = await sendAndReceive(server, {
+        jsonrpc: '2.0',
+        id: 7,
+        method: 'tools/call',
+        params: { name: 'health_check', arguments: {} },
+      });
+
+      const result = response.result as { content: Array<{ text: string }>; isError?: boolean };
+      expect(result.isError).toBeFalsy();
+
+      const health = JSON.parse(result.content[0].text);
+      expect(health.status).toBe('unhealthy');
+      expect(health.database.status).toBe('error');
+      expect(health.signal.status).toBe('unreachable');
+    } finally {
+      server.kill();
+      proc = null;
+    }
+  }, 15000);
 });
