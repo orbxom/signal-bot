@@ -15,6 +15,8 @@ function makeContext(overrides: Partial<MessageContext> = {}): MessageContext {
     botPhoneNumber: '+61400000000',
     attachmentsDir: '/app/signal-attachments',
     whisperModelPath: '/models/ggml-large.bin',
+    darkFactoryEnabled: '',
+    darkFactoryProjectRoot: '',
     ...overrides,
   };
 }

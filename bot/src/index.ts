@@ -32,6 +32,8 @@ async function main() {
       botPhoneNumber: config.botPhoneNumber,
       attachmentsDir: config.attachmentsDir,
       whisperModelPath: config.whisperModelPath,
+      darkFactoryEnabled: config.darkFactoryEnabled,
+      darkFactoryProjectRoot: config.darkFactoryProjectRoot,
     },
     signalClient,
     config.claude.maxTurns,
@@ -61,6 +63,8 @@ async function main() {
         botPhoneNumber: config.botPhoneNumber,
         attachmentsDir: config.attachmentsDir,
         whisperModelPath: config.whisperModelPath,
+        darkFactoryEnabled: config.darkFactoryEnabled,
+        darkFactoryProjectRoot: config.darkFactoryProjectRoot,
       },
     },
     {

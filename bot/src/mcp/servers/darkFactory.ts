@@ -1,14 +1,11 @@
-import { execFile } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { promisify } from 'node:util';
 import { catchErrors, error, ok } from '../result';
 import { runServer } from '../runServer';
 import type { McpServerDefinition } from '../types';
 import { requireNumber, requireString } from '../validate';
-
-const execFileAsync = promisify(execFile);
 
 function projectRoot(): string {
   return process.env.DARK_FACTORY_PROJECT_ROOT || path.resolve(__dirname, '..', '..', '..', '..');
@@ -119,27 +116,24 @@ const handlers = {
       // Write zellij KDL layout file to temp location
       const layoutPath = path.join(os.tmpdir(), `${sessionName}.kdl`);
       const escapedRoot = root.replace(/'/g, "'\\''");
-      const layoutContent = `layout {\n  pane command="bash" {\n    args "-c" "cd '${escapedRoot}' && claude \\"dark factory issue ${issueNumber.value}\\""\n    close_on_exit false\n  }\n}\n`;
+      const layoutContent = `layout {\n  pane command="bash" {\n    args "-c" "cd '${escapedRoot}' && claude \\"/dark-factory issue ${issueNumber.value}\\""\n    close_on_exit false\n  }\n}\n`;
       fs.writeFileSync(layoutPath, layoutContent);
 
-      // Launch kitty with zellij using the layout
-      await execFileAsync(
+      // Launch a new kitty window with zellij inside it
+      const child = spawn(
         'kitty',
         [
-          '@',
-          'launch',
-          '--type=os-window',
           '--title',
           sessionName,
-          '--',
           'zellij',
           '-s',
           sessionName,
-          '--layout',
+          '--new-session-with-layout',
           layoutPath,
         ],
-        { timeout: 10000 },
+        { detached: true, stdio: 'ignore', env: { ...process.env, CLAUDECODE: '' } },
       );
+      child.unref();
 
       // Write session metadata
       const metadata = {
@@ -206,7 +200,7 @@ const handlers = {
       }
 
       // Find the file containing our dark factory prompt
-      const issuePattern = `dark factory issue ${metadata.issueNumber}`;
+      const issuePattern = `/dark-factory issue ${metadata.issueNumber}`;
       let jsonlPath = path.join(claudeDir, candidates[0].name); // fallback to newest
       for (const candidate of candidates) {
         const filePath = path.join(claudeDir, candidate.name);
@@ -256,7 +250,7 @@ export const darkFactoryServer: McpServerDefinition = {
   entrypoint: 'darkFactory',
   tools: TOOLS,
   handlers,
-  envMapping: {},
+  envMapping: { DARK_FACTORY_ENABLED: 'darkFactoryEnabled', DARK_FACTORY_PROJECT_ROOT: 'darkFactoryProjectRoot' },
   onInit() {
     console.error('Dark Factory MCP server started');
   },

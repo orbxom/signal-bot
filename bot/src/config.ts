@@ -86,6 +86,8 @@ export class Config {
       sourceRoot: process.env.SOURCE_ROOT || path.resolve(__dirname, '..'),
       attachmentsDir: process.env.ATTACHMENTS_DIR || './data/signal-attachments',
       whisperModelPath: process.env.WHISPER_MODEL_PATH || './models/ggml-base.en.bin',
+      darkFactoryEnabled: process.env.DARK_FACTORY_ENABLED || '',
+      darkFactoryProjectRoot: process.env.DARK_FACTORY_PROJECT_ROOT || '',
       testChannelOnly,
       testGroupId,
     };

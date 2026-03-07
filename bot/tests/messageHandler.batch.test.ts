@@ -28,6 +28,8 @@ function makeAppConfig(overrides?: Partial<AppConfig>): AppConfig {
     botPhoneNumber: '+1234567890',
     attachmentsDir: './data/signal-attachments',
     whisperModelPath: './models/ggml-base.en.bin',
+    darkFactoryEnabled: '',
+    darkFactoryProjectRoot: '',
     ...overrides,
   };
 }

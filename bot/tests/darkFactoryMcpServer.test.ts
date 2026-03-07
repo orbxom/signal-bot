@@ -150,7 +150,7 @@ describe('Dark Factory MCP Server', () => {
         JSON.stringify({
           type: 'user',
           timestamp: new Date().toISOString(),
-          message: { role: 'user', content: 'dark factory issue 99' },
+          message: { role: 'user', content: '/dark-factory issue 99' },
         }),
         JSON.stringify({
           type: 'assistant',

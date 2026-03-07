@@ -12,6 +12,8 @@ export function makeMessageContext(overrides?: Partial<MessageContext>): Message
     botPhoneNumber: '',
     attachmentsDir: './data/signal-attachments',
     whisperModelPath: './models/ggml-base.en.bin',
+    darkFactoryEnabled: '',
+    darkFactoryProjectRoot: '',
     ...overrides,
   };
 }

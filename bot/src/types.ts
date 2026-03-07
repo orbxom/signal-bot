@@ -99,6 +99,8 @@ export interface AppConfig {
   botPhoneNumber: string;
   attachmentsDir: string;
   whisperModelPath: string;
+  darkFactoryEnabled: string;
+  darkFactoryProjectRoot: string;
 }
 
 /** Per-message request context. */

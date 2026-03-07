@@ -92,6 +92,8 @@ describe('RecurringReminderExecutor', () => {
         botPhoneNumber: '+61400000000',
         attachmentsDir: '/tmp/attachments',
         whisperModelPath: '/tmp/model.bin',
+        darkFactoryEnabled: '',
+        darkFactoryProjectRoot: '',
       },
       mockSignalClient as any,
       10,
