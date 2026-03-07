@@ -118,7 +118,8 @@ const handlers = {
 
       // Write zellij KDL layout file to temp location
       const layoutPath = path.join(os.tmpdir(), `${sessionName}.kdl`);
-      const layoutContent = `layout {\n  pane command="bash" {\n    args "-c" "cd ${root} && claude \\"dark factory issue ${issueNumber.value}\\""\n    close_on_exit false\n  }\n}\n`;
+      const escapedRoot = root.replace(/'/g, "'\\''");
+      const layoutContent = `layout {\n  pane command="bash" {\n    args "-c" "cd '${escapedRoot}' && claude \\"dark factory issue ${issueNumber.value}\\""\n    close_on_exit false\n  }\n}\n`;
       fs.writeFileSync(layoutPath, layoutContent);
 
       // Launch kitty with zellij using the layout
@@ -168,7 +169,8 @@ const handlers = {
     return catchErrors(() => {
       const lastN = typeof args.last_n === 'number' ? args.last_n : 5;
       const sessions = sessionsDir();
-      const metadataPath = path.join(sessions, `${sessionName.value}.json`);
+      const safeName = path.basename(sessionName.value);
+      const metadataPath = path.join(sessions, `${safeName}.json`);
 
       if (!fs.existsSync(metadataPath)) {
         return error(`No session found: ${sessionName.value}`);
@@ -248,7 +250,7 @@ export const darkFactoryServer: McpServerDefinition = {
   entrypoint: 'darkFactory',
   tools: TOOLS,
   handlers,
-  envMapping: { DARK_FACTORY_ENABLED: 'darkFactoryEnabled' },
+  envMapping: {},
   onInit() {
     console.error('Dark Factory MCP server started');
   },
