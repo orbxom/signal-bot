@@ -56,6 +56,14 @@ Image attachments sent in Signal messages are stored as BLOBs in the `attachment
 3. Add one import line to `bot/src/mcp/servers/index.ts`
 No other files need to change.
 
+### Dark Factory Dashboard (`dashboard/`)
+- `dashboard/src/server.ts` — HTTP static file server + WebSocket server (port 3333)
+- `dashboard/src/watcher.ts` — Chokidar file watcher on `factory/runs/*/`, emits updates on `status.json`, `event.json`, `diary.md` changes
+- `dashboard/src/types.ts` — Shared types: Run, StatusFile, EventFile, WsMessage
+- `dashboard/public/index.html` — Single-page Preact app (via esm.sh CDN). Real-time pipeline cards with stage progress bars, diary panels, auto-reconnecting WebSocket
+
+Run with `cd dashboard && npm run dev`. Opens at http://localhost:3333. Configure via `DASHBOARD_PORT` and `FACTORY_RUNS_DIR` env vars.
+
 ## Running Locally
 
 ### Prerequisites
