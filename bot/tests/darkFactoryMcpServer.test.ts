@@ -35,7 +35,7 @@ describe('Dark Factory MCP Server', () => {
     expect(serverInfo.name).toBe('signal-bot-dark-factory');
   });
 
-  it('should list 2 tools', async () => {
+  it('should list 3 tools', async () => {
     const server = spawnMcpServer();
     await initializeServer(server);
     const response = await sendAndReceive(server, {
@@ -44,9 +44,9 @@ describe('Dark Factory MCP Server', () => {
       method: 'tools/list',
     });
     const result = response.result as { tools: Array<{ name: string }> };
-    expect(result.tools).toHaveLength(2);
+    expect(result.tools).toHaveLength(3);
     const names = result.tools.map(t => t.name).sort();
-    expect(names).toEqual(['read_dark_factory', 'start_dark_factory']);
+    expect(names).toEqual(['read_dark_factory', 'send_dark_factory_input', 'start_dark_factory']);
   });
 
   it('should return error when DARK_FACTORY_ENABLED is not set', async () => {
@@ -104,6 +104,95 @@ describe('Dark Factory MCP Server', () => {
     const result = response.result as { content: Array<{ text: string }>; isError?: boolean };
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toContain('Missing or invalid session_name');
+  });
+
+  it('should return error when DARK_FACTORY_ENABLED is not set for send_input', async () => {
+    const server = spawnMcpServer();
+    await initializeServer(server);
+    const response = await sendAndReceive(server, {
+      jsonrpc: '2.0',
+      id: 20,
+      method: 'tools/call',
+      params: { name: 'send_dark_factory_input', arguments: { session_name: 'test', input: 'y' } },
+    });
+    const result = response.result as { content: Array<{ text: string }>; isError?: boolean };
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('not enabled');
+  });
+
+  it('should return error when session_name is missing for send_input', async () => {
+    const server = spawnMcpServer({ DARK_FACTORY_ENABLED: '1' });
+    await initializeServer(server);
+    const response = await sendAndReceive(server, {
+      jsonrpc: '2.0',
+      id: 21,
+      method: 'tools/call',
+      params: { name: 'send_dark_factory_input', arguments: { input: 'y' } },
+    });
+    const result = response.result as { content: Array<{ text: string }>; isError?: boolean };
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('Missing or invalid session_name');
+  });
+
+  it('should return error when both input and special_key are missing for send_input', async () => {
+    const server = spawnMcpServer({ DARK_FACTORY_ENABLED: '1' });
+    await initializeServer(server);
+    const response = await sendAndReceive(server, {
+      jsonrpc: '2.0',
+      id: 22,
+      method: 'tools/call',
+      params: { name: 'send_dark_factory_input', arguments: { session_name: 'test' } },
+    });
+    const result = response.result as { content: Array<{ text: string }>; isError?: boolean };
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('Missing or invalid input');
+  });
+
+  it('should accept special_key without input (bypasses input validation)', async () => {
+    const server = spawnMcpServer({ DARK_FACTORY_ENABLED: '1' });
+    await initializeServer(server);
+    const response = await sendAndReceive(server, {
+      jsonrpc: '2.0',
+      id: 24,
+      method: 'tools/call',
+      params: { name: 'send_dark_factory_input', arguments: { session_name: 'nonexistent', special_key: 'ctrl-c' } },
+    });
+    const result = response.result as { content: Array<{ text: string }>; isError?: boolean };
+    expect(result.isError).toBe(true);
+    // Should fail at session lookup, NOT at input validation
+    expect(result.content[0].text).toContain('No session found');
+    expect(result.content[0].text).not.toContain('Missing or invalid input');
+  });
+
+  it('should accept special_key as a valid parameter without session metadata', async () => {
+    const server = spawnMcpServer({ DARK_FACTORY_ENABLED: '1' });
+    await initializeServer(server);
+    const response = await sendAndReceive(server, {
+      jsonrpc: '2.0',
+      id: 25,
+      method: 'tools/call',
+      params: {
+        name: 'send_dark_factory_input',
+        arguments: { session_name: 'no-such-session', special_key: 'ctrl-c' },
+      },
+    });
+    const result = response.result as { content: Array<{ text: string }>; isError?: boolean };
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('No session found');
+  });
+
+  it('should return "no session found" for nonexistent session on send_input', async () => {
+    const server = spawnMcpServer({ DARK_FACTORY_ENABLED: '1' });
+    await initializeServer(server);
+    const response = await sendAndReceive(server, {
+      jsonrpc: '2.0',
+      id: 23,
+      method: 'tools/call',
+      params: { name: 'send_dark_factory_input', arguments: { session_name: 'nonexistent', input: 'y' } },
+    });
+    const result = response.result as { content: Array<{ text: string }>; isError?: boolean };
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('No session found');
   });
 
   describe('read_dark_factory with fake JSONL', () => {
@@ -195,6 +284,36 @@ describe('Dark Factory MCP Server', () => {
       expect(result.content[0].text).toContain('Starting dark factory');
       expect(result.content[0].text).toContain('Research complete');
       expect(result.content[0].text).toContain('Bash');
+    });
+
+    it('should return error when session exists in metadata but zellij is not reachable', async () => {
+      const sessionsPath = path.join(tempDir, 'factory', 'sessions');
+      fs.mkdirSync(sessionsPath, { recursive: true });
+
+      const sessionName = 'dark-factory-99-1234567890';
+      const metadata = {
+        sessionName,
+        issueNumber: 99,
+        launchedAt: new Date().toISOString(),
+      };
+      fs.writeFileSync(path.join(sessionsPath, `${sessionName}.json`), JSON.stringify(metadata));
+
+      const server = spawnMcpServer2({
+        DARK_FACTORY_PROJECT_ROOT: tempDir,
+        DARK_FACTORY_ENABLED: '1',
+      });
+      await initializeServer(server);
+
+      const response = await sendAndReceive(server, {
+        jsonrpc: '2.0',
+        id: 30,
+        method: 'tools/call',
+        params: { name: 'send_dark_factory_input', arguments: { session_name: sessionName, input: 'y' } },
+      });
+
+      const result = response.result as { content: Array<{ text: string }>; isError?: boolean };
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain('not reachable');
     });
   });
 });
