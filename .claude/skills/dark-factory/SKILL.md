@@ -45,35 +45,51 @@ Determine the entry mode from what the user provided, then initialize accordingl
 
 ### Full mode (issue, no plan)
 1. Fetch the GitHub issue details using `gh api repos/orbxom/signal-bot/issues/<N>`
-2. Create the run directory: `factory/runs/<run-id>/`
-3. Write `event.json` with: source, issueNumber, issueUrl, title, description, acceptanceCriteria, mode ("full"), createdAt
-4. Write `status.json` with all stages set to `pending` (plan, build, test, simplify, pr, integration-test, review)
-5. Create `diary.md` with header `# Diary — <run-id>`
-6. Update `status.json` to set current stage to `plan`
+2. **Interview check** (see "Interview Check" section below)
+3. Create the run directory: `factory/runs/<run-id>/`
+4. Write `event.json` with: source, issueNumber, issueUrl, title, description, acceptanceCriteria, interviewReport (if found), mode ("full"), createdAt
+5. Write `status.json` with `runId`, all stages set to `pending`, and `updatedAt` (see Status Management for schema)
+6. Create `diary.md` with header `# Diary — <run-id>`
+7. Update `status.json` to set current stage to `plan` and plan to `in-progress`
 
-**Diary:** Append entry — "Initialized. Mode: full. Issue #N: <title>."
+**Diary:** Append entry — "Initialized. Mode: full. Issue #N: <title>. Interview: <found/not needed/required but missing>."
 
 ### Plan-only mode (plan, no issue)
 1. Choose a run ID from the plan filename or content (e.g., `plan-<slug>`)
 2. Create the run directory: `factory/runs/<run-id>/`
 3. Copy the user's plan file to `factory/runs/<run-id>/plan.md`
 4. Write `event.json` synthesized from the plan content: source ("local"), title, description, acceptanceCriteria (extracted from plan), mode ("plan-only"), createdAt. No issueNumber or issueUrl.
-5. Write `status.json` with all stages set to `pending`
+5. Write `status.json` with `runId`, all stages set to `pending`, and `updatedAt` (see Status Management for schema)
 6. Create `diary.md` with header `# Diary — <run-id>`
-7. Update `status.json` to set current stage to `plan`
+7. Update `status.json` to set current stage to `plan` and plan to `in-progress`
 
 **Diary:** Append entry — "Initialized. Mode: plan-only. Plan: <filename>. Title: <title>."
 
 ### Fast-start mode (issue + plan)
 1. Fetch the GitHub issue details using `gh api repos/orbxom/signal-bot/issues/<N>`
-2. Create the run directory: `factory/runs/<run-id>/`
-3. Copy the user's plan file to `factory/runs/<run-id>/plan.md`
-4. Write `event.json` with: source, issueNumber, issueUrl, title, description, acceptanceCriteria, mode ("fast-start"), createdAt
-5. Write `status.json` with all stages set to `pending`
-6. Create `diary.md` with header `# Diary — <run-id>`
-7. Update `status.json` to set current stage to `plan`
+2. **Interview check** (see "Interview Check" section below)
+3. Create the run directory: `factory/runs/<run-id>/`
+4. Copy the user's plan file to `factory/runs/<run-id>/plan.md`
+5. Write `event.json` with: source, issueNumber, issueUrl, title, description, acceptanceCriteria, interviewReport (if found), mode ("fast-start"), createdAt
+6. Write `status.json` with `runId`, all stages set to `pending`, and `updatedAt` (see Status Management for schema)
+7. Create `diary.md` with header `# Diary — <run-id>`
+8. Update `status.json` to set current stage to `plan` and plan to `in-progress`
 
-**Diary:** Append entry — "Initialized. Mode: fast-start. Issue #N: <title>. Plan: <filename>."
+**Diary:** Append entry — "Initialized. Mode: fast-start. Issue #N: <title>. Plan: <filename>. Interview: <found/not needed/required but missing>."
+
+### Interview Check
+
+This check runs during initialization for Full and Fast-start modes (not Plan-only, which has no issue).
+
+1. Fetch issue comments: `gh api repos/orbxom/signal-bot/issues/<N>/comments`
+2. Scan for a comment whose body starts with `## Issue Interview Report`
+3. **Evaluate whether an interview is needed** based on the issue content:
+   - **Interview NOT needed** (proceed normally): bug fixes, simple/clear requests with well-defined acceptance criteria, small scope changes, issues with labels like `bug` or `chore`
+   - **Interview REQUIRED** (hard stop if missing): major features, ambiguous requirements, large scope, missing or vague acceptance criteria, issues with labels like `feature` or `enhancement`
+4. Decision outcomes:
+   - **Interview found:** Extract the report text. Store it in `event.json` as `interviewReport`. Diary: "Interview check: report found (posted <date>)."
+   - **Interview not needed:** Diary: "Interview check: skipped (<reason — e.g., bug fix, clear acceptance criteria>)." Proceed normally.
+   - **Interview required but missing:** Announce: "Issue #N looks like a major feature / ambiguous request but has no interview report. Please run `interview issue #N` first." **STOP the pipeline.** Do not proceed.
 
 **Announce:** "Initialized run for <run-id>. Mode: <mode>. Starting planning stage."
 
@@ -104,15 +120,19 @@ Combine all findings into `factory/runs/<run-id>/research.md`.
 
 **This step always runs**, even when a plan is provided. Research validates the plan against the current state of the codebase.
 
+**If `event.json` contains `interviewReport`:** All research agents should receive the interview report as additional context. It contains clarified requirements, agreed approach, constraints, and success criteria from the issue interviewer.
+
 **Diary:** Append entry when dispatching agents, then another when research completes (summarize key findings in one line).
 
 ### Step 2: Plan Drafting
 
 **Skip this step if `plan.md` already exists in the run directory** (plan-only or fast-start mode). Jump to Step 3.
 
-Use the `writing-plans` skill to create the implementation plan. The plan MUST include:
-- Goal (tied to acceptance criteria from the issue)
-- Approach (architecture decisions, trade-offs considered)
+Use the `writing-plans` skill to create the implementation plan. If `event.json` contains `interviewReport`, use it as primary input — the interview has already clarified requirements, agreed on an approach, and defined success criteria. The plan should build on these rather than re-derive them.
+
+The plan MUST include:
+- Goal (tied to acceptance criteria from the issue and/or interview report)
+- Approach (architecture decisions, trade-offs considered — honor the approach agreed in the interview)
 - File changes (which files are created/modified/deleted)
 - Test strategy (what tests, TDD approach)
 - Tasks (ordered, each small enough for one focused session)
@@ -258,13 +278,13 @@ Verify the feature actually works end-to-end using the mock signal server.
 Before running integration tests, check if any other factory run is active:
 
 1. Scan all `factory/runs/*/status.json` files
-2. For each OTHER run (not the current one), check if `currentStage` is not `"complete"` — meaning the run is still active
-3. If any other run is active:
+2. For each OTHER run (not the current one), check if its `integration-test` stage is `"in-progress"`
+3. If any other run's integration test is in progress:
    - Set `integration-test` to `"deferred"` in status.json
-   - **Diary:** "Integration test deferred — other run(s) in progress: <list of active run-ids>."
-   - **Announce:** "Integration tests deferred (other runs in progress: <list>). Run `/dark-factory run integration tests` when ready."
+   - **Diary:** "Integration test deferred — other run(s) running integration tests: <list of run-ids>."
+   - **Announce:** "Integration tests deferred (other runs running integration tests: <list>). Run `/dark-factory run integration tests` when ready."
    - **Skip to Stage 7 (REVIEW)** — continue the pipeline without integration tests
-4. If no other runs are active, proceed with integration tests below
+4. If no other run's integration test is in progress, proceed with integration tests below
 
 ### Steps 1-8: Run Integration Tests
 
@@ -328,7 +348,7 @@ When the user says `/dark-factory run integration tests`:
 1. Scan all `factory/runs/*/status.json` files for runs where `integration-test` is `"deferred"`
 2. If none found, announce "No deferred integration tests found." and stop
 3. If multiple found, list them and ask the user which to run (or offer to run all sequentially)
-4. **Concurrency check:** For each OTHER run (excluding the selected one), check if `currentStage` is not `"complete"`. If any are active, announce which runs are blocking and stop
+4. **Concurrency check:** For each OTHER run (excluding the selected one), check if its `integration-test` stage is `"in-progress"`. If any are running integration tests, announce which runs are blocking and stop
 5. For each selected run:
    - Read `event.json` and `diary.md` for context
    - Update status.json: set `currentStage` to `"integration-test"` and `integration-test` to `"in-progress"`
@@ -338,13 +358,85 @@ When the user says `/dark-factory run integration tests`:
    - If `review` is still `"pending"`, continue to Stage 7 (REVIEW)
 6. **Diary:** Append entry — "Deferred integration tests now running. Triggered by `/dark-factory run integration tests`."
 
+## Status Management
+
+Status.json is the single source of truth for a run's progress. Other sessions (and the `factory-status` skill) rely on it to understand what's happening across all runs. Keeping it accurate is critical — stale or incorrect status causes confusion, blocks integration tests, and misleads the human.
+
+### status.json schema
+
+Every status.json MUST include `runId` for identification:
+
+```json
+{
+  "runId": "issue-42-tool-notifications",
+  "currentStage": "build",
+  "stages": {
+    "plan": "complete",
+    "build": "in-progress",
+    "test": "pending",
+    "simplify": "pending",
+    "pr": "pending",
+    "integration-test": "pending",
+    "review": "pending"
+  },
+  "updatedAt": "2026-03-07T12:00:00Z"
+}
+```
+
+### Valid stage values
+
+- `pending` — not yet started
+- `in-progress` — currently being worked on
+- `complete` — finished successfully
+- `deferred` — skipped for now, will run later (only for integration-test)
+- `abandoned` — **requires human confirmation** (see below)
+
+### State transition rules
+
+Only these transitions are valid:
+
+- `pending` → `in-progress` (entering a stage)
+- `in-progress` → `complete` (finishing a stage)
+- `in-progress` → `deferred` (integration-test only, when other runs are active)
+- `deferred` → `in-progress` (resuming deferred work)
+- Any → `abandoned` (**only with explicit human confirmation**)
+
+Going backwards (e.g., `complete` → `in-progress`) is allowed only when review sends work back to build. Never jump from `pending` to `complete`.
+
+### Read-before-write rule
+
+**Always read the current status.json before writing it.** Never write status from memory or assumption. The file may have been updated by another session since you last looked. Read it, modify only the fields you need to change, and write it back.
+
+### Scope guard
+
+**You may only modify status.json for YOUR run.** Your run is identified by the run-id you initialized in Stage 0. If you need to read other runs' status (e.g., for the integration test concurrency check), that's fine — but never write to them.
+
+This is the rule that prevents cross-contamination. If you're the orchestrator for issue-41, you must not touch `factory/runs/issue-42-tool-notifications/status.json` under any circumstances.
+
+### Abandoned runs
+
+Marking a run as `abandoned` is a significant action — it tells other sessions and the human that this work is dead. The safeguard:
+
+- **Never mark a run as abandoned without explicit human confirmation.** Ask first: "Run <run-id> appears stuck at <stage>. Should I mark it as abandoned?"
+- When abandoning, set `currentStage` to `"abandoned"` and every stage to `"abandoned"`.
+- Diary: "Abandoned by human request. Reason: <reason>."
+
+### When to update
+
+Update status.json at exactly two points per stage:
+1. **Entering:** Set the stage to `in-progress` and `currentStage` to the stage name
+2. **Completing:** Set the stage to `complete` and `currentStage` to the next stage name
+
+Always include `updatedAt` with an ISO timestamp.
+
 ## Rules
 
 - **Never skip a stage.** Even for "trivial" changes.
 - **Never proceed past a checkpoint without human approval.**
-- **Always update status.json** when entering and completing a stage.
+- **Always update status.json** per the Status Management rules above — read before write, scope to your own run, valid transitions only.
 - **Always append to diary.md** at stage transitions and mid-stage milestones. Each entry: one line with timestamp, what happened, key decisions or outcomes. Brief but meaningful — enough for a new conversation to resume without reading full artifacts.
 - **Always write artifacts** to the run directory, not just to stdout.
 - **Never write or edit code directly.** The orchestrator delegates ALL code work (implementation, debugging, refactoring, simplification) to subagents. You may read subagent summaries, run shell commands (tests, git), and write pipeline artifacts (status.json, logs, event.json), but never use Read/Edit on source code files. This keeps your context clean for orchestration.
+- **Never modify another run's status.json.** See Scope Guard above.
 - **Encourage subagents to check their available skills** when spawning them.
 - **Use `gh api` instead of `gh issue view`** — the latter fails with GraphQL errors.

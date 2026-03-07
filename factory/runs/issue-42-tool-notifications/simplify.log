@@ -1,0 +1,36 @@
+## Simplify Review — issue-42-tool-notifications
+
+### Changes Made
+
+**1. Extract `resultText()` helper (Code Reuse + Quality)**
+
+The pattern `result.content[0] && 'text' in result.content[0] ? result.content[0].text : ''`
+was repeated 4 times across:
+- `bot/src/mcp/notify.ts`
+- `bot/src/mcp/servers/reminders.ts` (twice — set_reminder and set_recurring_reminder)
+- `bot/src/mcp/servers/personas.ts` (switch_persona)
+
+Extracted to `resultText(result)` in `bot/src/mcp/result.ts`. All call sites updated.
+
+**2. Eliminate double-parsing of Claude CLI output (Efficiency)**
+
+`claudeClient.ts` was parsing the raw Claude CLI stdout twice:
+1. In `generateResponse()` to extract tool calls for logging
+2. In `parseClaudeOutput()` for the actual response
+
+Consolidated into a single pass: `parseClaudeOutput()` now returns `toolCalls` and
+`inputTokens` alongside the existing fields. The duplicate parsing block (~15 lines)
+was removed from `generateResponse()`.
+
+### Files Modified
+- `bot/src/mcp/result.ts` — added `resultText()` helper
+- `bot/src/mcp/notify.ts` — use `resultText()` instead of inline extraction
+- `bot/src/mcp/servers/reminders.ts` — use `resultText()` (2 call sites)
+- `bot/src/mcp/servers/personas.ts` — use `resultText()` (1 call site)
+- `bot/src/claudeClient.ts` — extract `parseEntries()`, add `toolCalls`/`inputTokens` to
+  `parseClaudeOutput()` return type, remove duplicate parsing from `generateResponse()`
+
+### Verification
+- All 774 tests pass
+- Lint clean (biome check)
+- Committed as: refactor: simplify tool notification implementation

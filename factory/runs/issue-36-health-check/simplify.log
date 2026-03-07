@@ -1,0 +1,24 @@
+## Simplify — issue-36-health-check
+
+### Changes Made
+1. **Bug fix: botStartTime not propagated** (bot/src/index.ts)
+   - Added `botStartTime: config.botStartTime` to both AppConfig constructions
+   - Without this, health check would always fall back to process.uptime()
+
+2. **Bug fix: ConfigType missing fields** (bot/src/config.ts)
+   - Added `botStartTime`, `darkFactoryEnabled`, `darkFactoryProjectRoot` to interface
+   - Pre-existing: darkFactory fields were returned but not declared
+
+3. **Simplification: getMemory()** (bot/src/mcp/servers/healthCheck.ts)
+   - Replaced manual property extraction with `return process.memoryUsage()` directly
+   - Also adds `arrayBuffers` field at no cost
+
+### No Change Needed
+- Module-level mutable state: consistent with all other MCP servers
+- Lazy require() for circular dep: pragmatic, properly commented
+- Sequential db+signal checks: no concurrency gain (db check is sync)
+- Test file: well-structured, good coverage
+
+### Verification
+- All 748 tests pass
+- Lint clean (97 files)

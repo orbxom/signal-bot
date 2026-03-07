@@ -1,0 +1,15 @@
+# Test Results — issue-43-plannotator-plugin
+
+## npm test (vitest)
+Test Files: 48 passed (48)
+Tests: 748 passed (748)
+Duration: 16.71s
+Result: PASS
+
+## npm run lint (biome)
+Checked 97 files in 28ms. No fixes applied.
+Result: PASS
+
+## npm run check (biome)
+Checked 97 files in 36ms. No fixes applied.
+Result: PASS

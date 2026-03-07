@@ -209,7 +209,15 @@ describe('DatabaseConnection', () => {
       const row = db.conn.db.prepare("SELECT value FROM schema_meta WHERE key = 'schema_version'").get() as {
         value: string;
       };
-      expect(Number.parseInt(row.value, 10)).toBe(6);
+      expect(Number.parseInt(row.value, 10)).toBe(7);
+    });
+
+    it('should add mode column with default simple in v6 migration', () => {
+      db = createTestDb('signal-bot-db-test-');
+      const cols = db.conn.db.pragma('table_info(reminders)') as Array<{ name: string; dflt_value: string | null }>;
+      const modeCol = cols.find(c => c.name === 'mode');
+      expect(modeCol).toBeDefined();
+      expect(modeCol?.dflt_value).toBe("'simple'");
     });
   });
 

@@ -1,5 +1,4 @@
 {
-  "issueNumber": 34,
   "currentStage": "complete",
   "stages": {
     "plan": "complete",
@@ -7,8 +6,7 @@
     "test": "complete",
     "simplify": "complete",
     "pr": "complete",
-    "integration-test": "complete",
+    "integration-test": "deferred",
     "review": "complete"
-  },
-  "updatedAt": "2026-03-07T23:50:00Z"
+  }
 }

@@ -1,5 +1,5 @@
 {
-  "issueNumber": 34,
+  "runId": "issue-41-prompt-reminders",
   "currentStage": "complete",
   "stages": {
     "plan": "complete",
@@ -10,5 +10,5 @@
     "integration-test": "complete",
     "review": "complete"
   },
-  "updatedAt": "2026-03-07T23:50:00Z"
+  "updatedAt": "2026-03-08T00:16:00Z"
 }

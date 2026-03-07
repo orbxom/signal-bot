@@ -194,6 +194,120 @@ describe('Reminder MCP Server', () => {
     }
   });
 
+  it('should create a prompt mode reminder when mode is specified', async () => {
+    const proc = spawnMcpServer();
+    try {
+      await initializeServer(proc);
+      const dueAt = Date.now() + 3600000;
+      const response = await sendAndReceive(proc, {
+        jsonrpc: '2.0',
+        id: 3,
+        method: 'tools/call',
+        params: {
+          name: 'set_reminder',
+          arguments: { reminderText: 'Check the weather', dueAt, mode: 'prompt' },
+        },
+      });
+
+      const result = response.result as { content: Array<{ text: string }>; isError?: boolean };
+      expect(result.isError).toBeFalsy();
+      expect(result.content[0].text).toContain('Reminder #1');
+      expect(result.content[0].text).toContain('Check the weather');
+      expect(result.content[0].text).toContain('prompt mode');
+    } finally {
+      proc.kill();
+    }
+  });
+
+  it('should default to simple mode when mode is not specified', async () => {
+    const proc = spawnMcpServer();
+    try {
+      await initializeServer(proc);
+      const dueAt = Date.now() + 3600000;
+
+      // Set reminder without mode
+      await sendAndReceive(proc, {
+        jsonrpc: '2.0',
+        id: 3,
+        method: 'tools/call',
+        params: {
+          name: 'set_reminder',
+          arguments: { reminderText: 'Simple reminder', dueAt },
+        },
+      });
+
+      // List reminders — simple mode should NOT show [prompt] label
+      const listResponse = await sendAndReceive(proc, {
+        jsonrpc: '2.0',
+        id: 4,
+        method: 'tools/call',
+        params: { name: 'list_reminders', arguments: {} },
+      });
+
+      const listResult = listResponse.result as { content: Array<{ text: string }> };
+      expect(listResult.content[0].text).toContain('Simple reminder');
+      expect(listResult.content[0].text).not.toContain('[prompt]');
+    } finally {
+      proc.kill();
+    }
+  });
+
+  it('should reject invalid mode values', async () => {
+    const proc = spawnMcpServer();
+    try {
+      await initializeServer(proc);
+      const dueAt = Date.now() + 3600000;
+      const response = await sendAndReceive(proc, {
+        jsonrpc: '2.0',
+        id: 3,
+        method: 'tools/call',
+        params: {
+          name: 'set_reminder',
+          arguments: { reminderText: 'Bad mode', dueAt, mode: 'invalid' },
+        },
+      });
+
+      const result = response.result as { content: Array<{ text: string }>; isError?: boolean };
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain('Invalid mode');
+    } finally {
+      proc.kill();
+    }
+  });
+
+  it('should show [prompt] label in list_reminders for prompt mode reminders', async () => {
+    const proc = spawnMcpServer();
+    try {
+      await initializeServer(proc);
+      const dueAt = Date.now() + 3600000;
+
+      // Set a prompt mode reminder
+      await sendAndReceive(proc, {
+        jsonrpc: '2.0',
+        id: 3,
+        method: 'tools/call',
+        params: {
+          name: 'set_reminder',
+          arguments: { reminderText: 'Weather check', dueAt, mode: 'prompt' },
+        },
+      });
+
+      // List reminders — should show [prompt] label
+      const listResponse = await sendAndReceive(proc, {
+        jsonrpc: '2.0',
+        id: 4,
+        method: 'tools/call',
+        params: { name: 'list_reminders', arguments: {} },
+      });
+
+      const listResult = listResponse.result as { content: Array<{ text: string }> };
+      expect(listResult.content[0].text).toContain('[prompt]');
+      expect(listResult.content[0].text).toContain('Weather check');
+    } finally {
+      proc.kill();
+    }
+  });
+
   it('should return error for unknown tool', async () => {
     const proc = spawnMcpServer();
     try {

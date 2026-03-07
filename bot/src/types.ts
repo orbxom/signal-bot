@@ -34,6 +34,18 @@ export interface Reminder {
   sentAt: number | null;
   lastAttemptAt: number | null;
   failureReason: string | null;
+  mode: ReminderMode;
+}
+
+export type ReminderMode = 'simple' | 'prompt';
+
+/** Minimal interface for spawning a Claude prompt session. Used by both one-off and recurring reminders. */
+export interface PromptExecution {
+  id: number;
+  groupId: string;
+  requester: string;
+  promptText: string;
+  timezone?: string;
 }
 
 export type RecurringReminderStatus = 'active' | 'cancelled';

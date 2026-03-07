@@ -1,0 +1,17 @@
+Test Results — issue-42-tool-notifications
+==========================================
+
+Test Suite: npx vitest run
+Result: 50 files, 774 tests, ALL PASSED
+Duration: ~10s
+
+Lint/Format: npm run check (biome)
+Result: 101 files checked, no issues
+
+Breakdown:
+- Original tests: 742 (all pass)
+- New store tests: 5 (toolNotificationStore)
+- New notify tests: 13 (sendToolNotification + withNotification)
+- New registry tests: 7 (notification env vars)
+- New settings server tests: 8 (toggle + status tools)
+- Updated mock fixtures: 2 (messageHandler tests with toolNotifications mock)

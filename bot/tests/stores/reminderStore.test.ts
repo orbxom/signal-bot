@@ -278,6 +278,32 @@ describe('ReminderStore', () => {
     });
   });
 
+  describe('reminder mode', () => {
+    it('creates reminder with default simple mode', () => {
+      setup();
+      const futureTime = Date.now() + 60000;
+      const id = store.create('group1', 'user1', 'test', futureTime);
+      const reminders = store.getDueByGroup('group1', futureTime + 1000, 50);
+      expect(reminders.find(r => r.id === id)?.mode).toBe('simple');
+    });
+
+    it('creates reminder with explicit prompt mode', () => {
+      setup();
+      const futureTime = Date.now() + 60000;
+      const id = store.create('group1', 'user1', 'check status', futureTime, 'prompt');
+      const reminders = store.getDueByGroup('group1', futureTime + 1000, 50);
+      expect(reminders.find(r => r.id === id)?.mode).toBe('prompt');
+    });
+
+    it('creates reminder with explicit simple mode', () => {
+      setup();
+      const futureTime = Date.now() + 60000;
+      const id = store.create('group1', 'user1', 'test', futureTime, 'simple');
+      const reminders = store.getDueByGroup('group1', futureTime + 1000, 50);
+      expect(reminders.find(r => r.id === id)?.mode).toBe('simple');
+    });
+  });
+
   describe('listPending', () => {
     it('should return only pending reminders for that group', () => {
       setup();
