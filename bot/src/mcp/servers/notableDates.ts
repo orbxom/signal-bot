@@ -111,7 +111,61 @@ export const notableDatesServer: McpServerDefinition = {
   envMapping: { TZ: 'timezone' },
   handlers: {
     get_notable_dates(args) {
-      return error('Not implemented yet');
+      return catchErrors(async () => {
+        const dateArg = optionalString(args, 'date', '');
+
+        let year: number;
+        let month: number;
+        let day: number;
+
+        if (dateArg === '') {
+          const now = new Date();
+          year = now.getFullYear();
+          month = now.getMonth() + 1;
+          day = now.getDate();
+        } else {
+          // Validate YYYY-MM-DD format
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(dateArg)) {
+            return error('Invalid date format. Use YYYY-MM-DD (e.g., "2026-03-08").');
+          }
+          const [y, m, d] = dateArg.split('-').map(Number);
+          // Validate the date is real (catches Feb 30, month 13, etc.)
+          const check = new Date(y, m - 1, d, 12, 0, 0);
+          if (check.getFullYear() !== y || check.getMonth() !== m - 1 || check.getDate() !== d) {
+            return error(`Invalid date: ${dateArg}. The date does not exist.`);
+          }
+          year = y;
+          month = m;
+          day = d;
+        }
+
+        const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+
+        // Fetch from both sources in parallel
+        const [auHolidays, curated] = await Promise.all([
+          getAustralianHolidaysForDate(dateStr),
+          Promise.resolve(getCuratedDatesForDate(month, day)),
+        ]);
+
+        // Merge and deduplicate by name (case-insensitive)
+        const seen = new Set<string>();
+        const allDates: Array<{ name: string; description: string }> = [];
+        for (const item of [...auHolidays, ...curated]) {
+          const key = item.name.toLowerCase();
+          if (!seen.has(key)) {
+            seen.add(key);
+            allDates.push(item);
+          }
+        }
+
+        if (allDates.length === 0) {
+          return ok(`No notable holidays or observances found for ${dateStr}.`);
+        }
+
+        const header = `Notable dates for ${dateStr}:\n`;
+        const lines = allDates.map((d) => `• ${d.name} — ${d.description}`);
+        return ok(header + lines.join('\n'));
+      }, 'Failed to get notable dates');
     },
   },
   onInit() {
