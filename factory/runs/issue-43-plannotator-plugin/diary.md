@@ -17,3 +17,9 @@
 - **PR #47 created:** "docs: document plannotator plugin for dark factory". Issue linkage: verified (Closes #43). Moving to integration testing.
 - **Integration test deferred** — other run(s) in progress: issue-2, issue-31, issue-33, issue-34, issue-40, issue-41, issue-42, issue-5. Also: plannotator is a CLI feature untestable via mock signal. This pipeline run itself served as the end-to-end test (plannotator fired at Step 5).
 - **Review: clean.** All 6 acceptance criteria met. No issues found. PR #47 marked ready for review. Run complete.
+
+## 2026-03-08
+
+- **Deferred integration tests now running.** Triggered by `/dark-factory integration test 43`. No concurrency conflicts.
+- **Integration test: documentation-only change — no bot behavior to test via mock signal.** Verified plugin functionality instead: plannotator binary in PATH (pass), non-interactive shell PATH (pass), plugin enabled in settings (pass). CLAUDE.md docs on feature branch, PR #47 open and ready for review.
+- **Integration test: complete.** Run fully complete.

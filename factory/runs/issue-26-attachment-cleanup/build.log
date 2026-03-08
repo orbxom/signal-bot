@@ -1,0 +1,20 @@
+# Build Log — issue-26-attachment-cleanup
+
+## Files Changed
+1. bot/src/config.ts — Added attachmentRetentionDays to ConfigType interface + Config.load()
+2. bot/src/messageHandler.ts — Added attachmentRetentionDays to options, stored as property, call trimAttachments after trimMessages
+3. bot/tests/messageHandler.test.ts — Added trimAttachments mock + test with Date.now mock
+4. bot/src/index.ts — Wired config.attachmentRetentionDays into MessageHandler options
+
+## Commits
+1. edc09a8 — feat(config): add ATTACHMENT_RETENTION_DAYS setting (default 30)
+2. ea5c4a3 — fix: call trimAttachments alongside trimMessages after LLM response
+3. 81f4687 — feat: wire attachment retention config into MessageHandler
+
+## Test Results
+- 804 tests passed, 51 test files, 0 failures
+- Biome check: 103 files, no issues
+
+## TDD Process
+- Wrote trimAttachments test first → verified FAIL (spy called 0 times, expected 1)
+- Implemented minimal fix → verified PASS
