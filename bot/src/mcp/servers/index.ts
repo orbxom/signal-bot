@@ -10,6 +10,7 @@ import { reminderServer } from './reminders';
 import { settingsServer } from './settings';
 import { signalServer } from './signal';
 import { sourceCodeServer } from './sourceCode';
+import { notableDatesServer } from './notableDates';
 import { weatherServer } from './weather';
 
 export const ALL_SERVERS: McpServerDefinition[] = [
@@ -20,6 +21,7 @@ export const ALL_SERVERS: McpServerDefinition[] = [
   imagesServer,
   memoryServer,
   messageHistoryServer,
+  notableDatesServer,
   weatherServer,
   sourceCodeServer,
   settingsServer,
