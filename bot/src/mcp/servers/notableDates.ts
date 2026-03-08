@@ -39,6 +39,51 @@ function getCuratedDatesForDate(month: number, day: number): Array<{ name: strin
   return NOTABLE_DATES[key] ?? [];
 }
 
+interface NagerHoliday {
+  date: string;
+  localName: string;
+  name: string;
+  countryCode: string;
+  fixed: boolean;
+  global: boolean;
+  types: string[];
+}
+
+/** Simple in-memory cache keyed by year — AU holidays for a year never change. */
+const holidayCache = new Map<number, NagerHoliday[]>();
+
+async function fetchAustralianHolidays(year: number): Promise<NagerHoliday[]> {
+  const cached = holidayCache.get(year);
+  if (cached) return cached;
+
+  const url = `https://date.nager.at/api/v3/PublicHolidays/${year}/AU`;
+  const response = await fetch(url, { signal: AbortSignal.timeout(5000) });
+  if (!response.ok) {
+    throw new Error(`Nager.Date API returned ${response.status}`);
+  }
+  const holidays = (await response.json()) as NagerHoliday[];
+  holidayCache.set(year, holidays);
+  return holidays;
+}
+
+async function getAustralianHolidaysForDate(
+  dateStr: string,
+): Promise<Array<{ name: string; description: string }>> {
+  try {
+    const year = Number.parseInt(dateStr.slice(0, 4), 10);
+    const holidays = await fetchAustralianHolidays(year);
+    return holidays
+      .filter((h) => h.date === dateStr)
+      .map((h) => ({
+        name: h.name,
+        description: `Australian public holiday${h.global ? ' (national)' : ' (regional)'}. ${h.types.join(', ')}.`,
+      }));
+  } catch {
+    // API unavailable — return empty (curated dates still work)
+    return [];
+  }
+}
+
 const TOOLS: ToolDefinition[] = [
   {
     name: 'get_notable_dates',
