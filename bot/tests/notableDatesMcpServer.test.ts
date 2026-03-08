@@ -1,10 +1,6 @@
 import type { ChildProcess } from 'node:child_process';
 import { afterEach, describe, expect, it } from 'vitest';
-import {
-  initializeServer,
-  sendAndReceive,
-  spawnMcpServer as spawnServer,
-} from './helpers/mcpTestHelpers';
+import { initializeServer, sendAndReceive, spawnMcpServer as spawnServer } from './helpers/mcpTestHelpers';
 
 describe('Notable Dates MCP Server', () => {
   let proc: ChildProcess | null = null;
