@@ -73,6 +73,7 @@ async function main() {
       contextWindowSize: config.contextWindowSize,
       contextTokenBudget: config.contextTokenBudget,
       messageRetentionCount: config.messageRetentionCount,
+      attachmentRetentionDays: config.attachmentRetentionDays,
       collaborativeTestingMode: config.collaborativeTestingMode,
     },
   );

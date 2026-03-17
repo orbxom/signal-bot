@@ -15,6 +15,7 @@ export interface MessageHandlerOptions {
   contextWindowSize?: number;
   contextTokenBudget?: number;
   messageRetentionCount?: number;
+  attachmentRetentionDays?: number;
   collaborativeTestingMode?: boolean;
 }
 
@@ -29,6 +30,7 @@ export class MessageHandler {
   private signalClient: SignalClient;
   private contextWindowSize: number;
   private messageRetentionCount: number;
+  private readonly attachmentRetentionDays: number;
 
   constructor(
     mentionTriggers: string[],
@@ -55,6 +57,7 @@ export class MessageHandler {
     this.signalClient = deps.signalClient;
     this.contextWindowSize = options?.contextWindowSize || 200;
     this.messageRetentionCount = options?.messageRetentionCount || 1000;
+    this.attachmentRetentionDays = options?.attachmentRetentionDays || 30;
 
     this.mentionDetector = new MentionDetector(mentionTriggers);
     this.contextBuilder = new ContextBuilder({
@@ -399,8 +402,10 @@ export class MessageHandler {
         logger.step('delivery: sent via fallback');
       }
 
-      // Trim old messages
+      // Trim old messages and expired attachments
       this.storage.trimMessages(groupId, this.messageRetentionCount);
+      const attachmentCutoff = Date.now() - this.attachmentRetentionDays * 24 * 60 * 60 * 1000;
+      this.storage.trimAttachments(attachmentCutoff);
 
       logger.groupEnd();
     } catch (error) {
