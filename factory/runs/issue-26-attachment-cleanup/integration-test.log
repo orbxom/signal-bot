@@ -1,0 +1,23 @@
+# Integration Test Log — issue-26-attachment-cleanup
+
+## Setup
+- Mock server: worktree bot on port 9090
+- Bot: dev:mock mode with COLLABORATIVE_TESTING=true, separate DB (data/mock-bot.db)
+- Needed: copy .env to worktree, create data/ directory
+
+## Test 1: Basic mention (LLM round-trip)
+- Message: "claude: say hello and confirm you are working"
+- Expected: Full LLM cycle completes, COMPLETE marker reached (trimAttachments runs in the code path)
+- Actual: RECV → query extracted → LLM spawned (44.9s) → delivery sent → COMPLETE
+- Result: PASS
+
+## Test 2: Non-mention message
+- Message: "just a regular message, no trigger"
+- Expected: Stored but not processed (no LLM, no trim calls)
+- Actual: RECV logged, no LLM processing
+- Result: PASS
+
+## Notes
+- trimAttachments() call is silent (no explicit log line), same as trimMessages()
+- COMPLETE marker confirms the full processLlmRequest path ran without errors, which includes both trim calls
+- No errors in logs related to attachment cleanup

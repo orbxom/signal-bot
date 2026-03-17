@@ -1,5 +1,6 @@
 {
-  "runId": "issue-43-plannotator-plugin",
+  "runId": "issue-50-factory-dashboard",
+  "issueNumber": 50,
   "currentStage": "complete",
   "stages": {
     "plan": "complete",

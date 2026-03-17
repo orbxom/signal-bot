@@ -1,0 +1,16 @@
+{
+  "source": "github",
+  "issueNumber": 26,
+  "issueUrl": "https://github.com/orbxom/signal-bot/issues/26",
+  "title": "Bug: Attachment BLOBs never cleaned up",
+  "description": "Call trimAttachments() alongside trimMessages() so image BLOBs don't accumulate in SQLite forever. AttachmentStore.trimOlderThan() exists and Storage.trimAttachments() is wired up, but nothing in the bot ever calls it. trimMessages() is called in messageHandler.ts after every LLM response, but the corresponding attachment cleanup is missing.",
+  "acceptanceCriteria": [
+    "trimAttachments() is called automatically on a reasonable schedule (e.g. alongside trimMessages, or on a periodic timer)",
+    "Cutoff strategy is sensible — e.g. keep attachments for the same retention window as messages, or a configurable age-based cutoff",
+    "Existing tests still pass",
+    "New test covers the cleanup path"
+  ],
+  "interviewReport": null,
+  "mode": "full",
+  "createdAt": "2026-03-08T00:00:00Z"
+}

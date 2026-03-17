@@ -1,6 +1,6 @@
 {
-  "runId": "issue-43-plannotator-plugin",
-  "currentStage": "complete",
+  "runId": "issue-26-attachment-cleanup",
+  "currentStage": "review",
   "stages": {
     "plan": "complete",
     "build": "complete",
@@ -10,5 +10,5 @@
     "integration-test": "complete",
     "review": "complete"
   },
-  "updatedAt": "2026-03-08T00:00:00Z"
+  "updatedAt": "2026-03-08T00:10:00Z"
 }

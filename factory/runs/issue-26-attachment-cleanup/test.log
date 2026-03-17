@@ -1,0 +1,13 @@
+# Test Log — issue-26-attachment-cleanup
+
+## Full Test Suite
+- 804 tests passed, 51 test files, 0 failures
+- Duration: 10.17s
+
+## Lint
+- biome lint: 103 files checked, no fixes applied
+
+## Format Check
+- biome check: 103 files checked, no fixes applied
+
+## Result: ALL PASS

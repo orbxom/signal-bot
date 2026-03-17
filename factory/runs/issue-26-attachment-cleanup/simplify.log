@@ -1,0 +1,11 @@
+# Simplify Log — issue-26-attachment-cleanup
+
+## Finding 1 (FIXED): Config parsing pattern inconsistency
+- config.ts used `parseInt(...) || 30` which silently swallows invalid input
+- Changed to match established pattern: parseInt + Number.isNaN validation with thrown error
+- Tests: 804/804 pass after change
+
+## Findings 2-4 (No action needed)
+- messageHandler.ts changes clean, follows existing patterns
+- Global trimAttachments per LLM response is fine (cheap, idempotent SQL)
+- Test quality good, proper Date.now mock and assertion pattern
