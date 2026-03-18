@@ -172,3 +172,17 @@ export interface Attachment {
   data: Buffer; // raw binary, stored as BLOB in SQLite
   timestamp: number;
 }
+
+/** A single mention to process via the group processing queue */
+export interface MentionRequest {
+  groupId: string;
+  sender: string;
+  content: string;
+  attachments: SignalAttachment[];
+  timestamp: number;
+}
+
+/** A queue item — either a single mention or a coalesced batch of missed mentions */
+export type QueueItem =
+  | { kind: 'single'; request: MentionRequest }
+  | { kind: 'coalesced'; requests: MentionRequest[]; missedFraming: string };
