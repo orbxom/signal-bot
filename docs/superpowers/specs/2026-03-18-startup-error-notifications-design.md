@@ -21,7 +21,7 @@ Bot online (abc1234) — 2026-03-18 14:32 AEDT
 
 ### Error Notification
 
-Sent on unhandled rejections and fatal startup errors, before the process exits.
+Sent on unhandled rejections and fatal startup errors. The current `unhandledRejection` handler only logs — it does not exit. This feature adds `process.exit(1)` after sending the error notification, since an unhandled rejection indicates an unexpected state that warrants a restart (systemd will restart the service automatically).
 
 **Format:**
 ```
@@ -33,12 +33,12 @@ TypeError: Cannot read properties of undefined (reading 'foo')
 ```
 
 - Includes full error message and stack trace
-- Truncated to 2000 characters to stay within Signal message limits
+- Full formatted message (header + error + stack) truncated to 2000 characters total to stay within Signal message limits
 - Best-effort: if signal-cli is not reachable (e.g., early startup failure before signal-cli connects), the error is logged and the bot exits as it does today
 
 ## Notification Channel
 
-All notifications are sent to the Bot Test group (`config.testGroupId`).
+All notifications are sent to the Bot Test group (`config.testGroupId`) via `signalClient.sendMessage()` directly. This bypasses the message handler's channel filtering, so notifications work even though the NUC production config excludes the test group via `EXCLUDE_GROUP_IDS`. This is intentional — the bot sends to the group but doesn't process responses to these notifications.
 
 ## Activation
 
@@ -51,12 +51,12 @@ Controlled by a `STARTUP_NOTIFY` environment variable (read as `config.startupNo
 
 The deploy script (`scripts/deploy-nuc.sh`) writes `git rev-parse --short HEAD` to a `VERSION` file in the repo root before rsyncing to the NUC. This avoids requiring `.git/` on the NUC (already excluded from rsync).
 
-At startup, the bot reads `VERSION` from the repo root. If the file doesn't exist (e.g., running locally in dev), the commit hash displays as `"unknown"`.
+At startup, the bot reads `VERSION` from the repo root using `path.resolve(__dirname, '../../VERSION')` (two levels up from `bot/src/`). If the file doesn't exist (e.g., running locally in dev), the commit hash displays as `"unknown"`.
 
 ## Changes
 
 ### `bot/src/config.ts`
-- Add `startupNotify: boolean` field, read from `STARTUP_NOTIFY` env var (default `false`)
+- Add `startupNotify: boolean` to the `ConfigType` interface and `Config.load()`, read from `STARTUP_NOTIFY` env var (default `false`)
 
 ### `bot/src/index.ts`
 - Add `sendStartupNotification(signalClient, config)` — reads `VERSION` file, formats timestamp, sends message to `config.testGroupId`. Called after `waitForReady()`, before the polling loop.
@@ -66,7 +66,7 @@ At startup, the bot reads `VERSION` from the repo root. If the file doesn't exis
 ### `scripts/deploy-nuc.sh`
 - Before the rsync step, run `git rev-parse --short HEAD > VERSION` to write the commit hash
 - The `VERSION` file is synced to the NUC with everything else
-- After deploy completes (or on script exit), clean up the local `VERSION` file
+- Use a `trap` to clean up the local `VERSION` file on script exit (ensures cleanup even if deploy fails partway)
 
 ### NUC `bot/.env`
 - Add `STARTUP_NOTIFY=true`
@@ -74,11 +74,14 @@ At startup, the bot reads `VERSION` from the repo root. If the file doesn't exis
 ### `.gitignore`
 - Add `VERSION` (generated file, should not be committed)
 
+### `CLAUDE.md`
+- Add `STARTUP_NOTIFY=true` to the "NUC .env Differences" section
+
 ## Error Handling Edge Cases
 
 - **Signal-cli not ready during error notification:** Send attempt fails silently, error is logged, process exits. The deploy script's `systemctl status` output covers this case.
 - **Error during startup notification itself:** Caught and logged, does not prevent the bot from starting the polling loop.
-- **Multiple rapid unhandled rejections:** Each triggers a best-effort notification. The process exits after the first fatal one anyway.
+- **Multiple rapid unhandled rejections:** The first one triggers a notification and `process.exit(1)`. Systemd restarts the service automatically.
 
 ## Testing
 
