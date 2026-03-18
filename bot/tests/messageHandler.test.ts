@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MessageHandler } from '../src/messageHandler';
 import type { SignalClient } from '../src/signalClient';
 import type { Storage } from '../src/storage';
-import type { AppConfig, LLMClient, Message } from '../src/types';
+import type { AppConfig, LLMClient, MentionRequest, Message, QueueItem } from '../src/types';
 
 vi.mock('../src/logger', () => ({
   logger: {
@@ -25,7 +25,7 @@ function makeAppConfig(overrides?: Partial<AppConfig>): AppConfig {
     githubRepo: '',
     sourceRoot: '',
     signalCliUrl: '',
-    botPhoneNumber: '',
+    botPhoneNumber: '+61000',
     attachmentsDir: './data/signal-attachments',
     whisperModelPath: './models/ggml-base.en.bin',
     darkFactoryEnabled: '',
@@ -34,153 +34,168 @@ function makeAppConfig(overrides?: Partial<AppConfig>): AppConfig {
   };
 }
 
+function makeSingleItem(overrides?: Partial<MentionRequest>): QueueItem {
+  return {
+    kind: 'single',
+    request: {
+      groupId: 'g1',
+      sender: '+61400111222',
+      content: '@bot hello',
+      attachments: [],
+      timestamp: 1000,
+      ...overrides,
+    },
+  };
+}
+
+function makeCoalescedItem(requests: Partial<MentionRequest>[], missedFraming: string): QueueItem {
+  return {
+    kind: 'coalesced',
+    requests: requests.map(r => ({
+      groupId: 'g1',
+      sender: '+61400111222',
+      content: '@bot hello',
+      attachments: [],
+      timestamp: 1000,
+      ...r,
+    })),
+    missedFraming,
+  };
+}
+
 describe('MessageHandler', () => {
-  describe('handleMessage', () => {
-    let mockStorage: Storage;
-    let mockLLM: LLMClient;
-    let mockSignal: SignalClient;
+  let mockStorage: Storage;
+  let mockLLM: LLMClient;
+  let mockSignal: SignalClient;
 
-    beforeEach(() => {
-      vi.clearAllMocks();
+  beforeEach(() => {
+    vi.clearAllMocks();
 
-      mockStorage = {
-        addMessage: vi.fn(),
-        getRecentMessages: vi.fn().mockReturnValue([]),
-        trimMessages: vi.fn(),
-        trimAttachments: vi.fn(),
-        getDossiersByGroup: vi.fn().mockReturnValue([]),
-        getMemoriesByGroup: vi.fn().mockReturnValue([]),
-        getActivePersonaForGroup: vi.fn().mockReturnValue(null),
-        saveAttachment: vi.fn(),
-        groupSettings: { getToolNotifications: vi.fn().mockReturnValue(false), isEnabled: vi.fn().mockReturnValue(true), getTriggers: vi.fn().mockReturnValue(null) },
-      } as any;
+    mockStorage = {
+      addMessage: vi.fn(),
+      getRecentMessages: vi.fn().mockReturnValue([]),
+      trimMessages: vi.fn(),
+      trimAttachments: vi.fn(),
+      getDossiersByGroup: vi.fn().mockReturnValue([]),
+      getMemoriesByGroup: vi.fn().mockReturnValue([]),
+      getActivePersonaForGroup: vi.fn().mockReturnValue(null),
+      getDistinctGroupIds: vi.fn().mockReturnValue(['g1']),
+      saveAttachment: vi.fn(),
+      groupSettings: {
+        getToolNotifications: vi.fn().mockReturnValue(false),
+        isEnabled: vi.fn().mockReturnValue(true),
+        getTriggers: vi.fn().mockReturnValue(null),
+      },
+    } as any;
 
-      mockLLM = {
-        generateResponse: vi.fn().mockResolvedValue({
-          content: 'Test response',
-          tokensUsed: 25,
-          sentViaMcp: false,
-          mcpMessages: [],
-        }),
-      };
+    mockLLM = {
+      generateResponse: vi.fn().mockResolvedValue({
+        content: 'Test response',
+        tokensUsed: 25,
+        sentViaMcp: false,
+        mcpMessages: [],
+      }),
+    };
 
-      mockSignal = {
-        sendMessage: vi.fn().mockResolvedValue(undefined),
-        sendTyping: vi.fn().mockResolvedValue(undefined),
-        stopTyping: vi.fn().mockResolvedValue(undefined),
-        readAttachmentFile: vi.fn().mockReturnValue(null),
-      } as any;
-    });
+    mockSignal = {
+      sendMessage: vi.fn().mockResolvedValue(undefined),
+      sendTyping: vi.fn().mockResolvedValue(undefined),
+      stopTyping: vi.fn().mockResolvedValue(undefined),
+      readAttachmentFile: vi.fn().mockReturnValue(null),
+    } as any;
+  });
 
-    it('should skip messages from the bot itself', async () => {
-      const handler = new MessageHandler(['@bot'], {
-        storage: mockStorage,
-        llmClient: mockLLM,
-        signalClient: mockSignal,
-        appConfig: makeAppConfig({ botPhoneNumber: '+1234567890' }),
-      });
-
-      await handler.handleMessage('g1', '+1234567890', '@bot hello', 1000);
-
-      expect(mockStorage.addMessage).not.toHaveBeenCalled();
-      expect(mockLLM.generateResponse).not.toHaveBeenCalled();
-      expect(mockSignal.sendMessage).not.toHaveBeenCalled();
-    });
-
-    it('should process messages from other senders normally', async () => {
-      const handler = new MessageHandler(['@bot'], {
-        storage: mockStorage,
-        llmClient: mockLLM,
-        signalClient: mockSignal,
-        appConfig: makeAppConfig({ botPhoneNumber: '+1234567890' }),
-      });
-
-      await handler.handleMessage('g1', '+9876543210', '@bot hello', 1000);
-
-      expect(mockLLM.generateResponse).toHaveBeenCalled();
-    });
-
-    it('should store incoming message', async () => {
-      const handler = new MessageHandler(['@bot'], {
-        storage: mockStorage,
-        llmClient: mockLLM,
-        signalClient: mockSignal,
-      });
-
-      await handler.handleMessage('g1', 'Alice', 'Just saying hello', 1000);
-
-      expect(mockStorage.addMessage).toHaveBeenCalledWith({
-        groupId: 'g1',
-        sender: 'Alice',
-        content: 'Just saying hello',
-        timestamp: 1000,
-        isBot: false,
-      });
-    });
-
-    it('should not respond when not mentioned', async () => {
-      const handler = new MessageHandler(['@bot'], {
-        storage: mockStorage,
-        llmClient: mockLLM,
-        signalClient: mockSignal,
-      });
-
-      await handler.handleMessage('g1', 'Alice', 'Just saying hello', 1000);
-
-      expect(mockLLM.generateResponse).not.toHaveBeenCalled();
-      expect(mockSignal.sendMessage).not.toHaveBeenCalled();
-    });
-
-    it('should respond when mentioned', async () => {
-      const handler = new MessageHandler(['@bot'], {
-        storage: mockStorage,
-        llmClient: mockLLM,
-        signalClient: mockSignal,
-      });
-
-      await handler.handleMessage('g1', 'Alice', '@bot hello', 1000);
-
-      expect(mockLLM.generateResponse).toHaveBeenCalled();
-      expect(mockSignal.sendMessage).toHaveBeenCalledWith('g1', 'Test response');
-    });
-
-    it('should extract query and build context correctly', async () => {
+  describe('processRequest', () => {
+    it('should fetch fresh history and invoke LLM', async () => {
       const mockHistory: Message[] = [
         { id: 1, groupId: 'g1', sender: 'Alice', content: 'Previous message', timestamp: 500, isBot: false },
       ];
       mockStorage.getRecentMessages = vi.fn().mockReturnValue(mockHistory);
 
-      const handler = new MessageHandler(['@bot'], {
-        storage: mockStorage,
-        llmClient: mockLLM,
-        signalClient: mockSignal,
-      });
-
-      await handler.handleMessage('g1', 'Bob', '@bot what is 2+2?', 1000);
-
-      expect(mockLLM.generateResponse).toHaveBeenCalledWith(
-        expect.arrayContaining([
-          expect.objectContaining({ role: 'system' }),
-          expect.objectContaining({ role: 'user', content: '[1970-01-01 10:00] Alice: Previous message' }),
-          expect.objectContaining({ role: 'user', content: 'what is 2+2?' }),
-        ]),
-        expect.objectContaining({
-          groupId: 'g1',
-          sender: 'Bob',
-          timezone: 'Australia/Sydney',
-        }),
+      const handler = new MessageHandler(
+        {
+          storage: mockStorage,
+          llmClient: mockLLM,
+          signalClient: mockSignal,
+          appConfig: makeAppConfig(),
+        },
+        { mentionTriggers: ['@bot'], contextWindowSize: 50 },
       );
+
+      await handler.processRequest(makeSingleItem());
+
+      expect(mockStorage.getRecentMessages).toHaveBeenCalledWith('g1', 50);
+      expect(mockLLM.generateResponse).toHaveBeenCalled();
     });
 
-    it('should store bot response after sending', async () => {
-      const handler = new MessageHandler(['@bot'], {
-        storage: mockStorage,
-        llmClient: mockLLM,
-        signalClient: mockSignal,
-      });
+    it('should filter the triggering message from history (single item)', async () => {
+      const mockHistory: Message[] = [
+        { id: 1, groupId: 'g1', sender: 'Alice', content: 'Previous message', timestamp: 500, isBot: false },
+        { id: 2, groupId: 'g1', sender: '+61400111222', content: '@bot hello', timestamp: 1000, isBot: false },
+      ];
+      mockStorage.getRecentMessages = vi.fn().mockReturnValue(mockHistory);
+
+      const handler = new MessageHandler(
+        {
+          storage: mockStorage,
+          llmClient: mockLLM,
+          signalClient: mockSignal,
+          appConfig: makeAppConfig(),
+        },
+        { mentionTriggers: ['@bot'] },
+      );
+
+      await handler.processRequest(makeSingleItem({ sender: '+61400111222', timestamp: 1000 }));
+
+      // The LLM should receive history without the triggering message
+      const callArgs = (mockLLM.generateResponse as ReturnType<typeof vi.fn>).mock.calls[0];
+      const messages = callArgs[0];
+      const historyMsgs = messages.filter(
+        (m: { role: string; content: string }) => m.role === 'user' && m.content.includes('Previous message'),
+      );
+      expect(historyMsgs).toHaveLength(1);
+
+      // The triggering message should not appear in history context
+      const triggerInHistory = messages.filter(
+        (m: { role: string; content: string }) =>
+          m.role === 'user' &&
+          m.content.includes('[') &&
+          m.content.includes('+61400111222') &&
+          m.content.includes('@bot hello'),
+      );
+      expect(triggerInHistory).toHaveLength(0);
+    });
+
+    it('should send response to group', async () => {
+      const handler = new MessageHandler(
+        {
+          storage: mockStorage,
+          llmClient: mockLLM,
+          signalClient: mockSignal,
+          appConfig: makeAppConfig(),
+        },
+        { mentionTriggers: ['@bot'] },
+      );
+
+      await handler.processRequest(makeSingleItem());
+
+      expect(mockSignal.sendMessage).toHaveBeenCalledWith('g1', 'Test response');
+    });
+
+    it('should store bot response', async () => {
       vi.spyOn(Date, 'now').mockReturnValue(2000);
 
-      await handler.handleMessage('g1', 'Alice', '@bot hello', 1000);
+      const handler = new MessageHandler(
+        {
+          storage: mockStorage,
+          llmClient: mockLLM,
+          signalClient: mockSignal,
+          appConfig: makeAppConfig(),
+        },
+        { mentionTriggers: ['@bot'] },
+      );
+
+      await handler.processRequest(makeSingleItem());
 
       expect(mockStorage.addMessage).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -188,45 +203,102 @@ describe('MessageHandler', () => {
           content: 'Test response',
           timestamp: 2000,
           isBot: true,
+          sender: '+61000',
         }),
       );
     });
 
-    it('should NOT trim messages after responding (trimming moved to periodic maintenance)', async () => {
-      const handler = new MessageHandler(
-        ['@bot'],
-        { storage: mockStorage, llmClient: mockLLM, signalClient: mockSignal },
-        { contextWindowSize: 20 },
+    it('should handle coalesced items with missed framing', async () => {
+      const missedFraming =
+        'You were offline and missed the following messages:\n- [+61400111222] (2 min ago): "question one"\n- [+61400333444] (1 min ago): "question two"\n\nRespond to all of these in a single message.';
+      const item = makeCoalescedItem(
+        [
+          { content: '@bot question one', sender: '+61400111222', timestamp: 900 },
+          { content: '@bot question two', sender: '+61400333444', timestamp: 1000 },
+        ],
+        missedFraming,
       );
 
-      await handler.handleMessage('g1', 'Alice', '@bot hello', 1000);
-
-      expect(mockStorage.trimMessages).not.toHaveBeenCalled();
-    });
-
-    it('should NOT call trimAttachments after LLM response (trimming moved to periodic maintenance)', async () => {
       const handler = new MessageHandler(
-        ['@bot'],
-        { storage: mockStorage, llmClient: mockLLM, signalClient: mockSignal },
-        { contextWindowSize: 20 },
+        {
+          storage: mockStorage,
+          llmClient: mockLLM,
+          signalClient: mockSignal,
+          appConfig: makeAppConfig(),
+        },
+        { mentionTriggers: ['@bot'] },
       );
 
-      await handler.handleMessage('g1', 'Alice', '@bot hello', 1000);
+      await handler.processRequest(item);
 
-      expect(mockStorage.trimAttachments).not.toHaveBeenCalled();
+      // Should use the last request's content for the query
+      const callArgs = (mockLLM.generateResponse as ReturnType<typeof vi.fn>).mock.calls[0];
+      const messages = callArgs[0];
+      const lastUserMsg = messages[messages.length - 1];
+      expect(lastUserMsg.content).toContain('You were offline and missed the following messages:');
+      expect(lastUserMsg.content).toContain('question two');
     });
 
-    it('should handle LLM errors gracefully', async () => {
+    it('should filter all triggering messages from history for coalesced items', async () => {
+      const mockHistory: Message[] = [
+        { id: 1, groupId: 'g1', sender: 'Alice', content: 'Unrelated', timestamp: 500, isBot: false },
+        { id: 2, groupId: 'g1', sender: '+61400111222', content: '@bot question one', timestamp: 900, isBot: false },
+        { id: 3, groupId: 'g1', sender: '+61400333444', content: '@bot question two', timestamp: 1000, isBot: false },
+      ];
+      mockStorage.getRecentMessages = vi.fn().mockReturnValue(mockHistory);
+
+      const missedFraming = 'You were offline and missed the following messages:';
+      const item = makeCoalescedItem(
+        [
+          { content: '@bot question one', sender: '+61400111222', timestamp: 900 },
+          { content: '@bot question two', sender: '+61400333444', timestamp: 1000 },
+        ],
+        missedFraming,
+      );
+
+      const handler = new MessageHandler(
+        {
+          storage: mockStorage,
+          llmClient: mockLLM,
+          signalClient: mockSignal,
+          appConfig: makeAppConfig(),
+        },
+        { mentionTriggers: ['@bot'] },
+      );
+
+      await handler.processRequest(item);
+
+      const callArgs = (mockLLM.generateResponse as ReturnType<typeof vi.fn>).mock.calls[0];
+      const messages = callArgs[0];
+      // Only the unrelated message should be in history (plus system + query)
+      const userHistoryMsgs = messages.filter(
+        (m: { role: string; content: string }) => m.role === 'user' && m.content.includes('Unrelated'),
+      );
+      expect(userHistoryMsgs).toHaveLength(1);
+
+      // Trigger messages should not be in history
+      const triggerMsgs = messages.filter(
+        (m: { role: string; content: string }) =>
+          m.role === 'user' && m.content.includes('question one') && m.content.includes('['),
+      );
+      expect(triggerMsgs).toHaveLength(0);
+    });
+
+    it('should send error message on LLM failure', async () => {
       const { logger } = await import('../src/logger');
       mockLLM.generateResponse = vi.fn().mockRejectedValue(new Error('LLM API error'));
 
-      const handler = new MessageHandler(['@bot'], {
-        storage: mockStorage,
-        llmClient: mockLLM,
-        signalClient: mockSignal,
-      });
+      const handler = new MessageHandler(
+        {
+          storage: mockStorage,
+          llmClient: mockLLM,
+          signalClient: mockSignal,
+          appConfig: makeAppConfig(),
+        },
+        { mentionTriggers: ['@bot'] },
+      );
 
-      await handler.handleMessage('g1', 'Alice', '@bot hello', 1000);
+      await handler.processRequest(makeSingleItem());
 
       expect(logger.error).toHaveBeenCalled();
       expect(mockSignal.sendMessage).toHaveBeenCalledWith(
@@ -235,45 +307,130 @@ describe('MessageHandler', () => {
       );
     });
 
-    it('should handle Signal client errors gracefully', async () => {
-      const { logger } = await import('../src/logger');
-      mockSignal.sendMessage = vi.fn().mockRejectedValue(new Error('Signal API error'));
-
-      const handler = new MessageHandler(['@bot'], {
-        storage: mockStorage,
-        llmClient: mockLLM,
-        signalClient: mockSignal,
-      });
-
-      await handler.handleMessage('g1', 'Alice', '@bot hello', 1000);
-
-      expect(logger.error).toHaveBeenCalled();
-    });
-
-    it('should use correct context window size', async () => {
+    it('should extract query by stripping mention trigger', async () => {
       const handler = new MessageHandler(
-        ['@bot'],
-        { storage: mockStorage, llmClient: mockLLM, signalClient: mockSignal },
-        { contextWindowSize: 10 },
+        {
+          storage: mockStorage,
+          llmClient: mockLLM,
+          signalClient: mockSignal,
+          appConfig: makeAppConfig(),
+        },
+        { mentionTriggers: ['@bot'] },
       );
 
-      await handler.handleMessage('g1', 'Alice', '@bot hello', 1000);
+      await handler.processRequest(makeSingleItem({ content: '@bot what is 2+2?' }));
 
-      expect(mockStorage.getRecentMessages).toHaveBeenCalledWith('g1', 10);
+      const callArgs = (mockLLM.generateResponse as ReturnType<typeof vi.fn>).mock.calls[0];
+      const messages = callArgs[0];
+      const lastUserMsg = messages[messages.length - 1];
+      expect(lastUserMsg.content).toContain('what is 2+2?');
+      expect(lastUserMsg.content).not.toMatch(/^@bot/);
     });
 
-    it('should log response with token usage', async () => {
-      const { logger } = await import('../src/logger');
+    it('should include voice attachment info in query when present', async () => {
+      const handler = new MessageHandler(
+        {
+          storage: mockStorage,
+          llmClient: mockLLM,
+          signalClient: mockSignal,
+          appConfig: makeAppConfig(),
+        },
+        { mentionTriggers: ['@bot'] },
+      );
 
-      const handler = new MessageHandler(['@bot'], {
-        storage: mockStorage,
-        llmClient: mockLLM,
-        signalClient: mockSignal,
-      });
+      await handler.processRequest(
+        makeSingleItem({
+          content: '@bot',
+          attachments: [{ id: 'voice-abc', contentType: 'audio/aac', size: 5000, filename: null }],
+        }),
+      );
 
-      await handler.handleMessage('g1', 'Alice', '@bot hello', 1000);
+      const callArgs = (mockLLM.generateResponse as ReturnType<typeof vi.fn>).mock.calls[0];
+      const messages = callArgs[0];
+      const lastUserMsg = messages[messages.length - 1];
+      expect(lastUserMsg.content).toContain('[Voice message attached:');
+      expect(lastUserMsg.content).toContain('voice-abc');
+    });
 
-      expect(logger.step).toHaveBeenCalledWith(expect.stringContaining('25 tokens'));
+    it('should include image attachment info in query when present', async () => {
+      const handler = new MessageHandler(
+        {
+          storage: mockStorage,
+          llmClient: mockLLM,
+          signalClient: mockSignal,
+          appConfig: makeAppConfig({ attachmentsDir: '/data/attachments' }),
+        },
+        { mentionTriggers: ['@bot'] },
+      );
+
+      await handler.processRequest(
+        makeSingleItem({
+          content: '@bot what is this',
+          attachments: [{ id: 'img-abc', contentType: 'image/jpeg', size: 50000, filename: 'photo.jpg' }],
+        }),
+      );
+
+      const callArgs = (mockLLM.generateResponse as ReturnType<typeof vi.fn>).mock.calls[0];
+      const messages = callArgs[0];
+      const lastUserMsg = messages[messages.length - 1];
+      expect(lastUserMsg.content).toContain('[Image: attachment://img-abc]');
+    });
+
+    it('should not auto-send response when Claude sent messages via MCP', async () => {
+      const mcpLLM: LLMClient = {
+        generateResponse: vi.fn().mockResolvedValue({
+          content: 'Final answer',
+          tokensUsed: 10,
+          sentViaMcp: true,
+          mcpMessages: ['Looking into it...', 'Final answer'],
+        }),
+      };
+
+      const handler = new MessageHandler(
+        {
+          storage: mockStorage,
+          llmClient: mcpLLM,
+          signalClient: mockSignal,
+          appConfig: makeAppConfig(),
+        },
+        { mentionTriggers: ['@bot'] },
+      );
+
+      await handler.processRequest(makeSingleItem());
+
+      // Signal client sendMessage should NOT be called -- Claude handled it via MCP
+      expect(mockSignal.sendMessage).not.toHaveBeenCalled();
+    });
+
+    it('should store each MCP-sent message in the database', async () => {
+      const mcpLLM: LLMClient = {
+        generateResponse: vi.fn().mockResolvedValue({
+          content: 'Final',
+          tokensUsed: 10,
+          sentViaMcp: true,
+          mcpMessages: ['Ack message', 'Final response'],
+        }),
+      };
+
+      const handler = new MessageHandler(
+        {
+          storage: mockStorage,
+          llmClient: mcpLLM,
+          signalClient: mockSignal,
+          appConfig: makeAppConfig(),
+        },
+        { mentionTriggers: ['@bot'] },
+      );
+
+      await handler.processRequest(makeSingleItem());
+
+      // Each MCP message should be stored
+      const botMessages = (mockStorage.addMessage as ReturnType<typeof vi.fn>).mock.calls.filter(
+        (call: any[]) => call[0].isBot === true,
+      );
+      expect(botMessages).toHaveLength(2);
+      expect(botMessages[0][0].content).toBe('Ack message');
+      expect(botMessages[1][0].content).toBe('Final response');
     });
 
     it('should load dossiers and include them in LLM context', async () => {
@@ -287,42 +444,86 @@ describe('MessageHandler', () => {
           createdAt: 1000,
           updatedAt: 2000,
         },
-        {
-          id: 2,
-          groupId: 'g1',
-          personId: '+61400000002',
-          displayName: 'Bob',
-          notes: 'Enjoys hiking',
-          createdAt: 1000,
-          updatedAt: 2000,
-        },
       ]);
 
-      const handler = new MessageHandler(['@bot'], {
-        storage: mockStorage,
-        llmClient: mockLLM,
-        signalClient: mockSignal,
-      });
+      const handler = new MessageHandler(
+        {
+          storage: mockStorage,
+          llmClient: mockLLM,
+          signalClient: mockSignal,
+          appConfig: makeAppConfig(),
+        },
+        { mentionTriggers: ['@bot'] },
+      );
 
-      await handler.handleMessage('g1', 'Alice', '@bot hello', 1000);
+      await handler.processRequest(makeSingleItem());
 
       expect(mockStorage.getDossiersByGroup).toHaveBeenCalledWith('g1');
-
-      // Verify the system prompt includes dossier information
       const callArgs = (mockLLM.generateResponse as ReturnType<typeof vi.fn>).mock.calls[0];
       const messages = callArgs[0];
       const systemMsg = messages.find((m: { role: string }) => m.role === 'system');
       expect(systemMsg.content).toContain('## People in this group');
       expect(systemMsg.content).toContain('Alice (+61400000001)');
       expect(systemMsg.content).toContain('Loves cats');
-      expect(systemMsg.content).toContain('Bob (+61400000002)');
-      expect(systemMsg.content).toContain('Enjoys hiking');
+    });
+
+    it('should use active persona description in system prompt', async () => {
+      mockStorage.getActivePersonaForGroup = vi.fn().mockReturnValue({
+        id: 2,
+        name: 'Pirate',
+        description: 'Ye be a pirate captain! Speak in pirate dialect.',
+        tags: 'fun,pirate',
+        isDefault: false,
+        createdAt: 1000,
+        updatedAt: 1000,
+      });
+
+      const handler = new MessageHandler(
+        {
+          storage: mockStorage,
+          llmClient: mockLLM,
+          signalClient: mockSignal,
+          appConfig: makeAppConfig(),
+        },
+        { systemPrompt: 'Default assistant prompt.', mentionTriggers: ['@bot'] },
+      );
+
+      await handler.processRequest(makeSingleItem());
+
+      const callArgs = (mockLLM.generateResponse as ReturnType<typeof vi.fn>).mock.calls[0];
+      const messages = callArgs[0];
+      const systemMsg = messages.find((m: { role: string }) => m.role === 'system');
+      expect(systemMsg.content).toContain('Ye be a pirate captain!');
+      expect(systemMsg.content).not.toContain('Default assistant prompt.');
+    });
+
+    it('should pass appConfig fields to LLM context', async () => {
+      const handler = new MessageHandler(
+        {
+          storage: mockStorage,
+          llmClient: mockLLM,
+          signalClient: mockSignal,
+          appConfig: makeAppConfig({ signalCliUrl: 'http://localhost:8080' }),
+        },
+        { mentionTriggers: ['@bot'] },
+      );
+
+      await handler.processRequest(makeSingleItem());
+
+      expect(mockLLM.generateResponse).toHaveBeenCalledWith(
+        expect.any(Array),
+        expect.objectContaining({
+          signalCliUrl: 'http://localhost:8080',
+          botPhoneNumber: '+61000',
+          groupId: 'g1',
+          sender: '+61400111222',
+        }),
+      );
     });
 
     it('should resolve sender IDs to display names in history using dossier data', async () => {
       const mockHistory: Message[] = [
         { id: 1, groupId: 'g1', sender: '+61400000001', content: 'Previous message', timestamp: 500, isBot: false },
-        { id: 2, groupId: 'g1', sender: '+61400000002', content: 'Another message', timestamp: 600, isBot: false },
       ];
       mockStorage.getRecentMessages = vi.fn().mockReturnValue(mockHistory);
       mockStorage.getDossiersByGroup = vi.fn().mockReturnValue([
@@ -335,725 +536,95 @@ describe('MessageHandler', () => {
           createdAt: 1000,
           updatedAt: 2000,
         },
-        {
-          id: 2,
-          groupId: 'g1',
-          personId: '+61400000002',
-          displayName: 'Bob',
-          notes: '',
-          createdAt: 1000,
-          updatedAt: 2000,
-        },
       ]);
 
-      const handler = new MessageHandler(['@bot'], {
-        storage: mockStorage,
-        llmClient: mockLLM,
-        signalClient: mockSignal,
-      });
+      const handler = new MessageHandler(
+        {
+          storage: mockStorage,
+          llmClient: mockLLM,
+          signalClient: mockSignal,
+          appConfig: makeAppConfig(),
+        },
+        { mentionTriggers: ['@bot'] },
+      );
 
-      await handler.handleMessage('g1', '+61400000001', '@bot hello', 1000);
+      await handler.processRequest(makeSingleItem());
 
       const callArgs = (mockLLM.generateResponse as ReturnType<typeof vi.fn>).mock.calls[0];
       const messages = callArgs[0];
-      const aliceMsg = messages.find((m: { role: string; content: string }) => m.content.includes('Previous message'));
-      const bobMsg = messages.find((m: { role: string; content: string }) => m.content.includes('Another message'));
+      const aliceMsg = messages.find(
+        (m: { role: string; content: string }) => m.role === 'user' && m.content.includes('Previous message'),
+      );
       expect(aliceMsg.content).toContain('Alice: Previous message');
       expect(aliceMsg.content).not.toContain('+61400000001');
-      expect(bobMsg.content).toContain('Bob: Another message');
-      expect(bobMsg.content).not.toContain('+61400000002');
     });
+  });
 
-    it('should resolve Current requester to display name using dossier data', async () => {
-      mockStorage.getDossiersByGroup = vi.fn().mockReturnValue([
+  describe('runMaintenance', () => {
+    it('should call trimMessages for all groups from getDistinctGroupIds', () => {
+      mockStorage.getDistinctGroupIds = vi.fn().mockReturnValue(['g1', 'g2']);
+
+      const handler = new MessageHandler(
         {
-          id: 1,
-          groupId: 'g1',
-          personId: '+61400000001',
-          displayName: 'Alice',
-          notes: '',
-          createdAt: 1000,
-          updatedAt: 2000,
+          storage: mockStorage,
+          llmClient: mockLLM,
+          signalClient: mockSignal,
+          appConfig: makeAppConfig(),
         },
-      ]);
-
-      const handler = new MessageHandler(['@bot'], {
-        storage: mockStorage,
-        llmClient: mockLLM,
-        signalClient: mockSignal,
-      });
-
-      await handler.handleMessage('g1', '+61400000001', '@bot hello', 1000);
-
-      const callArgs = (mockLLM.generateResponse as ReturnType<typeof vi.fn>).mock.calls[0];
-      const messages = callArgs[0];
-      const systemMsg = messages.find((m: { role: string }) => m.role === 'system');
-      expect(systemMsg.content).toContain('Current requester: Alice (+61400000001)');
-    });
-
-    it('should not include dossier section when no dossiers exist', async () => {
-      mockStorage.getDossiersByGroup = vi.fn().mockReturnValue([]);
-
-      const handler = new MessageHandler(['@bot'], {
-        storage: mockStorage,
-        llmClient: mockLLM,
-        signalClient: mockSignal,
-      });
-
-      await handler.handleMessage('g1', 'Alice', '@bot hello', 1000);
-
-      const callArgs = (mockLLM.generateResponse as ReturnType<typeof vi.fn>).mock.calls[0];
-      const messages = callArgs[0];
-      const systemMsg = messages.find((m: { role: string }) => m.role === 'system');
-      expect(systemMsg.content).not.toContain('## People in this group');
-    });
-
-    it('should ignore duplicate messages with same groupId/sender/timestamp', async () => {
-      const handler = new MessageHandler(['@bot'], {
-        storage: mockStorage,
-        llmClient: mockLLM,
-        signalClient: mockSignal,
-      });
-
-      await handler.handleMessage('g1', 'Alice', '@bot hello', 1000);
-      await handler.handleMessage('g1', 'Alice', '@bot hello', 1000);
-
-      // LLM should only be called once
-      expect(mockLLM.generateResponse).toHaveBeenCalledTimes(1);
-    });
-
-    it('should process different messages normally', async () => {
-      const handler = new MessageHandler(['@bot'], {
-        storage: mockStorage,
-        llmClient: mockLLM,
-        signalClient: mockSignal,
-      });
-
-      await handler.handleMessage('g1', 'Alice', '@bot hello', 1000);
-      await handler.handleMessage('g1', 'Alice', '@bot hello', 2000);
-
-      expect(mockLLM.generateResponse).toHaveBeenCalledTimes(2);
-    });
-
-    it('should call signal client methods in correct order: sendTyping, response, stopTyping', async () => {
-      const callOrder: string[] = [];
-
-      mockSignal.sendMessage = vi.fn().mockImplementation(async (_groupId: string, _msg: string) => {
-        callOrder.push(`sendMessage:${_msg}`);
-      });
-      mockSignal.sendTyping = vi.fn().mockImplementation(async () => {
-        callOrder.push('sendTyping');
-      });
-      mockSignal.stopTyping = vi.fn().mockImplementation(async () => {
-        callOrder.push('stopTyping');
-      });
-
-      const handler = new MessageHandler(['@bot'], {
-        storage: mockStorage,
-        llmClient: mockLLM,
-        signalClient: mockSignal,
-      });
-
-      await handler.handleMessage('g1', 'Alice', '@bot hello', 1000);
-
-      // Filter out any interval-based sendTyping calls to test core ordering
-      const coreOrder = callOrder.filter(
-        (entry, i) => !(entry === 'sendTyping' && i > callOrder.indexOf('sendTyping')),
+        { messageRetentionCount: 500, mentionTriggers: ['@bot'] },
       );
-      expect(coreOrder).toEqual(['sendTyping', 'sendMessage:Test response', 'stopTyping']);
+
+      handler.runMaintenance();
+
+      expect(mockStorage.getDistinctGroupIds).toHaveBeenCalled();
+      expect(mockStorage.trimMessages).toHaveBeenCalledTimes(2);
+      expect(mockStorage.trimMessages).toHaveBeenCalledWith('g1', 500);
+      expect(mockStorage.trimMessages).toHaveBeenCalledWith('g2', 500);
     });
 
-    describe('MCP-based message sending', () => {
-      it('should not auto-send response when Claude sent messages via MCP', async () => {
-        const mcpLLM: LLMClient = {
-          generateResponse: vi.fn().mockResolvedValue({
-            content: 'Final answer',
-            tokensUsed: 10,
-            sentViaMcp: true,
-            mcpMessages: ['Looking into it...', 'Final answer'],
-          }),
-        };
-        const handler = new MessageHandler(['@bot'], {
-          storage: mockStorage,
-          llmClient: mcpLLM,
-          signalClient: mockSignal,
-          appConfig: makeAppConfig({ botPhoneNumber: '+61000', signalCliUrl: 'http://localhost:8080' }),
-        });
+    it('should call trimAttachments with correct cutoff', () => {
+      const mockNow = 1700000000000;
+      vi.spyOn(Date, 'now').mockReturnValue(mockNow);
 
-        await handler.handleMessage('g1', '+61111', '@bot test', Date.now());
-
-        // Signal client sendMessage should NOT be called — Claude handled it via MCP
-        expect(mockSignal.sendMessage).not.toHaveBeenCalled();
-      });
-
-      it('should auto-send response as fallback when Claude did not use MCP', async () => {
-        const plainLLM: LLMClient = {
-          generateResponse: vi.fn().mockResolvedValue({
-            content: 'Simple reply',
-            tokensUsed: 10,
-            sentViaMcp: false,
-            mcpMessages: [],
-          }),
-        };
-        const handler = new MessageHandler(['@bot'], {
-          storage: mockStorage,
-          llmClient: plainLLM,
-          signalClient: mockSignal,
-          appConfig: makeAppConfig({ botPhoneNumber: '+61000', signalCliUrl: 'http://localhost:8080' }),
-        });
-
-        await handler.handleMessage('g1', '+61111', '@bot test', Date.now());
-
-        // Fallback: bot sends the response
-        expect(mockSignal.sendMessage).toHaveBeenCalledWith('g1', 'Simple reply');
-      });
-
-      it('should store each MCP-sent message in the database', async () => {
-        const mcpLLM: LLMClient = {
-          generateResponse: vi.fn().mockResolvedValue({
-            content: 'Final',
-            tokensUsed: 10,
-            sentViaMcp: true,
-            mcpMessages: ['Ack message', 'Final response'],
-          }),
-        };
-        const handler = new MessageHandler(['@bot'], {
-          storage: mockStorage,
-          llmClient: mcpLLM,
-          signalClient: mockSignal,
-          appConfig: makeAppConfig({ botPhoneNumber: '+61000', signalCliUrl: 'http://localhost:8080' }),
-        });
-
-        await handler.handleMessage('g1', '+61111', '@bot test', Date.now());
-
-        // Each MCP message should be stored
-        const botMessages = mockStorage.addMessage.mock.calls.filter((call: any[]) => call[0].isBot === true);
-        expect(botMessages).toHaveLength(2);
-        expect(botMessages[0][0].content).toBe('Ack message');
-        expect(botMessages[1][0].content).toBe('Final response');
-      });
-
-      it('should pass signalCliUrl and botPhoneNumber to LLM context', async () => {
-        const handler = new MessageHandler(['@bot'], {
+      const handler = new MessageHandler(
+        {
           storage: mockStorage,
           llmClient: mockLLM,
           signalClient: mockSignal,
-          appConfig: makeAppConfig({ botPhoneNumber: '+61000', signalCliUrl: 'http://localhost:8080' }),
-        });
+          appConfig: makeAppConfig(),
+        },
+        { attachmentRetentionDays: 14, mentionTriggers: ['@bot'] },
+      );
 
-        await handler.handleMessage('g1', '+61111', '@bot hello', Date.now());
+      handler.runMaintenance();
 
-        expect(mockLLM.generateResponse).toHaveBeenCalledWith(
-          expect.any(Array),
-          expect.objectContaining({
-            signalCliUrl: 'http://localhost:8080',
-            botPhoneNumber: '+61000',
-          }),
-        );
-      });
+      const expectedCutoff = mockNow - 14 * 24 * 60 * 60 * 1000;
+      expect(mockStorage.trimAttachments).toHaveBeenCalledTimes(1);
+      expect(mockStorage.trimAttachments).toHaveBeenCalledWith(expectedCutoff);
+
+      vi.restoreAllMocks();
     });
 
-    describe('voice attachment handling', () => {
-      it('should include voice attachment info in query when present', async () => {
-        const handler = new MessageHandler(['@bot'], {
+    it('should handle trimMessages errors gracefully', async () => {
+      const { logger } = await import('../src/logger');
+      mockStorage.getDistinctGroupIds = vi.fn().mockReturnValue(['g1']);
+      mockStorage.trimMessages = vi.fn().mockImplementation(() => {
+        throw new Error('trim failed');
+      });
+
+      const handler = new MessageHandler(
+        {
           storage: mockStorage,
           llmClient: mockLLM,
           signalClient: mockSignal,
-        });
+          appConfig: makeAppConfig(),
+        },
+        { mentionTriggers: ['@bot'] },
+      );
 
-        await handler.handleMessage('g1', 'Alice', '@bot', 1000, [
-          { id: 'voice-abc', contentType: 'audio/aac', size: 5000, filename: null },
-        ]);
+      handler.runMaintenance();
 
-        const callArgs = (mockLLM.generateResponse as ReturnType<typeof vi.fn>).mock.calls[0];
-        const messages = callArgs[0];
-        const lastUserMsg = messages[messages.length - 1];
-        expect(lastUserMsg.content).toContain('[Voice message attached:');
-        expect(lastUserMsg.content).toContain('voice-abc');
-      });
-
-      it('should treat voice-only message with trigger as mentioned', async () => {
-        const handler = new MessageHandler(['@bot'], {
-          storage: mockStorage,
-          llmClient: mockLLM,
-          signalClient: mockSignal,
-        });
-
-        await handler.handleMessage('g1', 'Alice', '@bot', 1000, [
-          { id: 'voice-xyz', contentType: 'audio/aac', size: 3000, filename: null },
-        ]);
-
-        expect(mockLLM.generateResponse).toHaveBeenCalled();
-      });
-
-      it('should not include image attachments as voice attachments', async () => {
-        const handler = new MessageHandler(['@bot'], {
-          storage: mockStorage,
-          llmClient: mockLLM,
-          signalClient: mockSignal,
-        });
-
-        await handler.handleMessage('g1', 'Alice', '@bot check this image', 1000, [
-          { id: 'image-abc', contentType: 'image/jpeg', size: 50000, filename: 'photo.jpg' },
-        ]);
-
-        const callArgs = (mockLLM.generateResponse as ReturnType<typeof vi.fn>).mock.calls[0];
-        const messages = callArgs[0];
-        const lastUserMsg = messages[messages.length - 1];
-        expect(lastUserMsg.content).not.toContain('[Voice message attached:');
-      });
-    });
-
-    describe('voice attachments from history', () => {
-      it('should include voice attachment paths from history messages in context', async () => {
-        const mockHistory: Message[] = [
-          {
-            id: 1,
-            groupId: 'g1',
-            sender: 'Alice',
-            content: '',
-            timestamp: 500,
-            isBot: false,
-            attachments: [{ id: 'voice-abc', contentType: 'audio/aac', size: 5000, filename: null }],
-          },
-        ];
-        mockStorage.getRecentMessages = vi.fn().mockReturnValue(mockHistory);
-
-        const handler = new MessageHandler(['@bot'], {
-          storage: mockStorage,
-          llmClient: mockLLM,
-          signalClient: mockSignal,
-          appConfig: makeAppConfig({ attachmentsDir: '/data/attachments' }),
-        });
-
-        await handler.handleMessage('g1', 'Bob', '@bot transcribe that', 1000);
-
-        const callArgs = (mockLLM.generateResponse as ReturnType<typeof vi.fn>).mock.calls[0];
-        const messages = callArgs[0];
-        // History message should include voice attachment path
-        const historyMsg = messages.find(
-          (m: { role: string; content: string }) => m.role === 'user' && m.content.includes('Alice'),
-        );
-        expect(historyMsg.content).toContain('[Voice message attached: /data/attachments/voice-abc]');
-      });
-
-      it('should not include non-audio attachments from history in context', async () => {
-        const mockHistory: Message[] = [
-          {
-            id: 1,
-            groupId: 'g1',
-            sender: 'Alice',
-            content: 'check this',
-            timestamp: 500,
-            isBot: false,
-            attachments: [{ id: 'img-123', contentType: 'image/jpeg', size: 50000, filename: 'photo.jpg' }],
-          },
-        ];
-        mockStorage.getRecentMessages = vi.fn().mockReturnValue(mockHistory);
-
-        const handler = new MessageHandler(['@bot'], {
-          storage: mockStorage,
-          llmClient: mockLLM,
-          signalClient: mockSignal,
-        });
-
-        await handler.handleMessage('g1', 'Bob', '@bot what was that', 1000);
-
-        const callArgs = (mockLLM.generateResponse as ReturnType<typeof vi.fn>).mock.calls[0];
-        const messages = callArgs[0];
-        const historyMsg = messages.find(
-          (m: { role: string; content: string }) => m.role === 'user' && m.content.includes('Alice'),
-        );
-        expect(historyMsg.content).not.toContain('[Voice message attached:');
-      });
-
-      it('should store attachments when saving incoming message', async () => {
-        const handler = new MessageHandler(['@bot'], {
-          storage: mockStorage,
-          llmClient: mockLLM,
-          signalClient: mockSignal,
-        });
-
-        const attachments = [{ id: 'voice-xyz', contentType: 'audio/aac', size: 3000, filename: null }];
-        await handler.handleMessage('g1', 'Alice', 'hello', 1000, attachments);
-
-        expect(mockStorage.addMessage).toHaveBeenCalledWith(
-          expect.objectContaining({
-            attachments,
-          }),
-        );
-      });
-
-      it('should store message but not invoke Claude when storeOnly is true', async () => {
-        const handler = new MessageHandler(['@bot'], {
-          storage: mockStorage,
-          llmClient: mockLLM,
-          signalClient: mockSignal,
-        });
-
-        await handler.handleMessage('g1', 'Alice', '@bot hello', 1000, [], { storeOnly: true });
-
-        expect(mockStorage.addMessage).toHaveBeenCalledWith(
-          expect.objectContaining({
-            groupId: 'g1',
-            sender: 'Alice',
-            content: '@bot hello',
-          }),
-        );
-        expect(mockLLM.generateResponse).not.toHaveBeenCalled();
-        expect(mockSignal.sendMessage).not.toHaveBeenCalled();
-        expect(mockSignal.sendTyping).not.toHaveBeenCalled();
-      });
-    });
-
-    describe('image attachment handling', () => {
-      it('should include image attachment info in query when present', async () => {
-        const handler = new MessageHandler(['@bot'], {
-          storage: mockStorage,
-          llmClient: mockLLM,
-          signalClient: mockSignal,
-          appConfig: makeAppConfig({ attachmentsDir: '/data/attachments' }),
-        });
-
-        await handler.handleMessage('g1', 'Alice', '@bot what is this', 1000, [
-          { id: 'img-abc', contentType: 'image/jpeg', size: 50000, filename: 'photo.jpg' },
-        ]);
-
-        const callArgs = (mockLLM.generateResponse as ReturnType<typeof vi.fn>).mock.calls[0];
-        const messages = callArgs[0];
-        const lastUserMsg = messages[messages.length - 1];
-        expect(lastUserMsg.content).toContain('[Image: attachment://img-abc]');
-      });
-
-      it('should include image attachment paths from history messages in context', async () => {
-        const mockHistory: Message[] = [
-          {
-            id: 1,
-            groupId: 'g1',
-            sender: 'Alice',
-            content: 'check this out',
-            timestamp: 500,
-            isBot: false,
-            attachments: [{ id: 'img-123', contentType: 'image/jpeg', size: 50000, filename: 'photo.jpg' }],
-          },
-        ];
-        mockStorage.getRecentMessages = vi.fn().mockReturnValue(mockHistory);
-
-        const handler = new MessageHandler(['@bot'], {
-          storage: mockStorage,
-          llmClient: mockLLM,
-          signalClient: mockSignal,
-          appConfig: makeAppConfig({ attachmentsDir: '/data/attachments' }),
-        });
-
-        await handler.handleMessage('g1', 'Bob', '@bot what was that image', 1000);
-
-        const callArgs = (mockLLM.generateResponse as ReturnType<typeof vi.fn>).mock.calls[0];
-        const messages = callArgs[0];
-        const historyMsg = messages.find(
-          (m: { role: string; content: string }) => m.role === 'user' && m.content.includes('Alice'),
-        );
-        expect(historyMsg.content).toContain('[Image: attachment://img-123]');
-      });
-
-      it('should not include non-image non-audio attachments', async () => {
-        const handler = new MessageHandler(['@bot'], {
-          storage: mockStorage,
-          llmClient: mockLLM,
-          signalClient: mockSignal,
-        });
-
-        await handler.handleMessage('g1', 'Alice', '@bot check this', 1000, [
-          { id: 'doc-abc', contentType: 'application/pdf', size: 10000, filename: 'doc.pdf' },
-        ]);
-
-        const callArgs = (mockLLM.generateResponse as ReturnType<typeof vi.fn>).mock.calls[0];
-        const messages = callArgs[0];
-        const lastUserMsg = messages[messages.length - 1];
-        expect(lastUserMsg.content).not.toContain('[Image:');
-        expect(lastUserMsg.content).not.toContain('[Voice message attached:');
-      });
-    });
-
-    describe('typing indicators', () => {
-      it('should start typing indicator when mentioned', async () => {
-        const handler = new MessageHandler(['@bot'], {
-          storage: mockStorage,
-          llmClient: mockLLM,
-          signalClient: mockSignal,
-        });
-
-        await handler.handleMessage('g1', 'Alice', '@bot hello', 1000);
-
-        expect(mockSignal.sendTyping).toHaveBeenCalledWith('g1');
-      });
-
-      it('should stop typing indicator after sending response', async () => {
-        const handler = new MessageHandler(['@bot'], {
-          storage: mockStorage,
-          llmClient: mockLLM,
-          signalClient: mockSignal,
-        });
-
-        await handler.handleMessage('g1', 'Alice', '@bot hello', 1000);
-
-        expect(mockSignal.stopTyping).toHaveBeenCalledWith('g1');
-      });
-
-      it('should stop typing indicator even when LLM call fails', async () => {
-        mockLLM.generateResponse = vi.fn().mockRejectedValue(new Error('LLM API error'));
-
-        const handler = new MessageHandler(['@bot'], {
-          storage: mockStorage,
-          llmClient: mockLLM,
-          signalClient: mockSignal,
-        });
-
-        await handler.handleMessage('g1', 'Alice', '@bot hello', 1000);
-
-        expect(mockSignal.stopTyping).toHaveBeenCalledWith('g1');
-      });
-
-      it('should not start typing indicator when not mentioned', async () => {
-        const handler = new MessageHandler(['@bot'], {
-          storage: mockStorage,
-          llmClient: mockLLM,
-          signalClient: mockSignal,
-        });
-
-        await handler.handleMessage('g1', 'Alice', 'Just saying hello', 1000);
-
-        expect(mockSignal.sendTyping).not.toHaveBeenCalled();
-        expect(mockSignal.stopTyping).not.toHaveBeenCalled();
-      });
-
-      it('should still call LLM when typing indicator start fails', async () => {
-        mockSignal.sendTyping = vi.fn().mockRejectedValue(new Error('Typing failed'));
-
-        const handler = new MessageHandler(['@bot'], {
-          storage: mockStorage,
-          llmClient: mockLLM,
-          signalClient: mockSignal,
-        });
-
-        await handler.handleMessage('g1', 'Alice', '@bot hello', 1000);
-
-        expect(mockLLM.generateResponse).toHaveBeenCalled();
-        expect(mockSignal.sendMessage).toHaveBeenCalledWith('g1', 'Test response');
-      });
-
-      it('should not throw when typing indicator stop fails', async () => {
-        mockSignal.stopTyping = vi.fn().mockRejectedValue(new Error('Stop typing failed'));
-
-        const handler = new MessageHandler(['@bot'], {
-          storage: mockStorage,
-          llmClient: mockLLM,
-          signalClient: mockSignal,
-        });
-
-        await handler.handleMessage('g1', 'Alice', '@bot hello', 1000);
-
-        expect(mockSignal.sendMessage).toHaveBeenCalledWith('g1', 'Test response');
-      });
-
-      it('should refresh typing indicator during long-running LLM calls', async () => {
-        vi.useFakeTimers();
-
-        // Simulate a 25-second LLM call
-        mockLLM.generateResponse = vi.fn().mockImplementation(
-          () =>
-            new Promise(resolve => {
-              setTimeout(
-                () => resolve({ content: 'Slow response', tokensUsed: 500, sentViaMcp: false, mcpMessages: [] }),
-                25_000,
-              );
-            }),
-        );
-
-        const handler = new MessageHandler(['@bot'], {
-          storage: mockStorage,
-          llmClient: mockLLM,
-          signalClient: mockSignal,
-        });
-
-        const promise = handler.handleMessage('g1', 'Alice', '@bot hello', 1000);
-
-        // Initial sendTyping call
-        await vi.advanceTimersByTimeAsync(0);
-        expect(mockSignal.sendTyping).toHaveBeenCalledTimes(1);
-
-        // After 10s, interval fires
-        await vi.advanceTimersByTimeAsync(10_000);
-        expect(mockSignal.sendTyping).toHaveBeenCalledTimes(2);
-
-        // After 20s, interval fires again
-        await vi.advanceTimersByTimeAsync(10_000);
-        expect(mockSignal.sendTyping).toHaveBeenCalledTimes(3);
-
-        // Let the LLM resolve at 25s
-        await vi.advanceTimersByTimeAsync(5_000);
-        await promise;
-
-        // No more calls after resolution
-        expect(mockSignal.stopTyping).toHaveBeenCalledWith('g1');
-
-        vi.useRealTimers();
-      });
-
-      it('should clear typing interval even when LLM errors', async () => {
-        vi.useFakeTimers();
-
-        mockLLM.generateResponse = vi.fn().mockImplementation(
-          () =>
-            new Promise((_, reject) => {
-              setTimeout(() => reject(new Error('LLM failed')), 15_000);
-            }),
-        );
-        const handler = new MessageHandler(['@bot'], {
-          storage: mockStorage,
-          llmClient: mockLLM,
-          signalClient: mockSignal,
-        });
-
-        const promise = handler.handleMessage('g1', 'Alice', '@bot hello', 1000);
-
-        // Initial sendTyping + one interval tick at 10s
-        await vi.advanceTimersByTimeAsync(10_000);
-        expect(mockSignal.sendTyping).toHaveBeenCalledTimes(2);
-
-        // Let the LLM reject at 15s
-        await vi.advanceTimersByTimeAsync(5_000);
-        await promise;
-
-        // Reset the mock call count to verify no more interval calls
-        mockSignal.sendTyping.mockClear();
-
-        // Advance well past the next interval tick
-        await vi.advanceTimersByTimeAsync(20_000);
-        expect(mockSignal.sendTyping).not.toHaveBeenCalled();
-
-        expect(mockSignal.stopTyping).toHaveBeenCalledWith('g1');
-
-        vi.useRealTimers();
-      });
-    });
-
-    describe('image attachment ingestion', () => {
-      it('should save image attachment data to storage on receive', async () => {
-        const fakeBuffer = Buffer.from('fake image');
-        mockSignal.readAttachmentFile = vi.fn().mockReturnValue({ data: fakeBuffer });
-
-        const handler = new MessageHandler(['@bot'], {
-          storage: mockStorage,
-          llmClient: mockLLM,
-          signalClient: mockSignal,
-          appConfig: makeAppConfig({ attachmentsDir: '/data/attachments' }),
-        });
-
-        await handler.handleMessage('g1', 'Alice', '@bot check this', 1000, [
-          { id: 'img-abc', contentType: 'image/jpeg', size: 50000, filename: 'photo.jpg' },
-        ]);
-
-        expect(mockSignal.readAttachmentFile).toHaveBeenCalledWith('/data/attachments', 'img-abc');
-        expect(mockStorage.saveAttachment).toHaveBeenCalledWith(
-          expect.objectContaining({
-            id: 'img-abc',
-            groupId: 'g1',
-            contentType: 'image/jpeg',
-            data: fakeBuffer,
-          }),
-        );
-      });
-
-      it('should not crash when attachment file is missing', async () => {
-        mockSignal.readAttachmentFile = vi.fn().mockReturnValue(null);
-
-        const handler = new MessageHandler(['@bot'], {
-          storage: mockStorage,
-          llmClient: mockLLM,
-          signalClient: mockSignal,
-        });
-
-        await handler.handleMessage('g1', 'Alice', '@bot check this', 1000, [
-          { id: 'img-missing', contentType: 'image/jpeg', size: 50000, filename: null },
-        ]);
-
-        expect(mockStorage.saveAttachment).not.toHaveBeenCalled();
-      });
-
-      it('should skip non-image attachments during ingestion', async () => {
-        mockSignal.readAttachmentFile = vi.fn();
-
-        const handler = new MessageHandler(['@bot'], {
-          storage: mockStorage,
-          llmClient: mockLLM,
-          signalClient: mockSignal,
-        });
-
-        await handler.handleMessage('g1', 'Alice', '@bot', 1000, [
-          { id: 'voice-abc', contentType: 'audio/aac', size: 5000, filename: null },
-        ]);
-
-        expect(mockSignal.readAttachmentFile).not.toHaveBeenCalled();
-        expect(mockStorage.saveAttachment).not.toHaveBeenCalled();
-      });
-    });
-
-    describe('persona integration', () => {
-      it('should use active persona description in system prompt', async () => {
-        mockStorage.getActivePersonaForGroup = vi.fn().mockReturnValue({
-          id: 2,
-          name: 'Pirate',
-          description: 'Ye be a pirate captain! Speak in pirate dialect.',
-          tags: 'fun,pirate',
-          isDefault: false,
-          createdAt: 1000,
-          updatedAt: 1000,
-        });
-
-        const handler = new MessageHandler(
-          ['@bot'],
-          { storage: mockStorage, llmClient: mockLLM, signalClient: mockSignal },
-          { systemPrompt: 'Default assistant prompt.' },
-        );
-
-        await handler.handleMessage('g1', 'Alice', '@bot hello', 1000);
-
-        const callArgs = (mockLLM.generateResponse as ReturnType<typeof vi.fn>).mock.calls[0];
-        const messages = callArgs[0];
-        const systemMsg = messages.find((m: { role: string }) => m.role === 'system');
-        expect(systemMsg.content).toContain('Ye be a pirate captain!');
-        expect(systemMsg.content).not.toContain('Default assistant prompt.');
-      });
-
-      it('should fall back to system prompt when no active persona', async () => {
-        mockStorage.getActivePersonaForGroup = vi.fn().mockReturnValue(null);
-
-        const handler = new MessageHandler(
-          ['@bot'],
-          { storage: mockStorage, llmClient: mockLLM, signalClient: mockSignal },
-          { systemPrompt: 'Default assistant prompt.' },
-        );
-
-        await handler.handleMessage('g1', 'Alice', '@bot hello', 1000);
-
-        const callArgs = (mockLLM.generateResponse as ReturnType<typeof vi.fn>).mock.calls[0];
-        const messages = callArgs[0];
-        const systemMsg = messages.find((m: { role: string }) => m.role === 'system');
-        expect(systemMsg.content).toContain('Default assistant prompt.');
-      });
-
-      it('should call getActivePersonaForGroup with correct groupId', async () => {
-        const handler = new MessageHandler(['@bot'], {
-          storage: mockStorage,
-          llmClient: mockLLM,
-          signalClient: mockSignal,
-        });
-
-        await handler.handleMessage('test-group-123', 'Alice', '@bot hello', 1000);
-
-        expect(mockStorage.getActivePersonaForGroup).toHaveBeenCalledWith('test-group-123');
-      });
+      expect(logger.error).toHaveBeenCalledWith(expect.stringContaining('Failed to trim messages'), expect.any(Error));
     });
   });
 });

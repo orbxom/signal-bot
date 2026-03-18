@@ -2,13 +2,9 @@ import { ContextBuilder } from './contextBuilder';
 import { logger } from './logger';
 import { estimateTokens } from './mcp/result';
 import { MentionDetector } from './mentionDetector';
-import { MessageDeduplicator } from './messageDeduplicator';
 import type { SignalClient } from './signalClient';
 import type { Storage } from './storage';
-import type { AppConfig, ExtractedMessage, LLMClient, Message, SignalAttachment } from './types';
-import { TypingIndicatorManager } from './typingIndicator';
-
-export const REALTIME_THRESHOLD_MS = 5000;
+import type { AppConfig, LLMClient, Message, QueueItem } from './types';
 
 export interface MessageHandlerOptions {
   systemPrompt?: string;
@@ -17,13 +13,12 @@ export interface MessageHandlerOptions {
   messageRetentionCount?: number;
   attachmentRetentionDays?: number;
   collaborativeTestingMode?: boolean;
+  mentionTriggers?: string[];
 }
 
 export class MessageHandler {
   private mentionDetector: MentionDetector;
   private contextBuilder: ContextBuilder;
-  private deduplicator: MessageDeduplicator;
-  private typingManager: TypingIndicatorManager;
   private appConfig: AppConfig;
   private storage: Storage;
   private llmClient: LLMClient;
@@ -33,7 +28,6 @@ export class MessageHandler {
   private readonly attachmentRetentionDays: number;
 
   constructor(
-    mentionTriggers: string[],
     deps: {
       storage: Storage;
       llmClient: LLMClient;
@@ -61,7 +55,7 @@ export class MessageHandler {
     this.messageRetentionCount = options?.messageRetentionCount || 1000;
     this.attachmentRetentionDays = options?.attachmentRetentionDays || 30;
 
-    this.mentionDetector = new MentionDetector(mentionTriggers);
+    this.mentionDetector = new MentionDetector(options?.mentionTriggers || []);
     this.contextBuilder = new ContextBuilder({
       systemPrompt: options?.systemPrompt || '',
       timezone: this.appConfig.timezone,
@@ -69,8 +63,6 @@ export class MessageHandler {
       attachmentsDir: this.appConfig.attachmentsDir,
       collaborativeTestingMode: options?.collaborativeTestingMode,
     });
-    this.deduplicator = new MessageDeduplicator();
-    this.typingManager = new TypingIndicatorManager(deps.signalClient);
   }
 
   runMaintenance(): void {
@@ -90,191 +82,122 @@ export class MessageHandler {
     }
   }
 
-  async handleMessage(
-    groupId: string,
-    sender: string,
-    content: string,
-    timestamp: number,
-    attachments: SignalAttachment[] = [],
-    options?: { storeOnly?: boolean },
-  ): Promise<void> {
-    // Skip messages from the bot itself
-    if (this.appConfig.botPhoneNumber && sender === this.appConfig.botPhoneNumber) {
-      logger.compact('SKIP', `(bot-self) [${groupId}]`);
-      return;
-    }
+  async processRequest(item: QueueItem): Promise<void> {
+    // Extract fields from the queue item
+    const isCoalesced = item.kind === 'coalesced';
+    const request = isCoalesced ? item.requests[item.requests.length - 1] : item.request;
+    const { groupId, sender, content, attachments } = request;
+    const missedFraming = isCoalesced ? item.missedFraming : undefined;
 
-    // Skip duplicate messages
-    if (this.deduplicator.isDuplicate(groupId, sender, timestamp)) {
-      logger.compact('SKIP', `(dedup) [${groupId}] ${sender}`);
-      return;
-    }
+    // Fetch fresh history and filter out trigger message(s)
+    const rawHistory = this.storage.getRecentMessages(groupId, this.contextWindowSize);
+    const history = this.filterTriggerMessage(rawHistory, item);
 
-    // Check for mention before storing so history fetch doesn't include current message
-    const mentioned = this.mentionDetector.isMentioned(content);
+    // Fit history to token budget
+    const fitted = this.contextBuilder.fitToTokenBudget(history);
 
-    // Get conversation history before storing current message (avoids duplication in context)
-    let history: Message[] = [];
-    let historyFormatted: string[] | undefined;
-    if (mentioned) {
-      const batch = this.storage.getRecentMessages(groupId, this.contextWindowSize);
-      const fitted = this.contextBuilder.fitToTokenBudget(batch);
-      history = fitted.messages;
-      historyFormatted = fitted.formatted;
-    }
-
-    // Store incoming message (including any attachments for later context)
-    this.storage.addMessage({
-      groupId,
-      sender,
-      content,
-      timestamp,
-      isBot: false,
-      attachments: attachments.length > 0 ? attachments : undefined,
-    });
-
-    if (!options?.storeOnly) {
-      this.ingestImageAttachments(groupId, sender, attachments, timestamp);
-    }
-
-    if (options?.storeOnly || !mentioned) {
-      return;
-    }
-
-    logger.group('MESSAGE RECEIVED');
+    logger.group('PROCESS REQUEST');
     logger.step(`group: ${groupId}  sender: ${sender}`);
     logger.step(`content: "${content.substring(0, 100)}"`);
-    logger.step(`history: ${history.length} messages fetched`);
-
-    await this.typingManager.withTyping(groupId, () =>
-      this.processLlmRequest(groupId, sender, content, attachments, history, historyFormatted),
+    logger.step(
+      `history: ${fitted.messages.length} messages (${history.length} fetched, filtered from ${rawHistory.length})`,
     );
-  }
 
-  async handleMessageBatch(
-    groupId: string,
-    messages: ExtractedMessage[],
-    options?: { storeOnly?: boolean },
-  ): Promise<void> {
-    const validMessages: ExtractedMessage[] = [];
-    for (const msg of messages) {
-      if (this.appConfig.botPhoneNumber && msg.sender === this.appConfig.botPhoneNumber) {
-        continue;
-      }
-      if (this.deduplicator.isDuplicate(groupId, msg.sender, msg.timestamp)) {
-        continue;
-      }
-      validMessages.push(msg);
-    }
+    try {
+      // Extract query
+      const query = this.mentionDetector.extractQuery(content);
+      logger.step(`query: "${query.substring(0, 80)}"`);
 
-    // Check if bot is disabled for this group — still store messages but don't process
-    if (!this.storage.groupSettings.isEnabled(groupId)) {
-      for (const msg of validMessages) {
+      // Append voice and image attachment info to query
+      const voiceLines = attachments
+        .filter(a => a.contentType.startsWith('audio/'))
+        .map(a => this.contextBuilder.formatVoiceAttachment(a.id));
+      const imageLines = attachments
+        .filter(a => a.contentType.startsWith('image/'))
+        .map(a => this.contextBuilder.formatImageAttachment(a.id));
+      const allAttachmentLines = [...voiceLines, ...imageLines];
+      if (voiceLines.length > 0 || imageLines.length > 0) {
+        logger.step(`attachments: ${voiceLines.length} voice, ${imageLines.length} image`);
+      }
+      let queryWithAttachments = query;
+      if (allAttachmentLines.length > 0) {
+        const attachmentBlock = allAttachmentLines.join('\n');
+        queryWithAttachments = query ? `${query}\n\n${attachmentBlock}` : attachmentBlock;
+      }
+
+      if (missedFraming) {
+        queryWithAttachments = missedFraming + (queryWithAttachments ? `\n\n${queryWithAttachments}` : '');
+      }
+
+      // Build additional system context (dossiers + memories + skills + persona)
+      const { additionalContext, nameMap, personaPrompt } = this.assembleAdditionalContext(groupId);
+
+      // Build context
+      const messages = this.contextBuilder.buildContext({
+        history: fitted.messages,
+        query: queryWithAttachments,
+        groupId,
+        sender,
+        dossierContext: additionalContext,
+        personaDescription: personaPrompt,
+        nameMap,
+        preFormatted: fitted.formatted,
+      });
+
+      logger.step(`context: ${nameMap.size} dossiers${personaPrompt ? ', with persona' : ''}`);
+
+      // Get LLM response
+      const startTime = Date.now();
+      const toolNotificationsEnabled = this.storage.groupSettings.getToolNotifications(groupId);
+      const response = await this.llmClient.generateResponse(messages, {
+        ...this.appConfig,
+        groupId,
+        sender,
+        toolNotificationsEnabled,
+      });
+
+      const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+      logger.step(`llm: response in ${elapsed}s (${response.tokensUsed} tokens)`);
+
+      const botSender = this.appConfig.botPhoneNumber || 'bot';
+      if (response.sentViaMcp) {
+        // Claude sent messages directly -- store each one
+        for (const mcpMsg of response.mcpMessages) {
+          this.storage.addMessage({
+            groupId,
+            sender: botSender,
+            content: mcpMsg,
+            timestamp: Date.now(),
+            isBot: true,
+          });
+        }
+        logger.step(`delivery: sent via MCP (${response.mcpMessages.length} message(s))`);
+      } else {
+        // Fallback: Claude didn't use the MCP tool, send result as before
+        await this.signalClient.sendMessage(groupId, response.content);
         this.storage.addMessage({
           groupId,
-          sender: msg.sender,
-          content: msg.content,
-          timestamp: msg.timestamp,
-          isBot: false,
-          attachments: msg.attachments.length > 0 ? msg.attachments : undefined,
+          sender: botSender,
+          content: response.content,
+          timestamp: Date.now(),
+          isBot: true,
         });
+        logger.step('delivery: sent via fallback');
       }
-      return;
-    }
 
-    // Resolve per-group triggers or fall back to global
-    const customTriggers = this.storage.groupSettings.getTriggers(groupId);
-    const detector = customTriggers ? new MentionDetector(customTriggers) : this.mentionDetector;
+      logger.groupEnd();
+    } catch (error) {
+      logger.error('Error handling message:', error);
+      logger.groupEnd();
 
-    const mentionMessages = validMessages.filter(msg => detector.isMentioned(msg.content));
-
-    let history: Message[] = [];
-    let historyFormatted: string[] | undefined;
-    if (mentionMessages.length > 0 && !options?.storeOnly) {
-      const batch = this.storage.getRecentMessages(groupId, this.contextWindowSize);
-      const fitted = this.contextBuilder.fitToTokenBudget(batch);
-      history = fitted.messages;
-      historyFormatted = fitted.formatted;
-    }
-
-    for (const msg of validMessages) {
-      this.storage.addMessage({
-        groupId,
-        sender: msg.sender,
-        content: msg.content,
-        timestamp: msg.timestamp,
-        isBot: false,
-        attachments: msg.attachments.length > 0 ? msg.attachments : undefined,
-      });
-    }
-
-    if (!options?.storeOnly) {
-      for (const msg of validMessages) {
-        this.ingestImageAttachments(groupId, msg.sender, msg.attachments, msg.timestamp);
+      // Try to send error message to group
+      try {
+        const errorMsg = 'Sorry, I encountered an error processing your request.';
+        await this.signalClient.sendMessage(groupId, errorMsg);
+      } catch (sendError) {
+        logger.error('Failed to send error message:', sendError);
       }
     }
-
-    if (options?.storeOnly || mentionMessages.length === 0) {
-      return;
-    }
-
-    // Classify mentions as missed vs real-time
-    const now = Date.now();
-    const missed = mentionMessages.filter(m => now - m.timestamp > REALTIME_THRESHOLD_MS);
-    const realtime = mentionMessages.filter(m => now - m.timestamp <= REALTIME_THRESHOLD_MS);
-
-    // Missed mentions: batch into a single LLM call if multiple, or process individually
-    if (missed.length > 1) {
-      const latest = missed[missed.length - 1];
-      await this.typingManager.withTyping(groupId, () =>
-        this.processLlmRequest(
-          groupId,
-          latest.sender,
-          latest.content,
-          latest.attachments,
-          history,
-          historyFormatted,
-          this.buildMissedMessageFraming(missed, now),
-        ),
-      );
-    } else if (missed.length === 1) {
-      const msg = missed[0];
-      await this.typingManager.withTyping(groupId, () =>
-        this.processLlmRequest(groupId, msg.sender, msg.content, msg.attachments, history, historyFormatted),
-      );
-    }
-
-    // Real-time mentions: process individually with fresh history each time
-    for (const msg of realtime) {
-      const freshBatch = this.storage.getRecentMessages(groupId, this.contextWindowSize);
-      const freshFitted = this.contextBuilder.fitToTokenBudget(freshBatch);
-      await this.typingManager.withTyping(groupId, () =>
-        this.processLlmRequest(
-          groupId,
-          msg.sender,
-          msg.content,
-          msg.attachments,
-          freshFitted.messages,
-          freshFitted.formatted,
-        ),
-      );
-    }
-  }
-
-  private buildMissedMessageFraming(missed: ExtractedMessage[], now: number): string {
-    const lines = missed.map(m => {
-      const agoSeconds = Math.round((now - m.timestamp) / 1000);
-      let agoStr: string;
-      if (agoSeconds < 60) {
-        agoStr = `${agoSeconds}s ago`;
-      } else if (agoSeconds < 3600) {
-        agoStr = `${Math.round(agoSeconds / 60)} min ago`;
-      } else {
-        agoStr = `${Math.round(agoSeconds / 3600)}h ago`;
-      }
-      return `- [${m.sender}] (${agoStr}): "${m.content}"`;
-    });
-    return `You were offline and missed the following messages:\n${lines.join('\n')}\n\nRespond to all of these in a single message.`;
   }
 
   /** Assemble additional context (dossiers, memories, skills, persona) for the LLM request. */
@@ -326,136 +249,13 @@ export class MessageHandler {
     };
   }
 
-  private ingestImageAttachments(
-    groupId: string,
-    sender: string,
-    attachments: SignalAttachment[],
-    timestamp: number,
-  ): void {
-    for (const att of attachments) {
-      if (att.contentType.startsWith('image/')) {
-        const file = this.signalClient.readAttachmentFile(this.appConfig.attachmentsDir, att.id);
-        if (!file) {
-          logger.debug(`Attachment file not found on disk: ${att.id}`);
-          continue;
-        }
-        this.storage.saveAttachment({
-          id: att.id,
-          groupId,
-          sender,
-          contentType: att.contentType,
-          size: att.size,
-          filename: att.filename,
-          data: file.data,
-          timestamp,
-        });
-      }
+  private filterTriggerMessage(history: Message[], item: QueueItem): Message[] {
+    if (item.kind === 'single') {
+      const { sender, timestamp } = item.request;
+      return history.filter(m => !(m.sender === sender && m.timestamp === timestamp));
     }
-  }
-
-  private async processLlmRequest(
-    groupId: string,
-    sender: string,
-    content: string,
-    attachments: SignalAttachment[],
-    history: Message[],
-    historyFormatted?: string[],
-    missedFraming?: string,
-  ): Promise<void> {
-    try {
-      // Extract query
-      const query = this.mentionDetector.extractQuery(content);
-      logger.step(`query: "${query.substring(0, 80)}"`);
-
-      // Append voice and image attachment info to query
-      const voiceLines = attachments
-        .filter(a => a.contentType.startsWith('audio/'))
-        .map(a => this.contextBuilder.formatVoiceAttachment(a.id));
-      const imageLines = attachments
-        .filter(a => a.contentType.startsWith('image/'))
-        .map(a => this.contextBuilder.formatImageAttachment(a.id));
-      const allAttachmentLines = [...voiceLines, ...imageLines];
-      if (voiceLines.length > 0 || imageLines.length > 0) {
-        logger.step(`attachments: ${voiceLines.length} voice, ${imageLines.length} image`);
-      }
-      let queryWithAttachments = query;
-      if (allAttachmentLines.length > 0) {
-        const attachmentBlock = allAttachmentLines.join('\n');
-        queryWithAttachments = query ? `${query}\n\n${attachmentBlock}` : attachmentBlock;
-      }
-
-      if (missedFraming) {
-        queryWithAttachments = missedFraming + (queryWithAttachments ? `\n\n${queryWithAttachments}` : '');
-      }
-
-      // Build additional system context (dossiers + memories + skills + persona)
-      const { additionalContext, nameMap, personaPrompt } = this.assembleAdditionalContext(groupId);
-
-      // Build context
-      const messages = this.contextBuilder.buildContext({
-        history,
-        query: queryWithAttachments,
-        groupId,
-        sender,
-        dossierContext: additionalContext,
-        personaDescription: personaPrompt,
-        nameMap,
-        preFormatted: historyFormatted,
-      });
-
-      logger.step(`context: ${nameMap.size} dossiers${personaPrompt ? ', with persona' : ''}`);
-
-      // Get LLM response
-      const startTime = Date.now();
-      const toolNotificationsEnabled = this.storage.groupSettings.getToolNotifications(groupId);
-      const response = await this.llmClient.generateResponse(messages, {
-        ...this.appConfig,
-        groupId,
-        sender,
-        toolNotificationsEnabled,
-      });
-
-      const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-      logger.step(`llm: response in ${elapsed}s (${response.tokensUsed} tokens)`);
-
-      const botSender = this.appConfig.botPhoneNumber || 'bot';
-      if (response.sentViaMcp) {
-        // Claude sent messages directly — store each one
-        for (const mcpMsg of response.mcpMessages) {
-          this.storage.addMessage({
-            groupId,
-            sender: botSender,
-            content: mcpMsg,
-            timestamp: Date.now(),
-            isBot: true,
-          });
-        }
-        logger.step(`delivery: sent via MCP (${response.mcpMessages.length} message(s))`);
-      } else {
-        // Fallback: Claude didn't use the MCP tool, send result as before
-        await this.signalClient.sendMessage(groupId, response.content);
-        this.storage.addMessage({
-          groupId,
-          sender: botSender,
-          content: response.content,
-          timestamp: Date.now(),
-          isBot: true,
-        });
-        logger.step('delivery: sent via fallback');
-      }
-
-      logger.groupEnd();
-    } catch (error) {
-      logger.error('Error handling message:', error);
-      logger.groupEnd();
-
-      // Try to send error message to group
-      try {
-        const errorMsg = 'Sorry, I encountered an error processing your request.';
-        await this.signalClient.sendMessage(groupId, errorMsg);
-      } catch (sendError) {
-        logger.error('Failed to send error message:', sendError);
-      }
-    }
+    // For coalesced: filter out all triggering messages
+    const triggers = new Set(item.requests.map(r => `${r.sender}:${r.timestamp}`));
+    return history.filter(m => !triggers.has(`${m.sender}:${m.timestamp}`));
   }
 }
