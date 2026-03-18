@@ -50,8 +50,8 @@ export default function Dossiers() {
     )},
     { key: 'actions', header: '', render: (d: Dossier) => (
       <div style={{ display: 'flex', gap: '0.5rem' }}>
-        <button onClick={() => startEdit(d)} className="btn-small">Edit</button>
-        <button onClick={() => deleteDossier(d)} className="btn-danger">Delete</button>
+        <button onClick={() => startEdit(d)} className="btn">Edit</button>
+        <button onClick={() => deleteDossier(d)} className="btn btn--danger">Delete</button>
       </div>
     )},
   ]
@@ -60,39 +60,42 @@ export default function Dossiers() {
     <div>
       <h1>Dossiers</h1>
 
-      <div style={{ marginBottom: '1rem' }}>
+      <div className="filter-bar">
         <input
           type="text"
+          className="form-input"
           placeholder="Filter by group ID..."
           value={groupFilter}
           onChange={e => setGroupFilter(e.target.value)}
-          style={{ padding: '0.5rem', width: '300px' }}
+          style={{ width: '300px' }}
         />
       </div>
 
       {editing && (
-        <div style={{ border: '1px solid #444', padding: '1rem', marginBottom: '1rem', borderRadius: '4px' }}>
+        <div className="edit-panel">
           <h3>Editing: {editing.personId}</h3>
-          <div style={{ marginBottom: '0.5rem' }}>
-            <label>Display Name: </label>
+          <div className="form-group">
+            <label>Display Name</label>
             <input
               type="text"
+              className="form-input"
               value={editDisplayName}
               onChange={e => setEditDisplayName(e.target.value)}
-              style={{ padding: '0.25rem', width: '200px' }}
             />
           </div>
-          <div style={{ marginBottom: '0.5rem' }}>
-            <label>Notes: </label>
+          <div className="form-group">
+            <label>Notes</label>
             <textarea
+              className="form-input"
               value={editNotes}
               onChange={e => setEditNotes(e.target.value)}
               rows={4}
-              style={{ width: '100%', padding: '0.25rem' }}
             />
           </div>
-          <button onClick={saveEdit} className="btn-small">Save</button>
-          <button onClick={() => setEditing(null)} style={{ marginLeft: '0.5rem' }} className="btn-small">Cancel</button>
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <button onClick={saveEdit} className="btn">Save</button>
+            <button onClick={() => setEditing(null)} className="btn">Cancel</button>
+          </div>
         </div>
       )}
 

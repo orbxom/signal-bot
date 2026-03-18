@@ -61,9 +61,9 @@ export default function Personas() {
     { key: 'isDefault', header: 'Default', render: (p: Persona) => p.isDefault ? 'Yes' : '' },
     { key: 'actions', header: '', render: (p: Persona) => (
       <div style={{ display: 'flex', gap: '0.5rem' }}>
-        <button onClick={() => startEdit(p)} className="btn-small">Edit</button>
+        <button onClick={() => startEdit(p)} className="btn">Edit</button>
         {!p.isDefault && (
-          <button onClick={() => deletePersona(p.id)} className="btn-danger">Delete</button>
+          <button onClick={() => deletePersona(p.id)} className="btn btn--danger">Delete</button>
         )}
       </div>
     )},
@@ -73,43 +73,43 @@ export default function Personas() {
     <div>
       <h1>Personas</h1>
 
-      <div style={{ border: '1px solid #444', padding: '1rem', marginBottom: '1rem', borderRadius: '4px' }}>
+      <div className="edit-panel">
         <h3>Create Persona</h3>
-        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-end', flexWrap: 'wrap' }}>
-          <div>
-            <label>Name: </label>
-            <input type="text" value={newName} onChange={e => setNewName(e.target.value)} style={{ padding: '0.25rem' }} />
+        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+          <div className="form-group" style={{ marginBottom: 0 }}>
+            <label>Name</label>
+            <input type="text" className="form-input" value={newName} onChange={e => setNewName(e.target.value)} />
           </div>
-          <div>
-            <label>Description: </label>
-            <input type="text" value={newDescription} onChange={e => setNewDescription(e.target.value)} style={{ padding: '0.25rem', width: '300px' }} />
+          <div className="form-group" style={{ marginBottom: 0, flex: 1 }}>
+            <label>Description</label>
+            <input type="text" className="form-input" value={newDescription} onChange={e => setNewDescription(e.target.value)} />
           </div>
-          <div>
-            <label>Tags: </label>
-            <input type="text" value={newTags} onChange={e => setNewTags(e.target.value)} style={{ padding: '0.25rem' }} />
+          <div className="form-group" style={{ marginBottom: 0 }}>
+            <label>Tags</label>
+            <input type="text" className="form-input" value={newTags} onChange={e => setNewTags(e.target.value)} />
           </div>
-          <button onClick={createPersona} className="btn-small">Create</button>
+          <button onClick={createPersona} className="btn">Create</button>
         </div>
       </div>
 
       {editing && (
-        <div style={{ border: '1px solid #444', padding: '1rem', marginBottom: '1rem', borderRadius: '4px' }}>
+        <div className="edit-panel">
           <h3>Editing: {editing.name}</h3>
-          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-end', flexWrap: 'wrap' }}>
-            <div>
-              <label>Name: </label>
-              <input type="text" value={editName} onChange={e => setEditName(e.target.value)} style={{ padding: '0.25rem' }} />
+          <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label>Name</label>
+              <input type="text" className="form-input" value={editName} onChange={e => setEditName(e.target.value)} />
             </div>
-            <div>
-              <label>Description: </label>
-              <input type="text" value={editDescription} onChange={e => setEditDescription(e.target.value)} style={{ padding: '0.25rem', width: '300px' }} />
+            <div className="form-group" style={{ marginBottom: 0, flex: 1 }}>
+              <label>Description</label>
+              <input type="text" className="form-input" value={editDescription} onChange={e => setEditDescription(e.target.value)} />
             </div>
-            <div>
-              <label>Tags: </label>
-              <input type="text" value={editTags} onChange={e => setEditTags(e.target.value)} style={{ padding: '0.25rem' }} />
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label>Tags</label>
+              <input type="text" className="form-input" value={editTags} onChange={e => setEditTags(e.target.value)} />
             </div>
-            <button onClick={saveEdit} className="btn-small">Save</button>
-            <button onClick={() => setEditing(null)} className="btn-small">Cancel</button>
+            <button onClick={saveEdit} className="btn">Save</button>
+            <button onClick={() => setEditing(null)} className="btn">Cancel</button>
           </div>
         </div>
       )}

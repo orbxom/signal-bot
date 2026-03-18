@@ -45,8 +45,8 @@ export default function Memories() {
     )},
     { key: 'actions', header: '', render: (m: Memory) => (
       <div style={{ display: 'flex', gap: '0.5rem' }}>
-        <button onClick={() => startEdit(m)} className="btn-small">Edit</button>
-        <button onClick={() => deleteMemory(m)} className="btn-danger">Delete</button>
+        <button onClick={() => startEdit(m)} className="btn">Edit</button>
+        <button onClick={() => deleteMemory(m)} className="btn btn--danger">Delete</button>
       </div>
     )},
   ]
@@ -55,29 +55,33 @@ export default function Memories() {
     <div>
       <h1>Memories</h1>
 
-      <div style={{ marginBottom: '1rem' }}>
+      <div className="filter-bar">
         <input
           type="text"
+          className="form-input"
           placeholder="Filter by group ID..."
           value={groupFilter}
           onChange={e => setGroupFilter(e.target.value)}
-          style={{ padding: '0.5rem', width: '300px' }}
+          style={{ width: '300px' }}
         />
       </div>
 
       {editing && (
-        <div style={{ border: '1px solid #444', padding: '1rem', marginBottom: '1rem', borderRadius: '4px' }}>
+        <div className="edit-panel">
           <h3>Editing: {editing.topic}</h3>
-          <div style={{ marginBottom: '0.5rem' }}>
+          <div className="form-group">
+            <label>Content</label>
             <textarea
+              className="form-input"
               value={editContent}
               onChange={e => setEditContent(e.target.value)}
               rows={4}
-              style={{ width: '100%', padding: '0.25rem' }}
             />
           </div>
-          <button onClick={saveEdit} className="btn-small">Save</button>
-          <button onClick={() => setEditing(null)} style={{ marginLeft: '0.5rem' }} className="btn-small">Cancel</button>
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <button onClick={saveEdit} className="btn">Save</button>
+            <button onClick={() => setEditing(null)} className="btn">Cancel</button>
+          </div>
         </div>
       )}
 

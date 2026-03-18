@@ -316,3 +316,29 @@ select.form-input {
   margin-left: 0.4rem;
   vertical-align: middle;
 }
+
+/* Edit panel */
+.edit-panel {
+  background: #1a1a2e;
+  border: 1px solid #333;
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.5rem;
+}
+
+.edit-panel h3 {
+  margin-bottom: 0.75rem;
+  font-weight: 600;
+}
+
+/* Small button variant */
+.btn--small {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.8rem;
+}
+
+/* Textarea styling */
+textarea.form-input {
+  resize: vertical;
+  font-family: inherit;
+}

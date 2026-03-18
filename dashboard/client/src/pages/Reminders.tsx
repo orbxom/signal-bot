@@ -60,7 +60,7 @@ export default function Reminders() {
       <span style={{ color: r.status === 'pending' ? '#8f8' : r.status === 'sent' ? '#aaa' : '#e74' }}>{r.status}</span>
     )},
     { key: 'actions', header: '', render: (r: Reminder) => r.status === 'pending' ? (
-      <button onClick={() => cancelReminder(r.id, r.groupId)} className="btn-danger">Cancel</button>
+      <button onClick={() => cancelReminder(r.id, r.groupId)} className="btn btn--danger">Cancel</button>
     ) : null },
   ]
 
@@ -75,12 +75,12 @@ export default function Reminders() {
       <span style={{ color: r.consecutiveFailures > 0 ? '#e74' : '#aaa' }}>
         {r.consecutiveFailures}
         {r.consecutiveFailures > 0 && (
-          <button onClick={() => resetFailures(r.id)} style={{ marginLeft: '0.5rem' }} className="btn-small">Reset</button>
+          <button onClick={() => resetFailures(r.id)} className="btn btn--small" style={{ marginLeft: '0.5rem' }}>Reset</button>
         )}
       </span>
     )},
     { key: 'actions', header: '', render: (r: RecurringReminder) => r.status === 'active' ? (
-      <button onClick={() => cancelRecurring(r.id, r.groupId)} className="btn-danger">Cancel</button>
+      <button onClick={() => cancelRecurring(r.id, r.groupId)} className="btn btn--danger">Cancel</button>
     ) : null },
   ]
 
@@ -88,17 +88,18 @@ export default function Reminders() {
     <div>
       <h1>Reminders</h1>
 
-      <div style={{ marginBottom: '1rem' }}>
+      <div className="filter-bar">
         <input
           type="text"
+          className="form-input"
           placeholder="Filter by group ID..."
           value={groupFilter}
           onChange={e => setGroupFilter(e.target.value)}
-          style={{ padding: '0.5rem', width: '300px' }}
+          style={{ width: '300px' }}
         />
       </div>
 
-      <h2>One-off Reminders</h2>
+      <h2 style={{ marginBottom: '0.75rem' }}>One-off Reminders</h2>
       <DataTable<Reminder>
         columns={reminderColumns}
         data={reminders ?? []}
@@ -106,7 +107,7 @@ export default function Reminders() {
         emptyMessage="No reminders found"
       />
 
-      <h2 style={{ marginTop: '1.5rem' }}>Recurring Reminders</h2>
+      <h2 style={{ margin: '1.5rem 0 0.75rem' }}>Recurring Reminders</h2>
       <DataTable<RecurringReminder>
         columns={recurringColumns}
         data={recurring ?? []}
