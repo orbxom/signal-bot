@@ -13,10 +13,31 @@ git rev-parse --short HEAD > "$REPO_DIR/VERSION"
 cleanup_version() { rm -f "$REPO_DIR/VERSION"; }
 trap cleanup_version EXIT
 
-echo "==> Deploying to ${NUC}:~/${NUC_PATH}"
+# ── Phase 1: Pre-flight ─────────────────────────────────────────────
 
-# Get remote package.json checksum before sync
-REMOTE_PKG_HASH=$(ssh "$NUC" "md5sum ~/${NUC_PATH}/bot/package.json 2>/dev/null | cut -d' ' -f1" || echo "none")
+echo "==> Pre-flight checks"
+
+# Check SSH connectivity
+if ! ssh -o ConnectTimeout=5 "$NUC" "true" 2>/dev/null; then
+  echo "DEPLOY FAILED: Cannot reach ${NUC_HOST} via SSH"
+  exit 1
+fi
+
+# Check signal-cli is running (bot depends on it)
+SIGNAL_CLI_STATUS=$(ssh "$NUC" "systemctl is-active signal-cli 2>/dev/null" || true)
+if [ "$SIGNAL_CLI_STATUS" != "active" ]; then
+  echo "DEPLOY FAILED: signal-cli.service is not running (status: ${SIGNAL_CLI_STATUS})"
+  echo "  Fix with: ssh ${NUC} \"sudo systemctl start signal-cli\""
+  exit 1
+fi
+
+echo "    signal-cli: active"
+echo "    SSH: ok"
+
+# ── Phase 2: Sync & Install ─────────────────────────────────────────
+
+echo ""
+echo "==> Deploying to ${NUC}:~/${NUC_PATH}"
 
 # Sync source files
 rsync -avz --delete \
@@ -41,26 +62,64 @@ rsync -avz --delete \
 
 echo "==> Files synced"
 
-# Check if package.json changed
-LOCAL_PKG_HASH=$(md5sum "$REPO_DIR/bot/package.json" | cut -d' ' -f1)
-if [ "$REMOTE_PKG_HASH" != "$LOCAL_PKG_HASH" ]; then
-  echo "==> package.json changed, running npm install..."
-  ssh "$NUC" "cd ~/${NUC_PATH}/bot && npm install"
+# Install dependencies for both bot and dashboard
+echo "==> Installing dependencies..."
+ssh "$NUC" "cd ~/${NUC_PATH}/bot && npm install"
+ssh "$NUC" "cd ~/${NUC_PATH}/dashboard && npm install"
+
+# Install systemd service files
+echo "==> Installing systemd service files..."
+ssh "$NUC" "sudo cp ~/${NUC_PATH}/scripts/systemd/*.service /etc/systemd/system/ && sudo systemctl daemon-reload"
+
+# ── Phase 3: Restart Services ───────────────────────────────────────
+
+echo ""
+echo "==> Ensuring services are enabled on boot..."
+ssh "$NUC" "sudo systemctl enable signal-cli signal-bot signal-bot-dashboard"
+
+echo "==> Restarting services..."
+ssh "$NUC" "sudo systemctl restart signal-bot && sudo systemctl restart signal-bot-dashboard"
+RESTART_TIME=$(date -u +"%Y-%m-%d %H:%M:%S")
+
+# ── Phase 4: Verify ─────────────────────────────────────────────────
+
+echo "==> Waiting for startup..."
+sleep 5
+
+FAILED=0
+
+# Check signal-bot status
+BOT_STATUS=$(ssh "$NUC" "systemctl is-active signal-bot 2>/dev/null" || true)
+if [ "$BOT_STATUS" != "active" ]; then
+  echo "    signal-bot: $BOT_STATUS"
+  FAILED=1
 else
-  echo "==> package.json unchanged, skipping npm install"
+  echo "    signal-bot: active"
 fi
 
-# Restart signal-bot service
-echo "==> Restarting signal-bot service..."
-ssh "$NUC" "sudo systemctl restart signal-bot"
+# Check dashboard status
+DASH_STATUS=$(ssh "$NUC" "systemctl is-active signal-bot-dashboard 2>/dev/null" || true)
+if [ "$DASH_STATUS" != "active" ]; then
+  echo "    signal-bot-dashboard: $DASH_STATUS"
+  FAILED=1
+else
+  echo "    signal-bot-dashboard: active"
+fi
 
-# Wait for startup
-sleep 3
+# Check recent logs for error patterns (exclude known transient startup messages)
+BOT_LOGS=$(ssh "$NUC" "journalctl -u signal-bot --since='${RESTART_TIME}' --no-pager -o cat 2>/dev/null" || true)
+FILTERED_ERRORS=$(echo "$BOT_LOGS" | grep -E 'Error|FATAL|Cannot find module|ExitCode|EADDRINUSE' | grep -v 'Receive command cannot be used' || true)
+if [ -n "$FILTERED_ERRORS" ]; then
+  echo ""
+  echo "    Errors detected in signal-bot logs:"
+  echo "$FILTERED_ERRORS" | head -10 | sed 's/^/      /'
+  FAILED=1
+fi
 
-# Show status
 echo ""
-echo "==> Service status:"
-ssh "$NUC" "systemctl status signal-bot --no-pager -l" || true
-
-echo ""
-echo "==> Deploy complete"
+if [ "$FAILED" -eq 0 ]; then
+  echo "DEPLOY OK"
+else
+  echo "DEPLOY FAILED — run scripts/nuc-health.sh for details"
+  exit 1
+fi

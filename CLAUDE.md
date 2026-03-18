@@ -192,7 +192,7 @@ The NUC has its own `bot/.env` with:
 ./scripts/deploy-nuc.sh                          # deploy current source to NUC
 NUC_HOST=10.0.0.5 ./scripts/deploy-nuc.sh       # custom NUC IP
 ```
-Syncs source via rsync (excludes data/.env/node_modules), runs `npm install` if package.json changed, restarts `signal-bot` service.
+Runs 4 phases: pre-flight (checks SSH + signal-cli is running), sync & install (rsync, `npm install` for bot + dashboard, installs systemd service files), restart (enables all 3 services on boot + restarts `signal-bot` and `signal-bot-dashboard`), verify (checks services are active, scans logs for errors). Prints **DEPLOY OK** or **DEPLOY FAILED**.
 
 ### Health Check
 ```bash

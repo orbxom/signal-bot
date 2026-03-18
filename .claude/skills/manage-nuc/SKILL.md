@@ -11,13 +11,19 @@ The signal bot runs in production on an Intel NUC (i5-7260U, 16GB RAM) at `192.1
 
 ### Deploy
 
-Syncs current source code to the NUC, installs deps if needed, restarts the bot:
+Syncs current source code to the NUC, installs deps if needed, restarts services, and verifies health:
 
 ```bash
 /home/zknowles/personal/signal-bot/scripts/deploy-nuc.sh
 ```
 
-Run this after making code changes you want live in production. It uses rsync (excludes data/.env/node_modules), checks if `npm install` is needed, and restarts `signal-bot.service`. Look for `*** EXCLUDING 1 group(s) from LLM processing ***` in the output to confirm the channel filtering is active.
+The script runs 4 phases:
+1. **Pre-flight** — checks SSH connectivity and that `signal-cli.service` is running (exits early if not)
+2. **Sync & Install** — rsyncs source (excludes data/.env/node_modules), runs `npm install` for bot + dashboard, installs systemd service files
+3. **Restart** — enables all 3 services on boot (`systemctl enable`), restarts `signal-bot` and `signal-bot-dashboard`
+4. **Verify** — waits 5s, checks both services are active, scans recent logs for error patterns
+
+Prints **DEPLOY OK** or **DEPLOY FAILED** at the end. If failed, run `nuc-health.sh` for deeper investigation.
 
 ### Health Check
 
