@@ -79,6 +79,10 @@ export class SignalClient {
     await this.rpc<void>('quitGroup', { groupId });
   }
 
+  async joinGroup(uri: string): Promise<void> {
+    await this.rpc<void>('joinGroup', { uri });
+  }
+
   async waitForReady(maxRetries: number = 10, baseDelay: number = 2000): Promise<void> {
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
