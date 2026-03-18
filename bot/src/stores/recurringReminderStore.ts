@@ -182,6 +182,36 @@ export class RecurringReminderStore {
     });
   }
 
+  listAll(filters?: { groupId?: string; limit?: number; offset?: number }): RecurringReminder[] {
+    return this.conn.runOp('list all recurring reminders', () => {
+      const limit = Math.min(filters?.limit ?? 50, 200);
+      const offset = filters?.offset ?? 0;
+      const conditions: string[] = ['status = ?'];
+      const params: unknown[] = ['active'];
+
+      if (filters?.groupId) {
+        conditions.push('groupId = ?');
+        params.push(filters.groupId);
+      }
+
+      const where = `WHERE ${conditions.join(' AND ')}`;
+      const sql = `SELECT * FROM recurring_reminders ${where} ORDER BY nextDueAt ASC LIMIT ? OFFSET ?`;
+      params.push(limit, offset);
+
+      const rows = this.conn.db.prepare(sql).all(...params) as Array<RecurringReminderRow>;
+      return rows.map(mapRow);
+    });
+  }
+
+  resetFailures(id: number): boolean {
+    return this.conn.runOp('reset recurring reminder failures', () => {
+      const result = this.conn.db.prepare(
+        'UPDATE recurring_reminders SET consecutiveFailures = 0 WHERE id = ?'
+      ).run(id);
+      return result.changes > 0;
+    });
+  }
+
   advanceNextDue(id: number, nextDueAt: number): void {
     this.conn.runOp('advance recurring reminder next due', () => {
       this.stmts.advanceNextDue.run(nextDueAt, Date.now(), id);

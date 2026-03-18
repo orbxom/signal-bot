@@ -304,6 +304,43 @@ describe('ReminderStore', () => {
     });
   });
 
+  describe('listAll', () => {
+    it('lists reminders across all groups', () => {
+      const store = setup();
+      store.create('group1', 'user1', 'reminder1', Date.now() + 10000);
+      store.create('group2', 'user2', 'reminder2', Date.now() + 20000);
+      const all = store.listAll();
+      expect(all).toHaveLength(2);
+    });
+
+    it('filters by groupId', () => {
+      const store = setup();
+      store.create('group1', 'user1', 'reminder1', Date.now() + 10000);
+      store.create('group2', 'user2', 'reminder2', Date.now() + 20000);
+      const filtered = store.listAll({ groupId: 'group1' });
+      expect(filtered).toHaveLength(1);
+      expect(filtered[0].groupId).toBe('group1');
+    });
+
+    it('filters by status', () => {
+      const store = setup();
+      const id = store.create('group1', 'user1', 'reminder1', Date.now() + 10000);
+      store.create('group1', 'user1', 'reminder2', Date.now() + 20000);
+      store.markSent(id);
+      const pending = store.listAll({ status: 'pending' });
+      expect(pending).toHaveLength(1);
+    });
+
+    it('supports pagination', () => {
+      const store = setup();
+      for (let i = 0; i < 5; i++) {
+        store.create('group1', 'user1', `reminder${i}`, Date.now() + i * 1000);
+      }
+      const page = store.listAll({ limit: 2, offset: 2 });
+      expect(page).toHaveLength(2);
+    });
+  });
+
   describe('listPending', () => {
     it('should return only pending reminders for that group', () => {
       setup();

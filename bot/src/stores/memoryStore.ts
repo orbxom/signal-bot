@@ -89,6 +89,21 @@ export class MemoryStore {
     }
   }
 
+  listAll(filters?: { groupId?: string; limit?: number; offset?: number }): Memory[] {
+    return this.conn.runOp('list all memories', () => {
+      const limit = Math.min(filters?.limit ?? 50, 200);
+      const offset = filters?.offset ?? 0;
+      if (filters?.groupId) {
+        return this.conn.db.prepare(
+          'SELECT * FROM memories WHERE groupId = ? ORDER BY topic LIMIT ? OFFSET ?'
+        ).all(filters.groupId, limit, offset) as Memory[];
+      }
+      return this.conn.db.prepare(
+        'SELECT * FROM memories ORDER BY topic LIMIT ? OFFSET ?'
+      ).all(limit, offset) as Memory[];
+    });
+  }
+
   delete(groupId: string, topic: string): boolean {
     this.conn.ensureOpen();
 

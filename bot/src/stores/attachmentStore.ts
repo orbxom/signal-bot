@@ -51,6 +51,47 @@ export class AttachmentStore {
     }
   }
 
+  listMetadata(filters?: { groupId?: string; limit?: number; offset?: number }): Omit<Attachment, 'data'>[] {
+    this.conn.ensureOpen();
+    try {
+      const limit = Math.min(filters?.limit ?? 50, 200);
+      const offset = filters?.offset ?? 0;
+      if (filters?.groupId) {
+        return this.conn.db.prepare(
+          'SELECT id, groupId, sender, contentType, size, filename, timestamp FROM attachment_data WHERE groupId = ? ORDER BY timestamp DESC LIMIT ? OFFSET ?'
+        ).all(filters.groupId, limit, offset) as Omit<Attachment, 'data'>[];
+      }
+      return this.conn.db.prepare(
+        'SELECT id, groupId, sender, contentType, size, filename, timestamp FROM attachment_data ORDER BY timestamp DESC LIMIT ? OFFSET ?'
+      ).all(limit, offset) as Omit<Attachment, 'data'>[];
+    } catch (error) {
+      wrapSqliteError(error, 'list attachment metadata');
+    }
+  }
+
+  getStats(): { totalSize: number; countByGroup: Array<{ groupId: string; count: number; size: number }> } {
+    this.conn.ensureOpen();
+    try {
+      const rows = this.conn.db.prepare(
+        'SELECT groupId, COUNT(*) as count, SUM(LENGTH(data)) as size FROM attachment_data GROUP BY groupId'
+      ).all() as Array<{ groupId: string; count: number; size: number }>;
+      const totalSize = rows.reduce((sum, r) => sum + (r.size || 0), 0);
+      return { totalSize, countByGroup: rows };
+    } catch (error) {
+      wrapSqliteError(error, 'get attachment stats');
+    }
+  }
+
+  deleteById(id: string): boolean {
+    this.conn.ensureOpen();
+    try {
+      const result = this.conn.db.prepare('DELETE FROM attachment_data WHERE id = ?').run(id);
+      return result.changes > 0;
+    } catch (error) {
+      wrapSqliteError(error, 'delete attachment');
+    }
+  }
+
   trimOlderThan(cutoffTimestamp: number): void {
     this.conn.ensureOpen();
     try {
