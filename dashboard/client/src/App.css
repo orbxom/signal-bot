@@ -292,3 +292,27 @@ a {
 .form-input::placeholder {
   color: #555;
 }
+
+select.form-input {
+  appearance: auto;
+}
+
+/* Filter bar */
+.filter-bar {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+/* Badge */
+.badge {
+  display: inline-block;
+  background: rgba(124, 124, 255, 0.2);
+  color: #7c7cff;
+  font-size: 0.7rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 3px;
+  margin-left: 0.4rem;
+  vertical-align: middle;
+}
