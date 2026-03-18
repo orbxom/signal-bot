@@ -393,8 +393,8 @@ describe('ingestMessages', () => {
     });
 
     expect(mockStorage.addMessage).toHaveBeenCalledTimes(3);
-    // Only g1 has mentions, and both are realtime (recent timestamps)
-    expect(enqueuedItems.length).toBeGreaterThanOrEqual(1);
+    // Both g1 messages are @bot mentions with recent timestamps (realtime)
+    expect(enqueuedItems).toHaveLength(2);
   });
 
   it('should include correct fields in MentionRequest', () => {

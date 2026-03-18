@@ -83,12 +83,18 @@ export class GroupProcessingQueue {
         logger.info(`Queue worker start [${groupId}]`);
 
         try {
-          // Note: If TTL fires, Promise.race resolves but the hung callback
-          // keeps running in the background, holding its SpawnLimiter slot.
-          // This is an accepted limitation — the hung Claude process will be
-          // killed by the CLI's own 5-minute timeout, then SpawnLimiter releases
-          // the slot. During the overlap window, the next item may block on
-          // SpawnLimiter.acquire() until the slot frees up.
+          // Note: The TTL covers the entire processCallback duration, including
+          // any SpawnLimiter wait time. The spec recommends starting the timer
+          // after acquire(), but spawnPromise encapsulates acquire/release
+          // internally. With a 6-minute TTL vs 5-minute Claude timeout, there's
+          // 1 minute of buffer. In the unlikely worst case (5min slot wait +
+          // 5min Claude), the TTL could fire prematurely — but the family bot
+          // has few groups, making sustained slot contention very unlikely.
+          //
+          // If TTL fires, Promise.race resolves but the hung callback keeps
+          // running in the background, holding its SpawnLimiter slot. The hung
+          // process will be killed by the CLI's own timeout, then SpawnLimiter
+          // releases the slot.
           await Promise.race([
             this.processCallback(item),
             new Promise<void>((_, reject) => {
