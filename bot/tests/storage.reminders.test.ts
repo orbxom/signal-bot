@@ -44,78 +44,6 @@ describe('Storage - Reminders', () => {
     });
   });
 
-  describe('getDueReminders', () => {
-    it('should return empty array when no reminders exist', () => {
-      const storage = createStorage();
-      const reminders = storage.getDueReminders(Date.now());
-      expect(reminders).toEqual([]);
-    });
-
-    it('should return only pending reminders where dueAt <= now', () => {
-      const storage = createStorage();
-      const now = Date.now();
-      vi.spyOn(Date, 'now').mockReturnValue(now - 120000);
-      storage.createReminder('group1', 'Alice', 'Due reminder', now - 60000);
-      storage.createReminder('group1', 'Alice', 'Future reminder', now + 60000);
-      vi.restoreAllMocks();
-
-      const reminders = storage.getDueReminders(now);
-      expect(reminders).toHaveLength(1);
-      expect(reminders[0].reminderText).toBe('Due reminder');
-      expect(reminders[0].status).toBe('pending');
-    });
-
-    it('should not return sent reminders', () => {
-      const storage = createStorage();
-      const now = Date.now();
-      vi.spyOn(Date, 'now').mockReturnValue(now - 120000);
-      const id = storage.createReminder('group1', 'Alice', 'Test', now - 60000);
-      vi.restoreAllMocks();
-
-      storage.markReminderSent(id);
-      const reminders = storage.getDueReminders(now);
-      expect(reminders).toHaveLength(0);
-    });
-
-    it('should not return failed reminders', () => {
-      const storage = createStorage();
-      const now = Date.now();
-      vi.spyOn(Date, 'now').mockReturnValue(now - 120000);
-      const id = storage.createReminder('group1', 'Alice', 'Test', now - 60000);
-      vi.restoreAllMocks();
-
-      storage.markReminderFailed(id);
-      const reminders = storage.getDueReminders(now);
-      expect(reminders).toHaveLength(0);
-    });
-
-    it('should respect the limit parameter', () => {
-      const storage = createStorage();
-      const now = Date.now();
-      vi.spyOn(Date, 'now').mockReturnValue(now - 120000);
-      for (let i = 0; i < 5; i++) {
-        storage.createReminder('group1', 'Alice', `Reminder ${i}`, now - 60000 + i);
-      }
-      vi.restoreAllMocks();
-
-      const reminders = storage.getDueReminders(now, 3);
-      expect(reminders).toHaveLength(3);
-    });
-
-    it('should return results ordered by dueAt ASC', () => {
-      const storage = createStorage();
-      const now = Date.now();
-      vi.spyOn(Date, 'now').mockReturnValue(now - 200000);
-      storage.createReminder('group1', 'Alice', 'Later', now - 30000);
-      storage.createReminder('group1', 'Alice', 'Earlier', now - 60000);
-      vi.restoreAllMocks();
-
-      const reminders = storage.getDueReminders(now);
-      expect(reminders[0].reminderText).toBe('Earlier');
-      expect(reminders[1].reminderText).toBe('Later');
-    });
-  });
-
   describe('markReminderSent', () => {
     it('should mark a pending reminder as sent', () => {
       const storage = createStorage();
@@ -127,7 +55,7 @@ describe('Storage - Reminders', () => {
       const result = storage.markReminderSent(id);
       expect(result).toBe(true);
 
-      const reminders = storage.getDueReminders(now);
+      const reminders = storage.reminders.getDueByGroup('group1', now, 50);
       expect(reminders).toHaveLength(0);
     });
 
@@ -147,47 +75,6 @@ describe('Storage - Reminders', () => {
       createStorage();
       const result = ts.storage.markReminderSent(999);
       expect(result).toBe(false);
-    });
-  });
-
-  describe('markReminderFailed', () => {
-    it('should mark a pending reminder as failed', () => {
-      const storage = createStorage();
-      const now = Date.now();
-      vi.spyOn(Date, 'now').mockReturnValue(now - 120000);
-      const id = storage.createReminder('group1', 'Alice', 'Test', now - 60000);
-      vi.restoreAllMocks();
-
-      const result = storage.markReminderFailed(id);
-      expect(result).toBe(true);
-    });
-
-    it('should return false for non-pending reminders', () => {
-      const storage = createStorage();
-      const now = Date.now();
-      vi.spyOn(Date, 'now').mockReturnValue(now - 120000);
-      const id = storage.createReminder('group1', 'Alice', 'Test', now - 60000);
-      vi.restoreAllMocks();
-
-      storage.markReminderSent(id);
-      const result = storage.markReminderFailed(id);
-      expect(result).toBe(false);
-    });
-  });
-
-  describe('incrementReminderRetry', () => {
-    it('should increment the retry count', () => {
-      const storage = createStorage();
-      const now = Date.now();
-      vi.spyOn(Date, 'now').mockReturnValue(now - 120000);
-      const id = storage.createReminder('group1', 'Alice', 'Test', now - 60000);
-      vi.restoreAllMocks();
-
-      storage.incrementReminderRetry(id);
-      storage.incrementReminderRetry(id);
-
-      const reminders = storage.getDueReminders(now);
-      expect(reminders[0].retryCount).toBe(2);
     });
   });
 
@@ -277,12 +164,6 @@ describe('Storage - Reminders', () => {
       const storage = createStorage();
       storage.close();
       expect(() => storage.createReminder('g1', 'Alice', 'Test', Date.now() + 60000)).toThrow('Database is closed');
-    });
-
-    it('should throw on getDueReminders after close', () => {
-      const storage = createStorage();
-      storage.close();
-      expect(() => storage.getDueReminders()).toThrow('Database is closed');
     });
 
     it('should throw on listReminders after close', () => {

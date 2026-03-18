@@ -44,7 +44,7 @@ export class ReminderScheduler {
     let total = 0;
 
     for (const groupId of groups) {
-      const reminders = store.getDueByGroup(groupId, now, 1);
+      const reminders = store.getDueByGroup(groupId, now, PER_GROUP_LIMIT);
       for (const reminder of reminders) {
         try {
           const claimed = store.markInFlight(reminder.id);
@@ -52,7 +52,7 @@ export class ReminderScheduler {
 
           await executor.execute(reminder);
 
-          const nextDueAt = computeNextDue(reminder.cronExpression, reminder.timezone);
+          const nextDueAt = this.safeNextDue(computeNextDue(reminder.cronExpression, reminder.timezone), now);
           store.markFired(reminder.id, nextDueAt);
           total++;
         } catch (error) {
@@ -67,11 +67,10 @@ export class ReminderScheduler {
 
   private async handleRecurringFailure(reminder: RecurringReminder): Promise<void> {
     const store = this.recurringStore as RecurringReminderStore;
+    const now = Date.now();
 
-    const nextDueAt = computeNextDue(reminder.cronExpression, reminder.timezone);
-    store.advanceNextDue(reminder.id, nextDueAt);
-
-    const failures = store.incrementFailures(reminder.id);
+    const nextDueAt = this.safeNextDue(computeNextDue(reminder.cronExpression, reminder.timezone), now);
+    const failures = store.handleFailure(reminder.id, nextDueAt);
     if (failures >= MAX_CONSECUTIVE_FAILURES) {
       store.cancel(reminder.id, reminder.groupId);
       try {
@@ -124,9 +123,6 @@ export class ReminderScheduler {
       }
     }
 
-    // Claim-then-send: record attempt BEFORE sending
-    this.reminderStore.recordAttempt(reminder.id);
-
     try {
       if (reminder.mode === 'prompt') {
         if (!this.recurringExecutor) {
@@ -143,12 +139,12 @@ export class ReminderScheduler {
         const messageText = this.formatReminderMessage(reminder, staleness);
         await this.signalClient.sendMessage(reminder.groupId, messageText);
       }
-      this.reminderStore.markSent(reminder.id);
+      this.reminderStore.completeReminder(reminder.id);
       return true;
     } catch (error) {
       logger.error(`Failed to ${reminder.mode === 'prompt' ? 'execute' : 'send'} reminder ${reminder.id}:`, error);
-      // Don't mark failed — recordAttempt already incremented retryCount
-      // Will retry on next cycle (with backoff)
+      // Record attempt on failure to enable backoff on next cycle
+      this.reminderStore.recordAttempt(reminder.id);
       return false;
     }
   }
@@ -160,6 +156,14 @@ export class ReminderScheduler {
     } catch {
       logger.error(`Failed to send failure notification for reminder ${reminder.id}`);
     }
+  }
+
+  private safeNextDue(nextDueAt: number, now: number): number {
+    if (nextDueAt <= now) {
+      logger.warn(`computeNextDue returned past timestamp ${nextDueAt}, adding 60s minimum delay`);
+      return now + 60_000;
+    }
+    return nextDueAt;
   }
 
   private formatReminderMessage(reminder: Reminder, stalenessMs: number): string {
