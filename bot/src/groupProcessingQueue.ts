@@ -56,7 +56,8 @@ export class GroupProcessingQueue {
 
     const run = async () => {
       while (state.queue.length > 0 && !this.stopped) {
-        const item = state.queue.shift()!;
+        const item = state.queue.shift();
+        if (!item) break;
         const start = Date.now();
         logger.info(`Queue worker start [${groupId}]`);
 
