@@ -21,7 +21,7 @@ export function useApi<T>(url: string, deps: unknown[] = []) {
 
   useEffect(() => { refetch() }, [refetch, ...deps])
 
-  return { data, loading, error, refetch }
+  return { data, loading, error, refetch, setData }
 }
 
 export async function apiCall(method: string, url: string, body?: unknown): Promise<unknown> {
