@@ -26,6 +26,7 @@ describe('groups routes', () => {
       listGroups: vi.fn(),
       getGroup: vi.fn(),
       quitGroup: vi.fn(),
+      joinGroup: vi.fn(),
     };
 
     app.use('/api', createGroupRoutes(mockStorage, mockSignalClient));
@@ -92,5 +93,96 @@ describe('groups routes', () => {
     expect(res.body.success).toBe(true);
     expect(mockSignalClient.quitGroup).toHaveBeenCalledWith('g1');
     expect(mockStorage.groupSettings.upsert).toHaveBeenCalledWith('g1', { enabled: false });
+  });
+
+  describe('POST /api/groups/join', () => {
+    it('joins group and returns refreshed group list', async () => {
+      mockSignalClient.joinGroup.mockResolvedValue(undefined);
+      mockSignalClient.listGroups
+        .mockResolvedValueOnce([{ id: 'g1', name: 'Family', members: ['+1'] }])
+        .mockResolvedValueOnce([
+          { id: 'g1', name: 'Family', members: ['+1'] },
+          { id: 'g2', name: 'New Group', members: ['+1', '+2'] },
+        ]);
+      mockStorage.groupSettings.get.mockReturnValue(null);
+      mockStorage.personas.getActiveForGroup.mockReturnValue(null);
+
+      const res = await request(app)
+        .post('/api/groups/join')
+        .send({ uri: 'https://signal.group/#abc123' });
+
+      expect(res.status).toBe(200);
+      expect(mockSignalClient.joinGroup).toHaveBeenCalledWith('https://signal.group/#abc123');
+      expect(res.body.groups).toHaveLength(2);
+    });
+
+    it('returns 202 when group not found after join (admin approval pending)', async () => {
+      mockSignalClient.joinGroup.mockResolvedValue(undefined);
+      // listGroups called twice: before join (1 group) and after join (still 1 group — new group not yet visible)
+      mockSignalClient.listGroups
+        .mockResolvedValueOnce([{ id: 'g1', name: 'Family', members: ['+1'] }])
+        .mockResolvedValueOnce([{ id: 'g1', name: 'Family', members: ['+1'] }]);
+      mockStorage.groupSettings.get.mockReturnValue(null);
+      mockStorage.personas.getActiveForGroup.mockReturnValue(null);
+
+      const res = await request(app)
+        .post('/api/groups/join')
+        .send({ uri: 'https://signal.group/#needs-approval' });
+
+      expect(res.status).toBe(202);
+      expect(res.body.message).toMatch(/awaiting admin approval/);
+    });
+
+    it('returns 400 for missing uri', async () => {
+      const res = await request(app)
+        .post('/api/groups/join')
+        .send({});
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/Invalid Signal group invite link/);
+    });
+
+    it('returns 400 for malformed uri', async () => {
+      const res = await request(app)
+        .post('/api/groups/join')
+        .send({ uri: 'https://example.com/not-a-signal-link' });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/Invalid Signal group invite link/);
+    });
+
+    it('returns 422 when signal-cli rejects the link', async () => {
+      mockSignalClient.listGroups.mockResolvedValue([]);
+      mockSignalClient.joinGroup.mockRejectedValue(new Error('Signal RPC error: Invalid group link'));
+
+      const res = await request(app)
+        .post('/api/groups/join')
+        .send({ uri: 'https://signal.group/#expired' });
+
+      expect(res.status).toBe(422);
+      expect(res.body.error).toMatch(/Invalid group link/);
+    });
+
+    it('returns 500 on unexpected errors', async () => {
+      mockSignalClient.listGroups.mockResolvedValue([]);
+      mockSignalClient.joinGroup.mockRejectedValue(new TypeError('Cannot read properties of undefined'));
+
+      const res = await request(app)
+        .post('/api/groups/join')
+        .send({ uri: 'https://signal.group/#abc123' });
+
+      expect(res.status).toBe(500);
+    });
+
+    it('returns 503 when signal-cli is unreachable', async () => {
+      mockSignalClient.listGroups.mockResolvedValue([]);
+      mockSignalClient.joinGroup.mockRejectedValue(new Error('Signal API error: ECONNREFUSED'));
+
+      const res = await request(app)
+        .post('/api/groups/join')
+        .send({ uri: 'https://signal.group/#abc123' });
+
+      expect(res.status).toBe(503);
+    });
   });
 });
