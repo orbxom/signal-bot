@@ -100,7 +100,6 @@ export class MessageHandler {
     content: string,
     timestamp: number,
     attachments: SignalAttachment[] = [],
-    options?: { storeOnly?: boolean },
   ): Promise<void> {
     // Skip messages from the bot itself
     if (this.appConfig.botPhoneNumber && sender === this.appConfig.botPhoneNumber) {
@@ -137,11 +136,9 @@ export class MessageHandler {
       attachments: attachments.length > 0 ? attachments : undefined,
     });
 
-    if (!options?.storeOnly) {
-      this.ingestImageAttachments(groupId, sender, attachments, timestamp);
-    }
+    this.ingestImageAttachments(groupId, sender, attachments, timestamp);
 
-    if (options?.storeOnly || !mentioned) {
+    if (!mentioned) {
       return;
     }
 
@@ -158,7 +155,6 @@ export class MessageHandler {
   async handleMessageBatch(
     groupId: string,
     messages: ExtractedMessage[],
-    options?: { storeOnly?: boolean },
   ): Promise<void> {
     const validMessages: ExtractedMessage[] = [];
     for (const msg of messages) {
@@ -194,7 +190,7 @@ export class MessageHandler {
 
     let history: Message[] = [];
     let historyFormatted: string[] | undefined;
-    if (mentionMessages.length > 0 && !options?.storeOnly) {
+    if (mentionMessages.length > 0) {
       const batch = this.storage.getRecentMessages(groupId, this.contextWindowSize);
       const fitted = this.contextBuilder.fitToTokenBudget(batch);
       history = fitted.messages;
@@ -212,13 +208,11 @@ export class MessageHandler {
       });
     }
 
-    if (!options?.storeOnly) {
-      for (const msg of validMessages) {
-        this.ingestImageAttachments(groupId, msg.sender, msg.attachments, msg.timestamp);
-      }
+    for (const msg of validMessages) {
+      this.ingestImageAttachments(groupId, msg.sender, msg.attachments, msg.timestamp);
     }
 
-    if (options?.storeOnly || mentionMessages.length === 0) {
+    if (mentionMessages.length === 0) {
       return;
     }
 

@@ -76,12 +76,6 @@ async function main() {
   );
   logger.success(`Message handler initialized (triggers: ${config.mentionTriggers.join(', ')})`);
 
-  if (config.testChannelOnly) {
-    logger.warn(`*** TEST CHANNEL ONLY MODE — only processing group ${config.testGroupId} ***`);
-  }
-  if (config.excludeGroupIds.length > 0) {
-    logger.warn(`*** EXCLUDING ${config.excludeGroupIds.length} group(s) from LLM processing ***`);
-  }
 
   // Graceful shutdown
   const shutdown = () => {
@@ -142,14 +136,7 @@ async function main() {
           continue;
         }
 
-        const storeOnly =
-          (config.testChannelOnly && data.groupId !== config.testGroupId) ||
-          config.excludeGroupIds.includes(data.groupId);
-        if (storeOnly) {
-          logger.compact('STORED', `[${data.groupId}] ${data.sender}: ${data.content.substring(0, 80)}`);
-        } else {
-          logger.compact('RECV', `[${data.groupId}] ${data.sender}: ${data.content.substring(0, 80)}`);
-        }
+        logger.compact('RECV', `[${data.groupId}] ${data.sender}: ${data.content.substring(0, 80)}`);
 
         if (!byGroup.has(data.groupId)) {
           byGroup.set(data.groupId, []);
@@ -160,9 +147,7 @@ async function main() {
       // Process each group's messages as a batch
       for (const [groupId, batch] of byGroup) {
         try {
-          const storeOnly =
-            (config.testChannelOnly && groupId !== config.testGroupId) || config.excludeGroupIds.includes(groupId);
-          await messageHandler.handleMessageBatch(groupId, batch, { storeOnly });
+          await messageHandler.handleMessageBatch(groupId, batch);
         } catch (error) {
           logger.error(`Error processing group ${groupId}:`, error);
         }

@@ -64,16 +64,12 @@ The dark factory dashboard runs on the NUC at http://192.168.0.239:3333. Managed
 ## NUC Environment
 
 - **Repo path**: `~/signal-bot` (cloned from GitHub, updated via deploy script)
-- **Bot .env**: `~/signal-bot/bot/.env` — has `EXCLUDE_GROUP_IDS` set to ignore the Bot Test channel
+- **Bot .env**: `~/signal-bot/bot/.env`
 - **signal-cli**: Native binary v0.14.1 at `/usr/local/bin/signal-cli`, data at `/var/lib/signal-cli`
 - **Claude CLI**: Installed globally via npm, authenticated
 - **Services**: `signal-cli.service`, `signal-bot.service`, `signal-bot-dashboard.service`
 - **Service templates**: `scripts/systemd/` in the repo
 
-## Dev vs Prod Channel Separation
+## Dev vs Prod
 
-The NUC bot and local dev bot share the same Signal phone number but respond to different groups:
-- **NUC (production)**: Responds to all groups EXCEPT the Bot Test channel (`EXCLUDE_GROUP_IDS`)
-- **PC (development)**: Only responds to the Bot Test channel (`--test-channel-only`)
-
-Messages are always stored in both databases regardless of filtering. The separation prevents duplicate responses.
+The NUC production bot responds to all groups including Bot Test. Only one instance should listen to Signal at a time to avoid duplicate responses.

@@ -21,8 +21,6 @@ export interface ConfigType {
   darkFactoryEnabled: string;
   darkFactoryProjectRoot: string;
   attachmentRetentionDays: number;
-  excludeGroupIds: string[];
-  testChannelOnly: boolean;
   testGroupId: string;
   collaborativeTestingMode: boolean;
   startupNotify: boolean;
@@ -77,13 +75,6 @@ export class Config {
       throw new Error('ATTACHMENT_RETENTION_DAYS must be a positive number');
     }
 
-    const excludeGroupIdsRaw = process.env.EXCLUDE_GROUP_IDS || '';
-    const excludeGroupIds = excludeGroupIdsRaw
-      .split(',')
-      .map(s => s.trim())
-      .filter(s => s.length > 0);
-
-    const testChannelOnly = process.argv.includes('--test-channel-only') || process.env.TEST_CHANNEL_ONLY === 'true';
     const testGroupId = process.env.TEST_GROUP_ID || 'kKWs+FQPBZKe7N7CdxMjNAAjE2uWEmtBij55MOfWFU4=';
     const collaborativeTestingMode = process.env.COLLABORATIVE_TESTING === 'true';
 
@@ -107,8 +98,6 @@ export class Config {
       darkFactoryEnabled: process.env.DARK_FACTORY_ENABLED || '',
       darkFactoryProjectRoot: process.env.DARK_FACTORY_PROJECT_ROOT || '',
       attachmentRetentionDays,
-      excludeGroupIds,
-      testChannelOnly,
       testGroupId,
       collaborativeTestingMode,
       startupNotify: process.env.STARTUP_NOTIFY === 'true',

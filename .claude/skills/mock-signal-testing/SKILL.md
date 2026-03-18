@@ -88,7 +88,7 @@ Or manually:
 
 ```bash
 cd /home/zknowles/personal/signal-bot/bot
-SIGNAL_CLI_URL=http://localhost:9090 npx tsx src/index.ts --test-channel-only
+SIGNAL_CLI_URL=http://localhost:9090 npx tsx src/index.ts
 ```
 
 Wait for `Starting message polling...` in the output before sending messages.
