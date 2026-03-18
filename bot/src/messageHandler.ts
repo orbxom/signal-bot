@@ -388,7 +388,7 @@ export class MessageHandler {
 
       // Get LLM response
       const startTime = Date.now();
-      const toolNotificationsEnabled = this.storage.toolNotifications.isEnabled(groupId);
+      const toolNotificationsEnabled = this.storage.groupSettings.getToolNotifications(groupId);
       const response = await this.llmClient.generateResponse(messages, {
         ...this.appConfig,
         groupId,

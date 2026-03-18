@@ -151,6 +151,11 @@ export class DatabaseConnection {
         this.migrateToV7();
         this.setSchemaVersion(7);
       }
+
+      if (currentVersion < 8) {
+        this.migrateToV8();
+        this.setSchemaVersion(8);
+      }
     } catch (error) {
       wrapSqliteError(error, 'run migrations');
     }
@@ -273,6 +278,32 @@ export class DatabaseConnection {
         updatedAt INTEGER NOT NULL
       );
     `);
+  }
+
+  private migrateToV8(): void {
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS group_settings (
+        groupId TEXT PRIMARY KEY,
+        enabled INTEGER DEFAULT 1,
+        customTriggers TEXT,
+        contextWindowSize INTEGER,
+        toolNotifications INTEGER DEFAULT 1,
+        createdAt INTEGER,
+        updatedAt INTEGER
+      )
+    `);
+    // Migrate data from old table
+    const rows = this.db.prepare(
+      'SELECT groupId, enabled, updatedAt FROM tool_notification_settings'
+    ).all() as Array<{ groupId: string; enabled: number; updatedAt: number }>;
+    const insert = this.db.prepare(`
+      INSERT OR IGNORE INTO group_settings (groupId, toolNotifications, enabled, createdAt, updatedAt)
+      VALUES (?, ?, 1, ?, ?)
+    `);
+    for (const row of rows) {
+      insert.run(row.groupId, row.enabled, row.updatedAt, row.updatedAt);
+    }
+    this.db.exec('DROP TABLE IF EXISTS tool_notification_settings');
   }
 
   checkpoint(): void {

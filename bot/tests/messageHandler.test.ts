@@ -52,7 +52,7 @@ describe('MessageHandler', () => {
         getMemoriesByGroup: vi.fn().mockReturnValue([]),
         getActivePersonaForGroup: vi.fn().mockReturnValue(null),
         saveAttachment: vi.fn(),
-        toolNotifications: { isEnabled: vi.fn().mockReturnValue(false) },
+        groupSettings: { getToolNotifications: vi.fn().mockReturnValue(false) },
       } as any;
 
       mockLLM = {
