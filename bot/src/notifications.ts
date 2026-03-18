@@ -32,7 +32,9 @@ export async function sendStartupNotification(
       timeZoneName: 'short',
     });
 
-    await signalClient.sendMessage(config.testGroupId, `Bot online (${commitHash}) — ${now}`);
+    const message = `Bot online (${commitHash}) — ${now}`;
+    await signalClient.sendMessage(config.testGroupId, message);
+    logger.success(`Startup notification sent: ${message}`);
   } catch (error) {
     logger.error('Failed to send startup notification:', error);
   }
