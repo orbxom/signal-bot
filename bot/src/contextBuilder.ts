@@ -27,12 +27,10 @@ const IMAGE_INSTRUCTIONS =
 
 const CAPABILITIES_PROMPT = `## Your Capabilities
 - Dossier tools (update_dossier, get_dossier, list_dossiers) — store/retrieve info about people in this group
-- Memory tools (save_memory, get_memory, list_memories, delete_memory) — store/retrieve group facts, plans, preferences
 - Persona tools (create_persona, list_personas, switch_persona) — create or switch bot personalities
 - Message history (search_messages, get_messages_by_date) — search past conversations
-- Image viewing (view_image) — view images shared in the group
 - Feature requests (create_feature_request) — file ideas via GitHub
-- Reminders (set_reminder, list_reminders) — schedule one-time or recurring reminders
+- Reminders (set_reminder, list_reminders, cancel_reminder) — schedule one-time or recurring reminders
 - Weather (get_weather_observations, get_weather_forecast) — Australian weather via BOM
 When someone shares personal info, you may update their dossier. When the group decides something worth remembering, save it as a memory.`;
 
