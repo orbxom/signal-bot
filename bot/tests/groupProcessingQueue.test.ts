@@ -12,7 +12,10 @@ vi.mock('../src/logger', () => ({
   },
 }));
 
-function singleItem(groupId: string, overrides?: Partial<{ sender: string; content: string; timestamp: number }>): QueueItem {
+function singleItem(
+  groupId: string,
+  overrides?: Partial<{ sender: string; content: string; timestamp: number }>,
+): QueueItem {
   return {
     kind: 'single',
     request: {
@@ -125,7 +128,9 @@ describe('GroupProcessingQueue', () => {
   it('should report processing state per group', async () => {
     let resolveProcessing: () => void;
     const blockingCallback = async () => {
-      await new Promise<void>(r => { resolveProcessing = r; });
+      await new Promise<void>(r => {
+        resolveProcessing = r;
+      });
     };
     queue = new GroupProcessingQueue(blockingCallback);
 
@@ -138,7 +143,7 @@ describe('GroupProcessingQueue', () => {
     expect(queue.isProcessing('g2')).toBe(false);
     expect(queue.getPendingCount('g1')).toBe(0);
 
-    resolveProcessing!();
+    resolveProcessing?.();
     await vi.waitFor(() => {
       expect(queue.isProcessing('g1')).toBe(false);
     });

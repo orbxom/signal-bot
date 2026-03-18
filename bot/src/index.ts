@@ -5,14 +5,14 @@ import { logger } from './logger';
 import { MessageDeduplicator } from './messageDeduplicator';
 import { MessageHandler } from './messageHandler';
 import { ingestMessages } from './messageIngestion';
-import { sendStartupNotification, sendErrorNotification } from './notifications';
+import { sendErrorNotification, sendStartupNotification } from './notifications';
 import { PollingBackoff } from './pollingBackoff';
 import { RecurringReminderExecutor } from './recurringReminderExecutor';
 import { ReminderScheduler } from './reminderScheduler';
 import { SignalClient } from './signalClient';
 import { Storage } from './storage';
-import { TypingIndicatorManager } from './typingIndicator';
 import type { ExtractedMessage } from './types';
+import { TypingIndicatorManager } from './typingIndicator';
 
 async function main() {
   logger.info('Starting Signal Family Bot...');
@@ -79,7 +79,7 @@ async function main() {
   const typingManager = new TypingIndicatorManager(signalClient);
 
   // Create per-group processing queue with typing indicator wrapper
-  const processingQueue = new GroupProcessingQueue(async (item) => {
+  const processingQueue = new GroupProcessingQueue(async item => {
     const groupId = item.kind === 'single' ? item.request.groupId : item.requests[0].groupId;
     await typingManager.withTyping(groupId, () => messageHandler.processRequest(item));
   });
@@ -106,7 +106,7 @@ async function main() {
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);
 
-  process.on('unhandledRejection', (reason) => {
+  process.on('unhandledRejection', reason => {
     logger.error('Unhandled rejection:', reason);
     sendErrorNotification(signalClient, config, reason).finally(() => {
       process.exit(1);
@@ -182,7 +182,7 @@ async function main() {
           botPhoneNumber: config.botPhoneNumber,
           storage,
           signalClient,
-          enqueue: (item) => processingQueue.enqueue(item),
+          enqueue: item => processingQueue.enqueue(item),
           storeOnlyGroupIds: effectiveStoreOnly,
           deduplicator,
           attachmentsDir: config.attachmentsDir,
@@ -228,7 +228,7 @@ async function main() {
   }
 }
 
-main().catch(async (error) => {
+main().catch(async error => {
   logger.error('Fatal error:', error);
   // Best-effort: signalClient may not be initialized if error was during startup
   // This catch can't access signalClient from main's scope, so create a temporary one
