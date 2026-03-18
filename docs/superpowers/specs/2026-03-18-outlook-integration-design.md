@@ -20,13 +20,14 @@ Two new MCP tool servers giving the Signal bot access to a personal Outlook.com 
 ### Approach: Two Separate MCP Servers + Shared Auth Module
 
 ```
-bot/src/mcp/servers/
-  outlookCalendar.ts    — Calendar CRUD + attendee management (6 tools)
-  outlookEmail.ts       — Inbox listing, reading, archiving (4 tools)
-  outlook-auth.ts       — Shared auth module (not an MCP server)
+bot/src/mcp/
+  outlookAuth.ts                — Shared auth module (not an MCP server)
+  servers/
+    outlookCalendar.ts          — Calendar CRUD + attendee management (6 tools)
+    outlookEmail.ts             — Inbox listing, reading, archiving (4 tools)
 ```
 
-This follows the existing project convention where each MCP server is a focused, independent unit. The shared auth module is a regular TypeScript import used by both servers.
+This follows the existing project convention where each MCP server is a focused, independent unit. The shared auth module lives one level above `servers/` since it's a utility, not a server — keeping the `servers/` directory exclusively for actual MCP server definitions.
 
 ## Authentication & Token Management
 
@@ -44,10 +45,11 @@ Register an app in Microsoft Entra (Azure AD) portal for personal accounts. Requ
 2. **Runtime:** `outlook-auth.ts` reads `OUTLOOK_REFRESH_TOKEN` from env, exchanges for access token on first use, caches in memory, auto-refreshes ~5 minutes before expiry (tokens last 1 hour).
 3. **Deploy:** `scripts/deploy-nuc.sh` syncs the refresh token to the NUC's `bot/.env` automatically.
 
-### Shared Auth Module: `bot/src/mcp/servers/outlook-auth.ts`
+### Shared Auth Module: `bot/src/mcp/outlookAuth.ts`
 
 - `getAccessToken(): Promise<string>` — returns valid access token, refreshing if needed
 - `graphFetch(path: string, options?): Promise<Response>` — thin wrapper around `fetch` with `Authorization: Bearer` header and base URL (`https://graph.microsoft.com/v1.0`). Handles 401 retry (force-refresh token, retry once).
+- **Expired/revoked token handling:** If the token endpoint returns `invalid_grant` (refresh token expired or revoked — Microsoft personal account tokens expire after 90 days of inactivity), the module logs a clear message ("Outlook refresh token has expired — re-run scripts/outlook-auth.ts") and all Outlook tools return a user-friendly error rather than a raw API error.
 
 ### Environment Variables
 
@@ -63,14 +65,15 @@ Both optional — if `OUTLOOK_REFRESH_TOKEN` is missing, Outlook tools simply do
 **File:** `bot/src/mcp/servers/outlookCalendar.ts`
 **Config key:** `outlook_calendar`
 **Entrypoint:** `outlookCalendar`
-**Env mapping:** `{ OUTLOOK_REFRESH_TOKEN: 'outlookRefreshToken', OUTLOOK_CLIENT_ID: 'outlookClientId', TZ: 'timezone' }`
+**Env mapping:** `{ OUTLOOK_REFRESH_TOKEN: 'outlookRefreshToken', OUTLOOK_CLIENT_ID: 'outlookClientId', TZ: 'timezone', MCP_GROUP_ID: 'groupId', MCP_SENDER: 'sender' }`
 
 ### Tools (6)
 
 #### `list_calendar_events`
-- **Inputs:** `startDate` (required, ISO date), `endDate` (optional, defaults to same day)
+- **Inputs:** `startDate` (required, YYYY-MM-DD), `endDate` (optional, YYYY-MM-DD, defaults to same day)
 - **Returns:** Subject, start/end times, location, attendees, online meeting link
 - **Graph:** `GET /me/calendarView?startDateTime=...&endDateTime=...`
+- **Date conversion:** Inputs are YYYY-MM-DD dates. The tool converts to timezone-aware datetimes using `TZ`: `startDateTime = startDate at 00:00 in TZ`, `endDateTime = endDate at 23:59:59 in TZ` (or start of next day).
 
 #### `get_calendar_event`
 - **Inputs:** `eventId` (required)
@@ -78,13 +81,14 @@ Both optional — if `OUTLOOK_REFRESH_TOKEN` is missing, Outlook tools simply do
 - **Graph:** `GET /me/events/{id}`
 
 #### `create_calendar_event`
-- **Inputs:** `subject` (required), `startDateTime` (required), `endDateTime` (required), `location` (optional), `body` (optional), `isOnlineMeeting` (optional, boolean)
+- **Inputs:** `subject` (required), `startDateTime` (required, ISO 8601 e.g. `2026-03-18T14:00:00`), `endDateTime` (required, ISO 8601), `location` (optional), `body` (optional), `isOnlineMeeting` (optional, boolean)
 - **Returns:** Created event ID + summary
 - **Graph:** `POST /me/events`
+- **Datetime handling:** Input datetimes are ISO 8601 strings. The tool uses the `TZ` env var as the timezone for the Graph API `timeZone` field: `{ "dateTime": "2026-03-18T14:00:00", "timeZone": "Australia/Sydney" }`.
 - **Notification:** Yes
 
 #### `update_calendar_event`
-- **Inputs:** `eventId` (required), plus any of: `subject`, `startDateTime`, `endDateTime`, `location`, `body`
+- **Inputs:** `eventId` (required), plus any of: `subject`, `startDateTime` (ISO 8601), `endDateTime` (ISO 8601), `location`, `body`
 - **Returns:** Updated event summary
 - **Graph:** `PATCH /me/events/{id}`
 - **Notification:** Yes
@@ -107,7 +111,7 @@ Both optional — if `OUTLOOK_REFRESH_TOKEN` is missing, Outlook tools simply do
 **File:** `bot/src/mcp/servers/outlookEmail.ts`
 **Config key:** `outlook_email`
 **Entrypoint:** `outlookEmail`
-**Env mapping:** `{ OUTLOOK_REFRESH_TOKEN: 'outlookRefreshToken', OUTLOOK_CLIENT_ID: 'outlookClientId', TZ: 'timezone' }`
+**Env mapping:** `{ OUTLOOK_REFRESH_TOKEN: 'outlookRefreshToken', OUTLOOK_CLIENT_ID: 'outlookClientId', TZ: 'timezone', MCP_GROUP_ID: 'groupId', MCP_SENDER: 'sender' }`
 
 ### Tools (4)
 
@@ -120,18 +124,19 @@ Both optional — if `OUTLOOK_REFRESH_TOKEN` is missing, Outlook tools simply do
 #### `read_email`
 - **Inputs:** `emailId` (required)
 - **Returns:** Full body (plain text preferred, stripped HTML fallback), headers, attachment names (no content)
-- **Graph:** `GET /me/messages/{id}?$select=subject,from,toRecipients,ccRecipients,body,receivedDateTime,hasAttachments,attachments`
+- **Graph:** `GET /me/messages/{id}?$select=subject,from,toRecipients,ccRecipients,body,receivedDateTime,hasAttachments&$expand=attachments($select=name,contentType,size)`
 
 #### `archive_emails`
 - **Inputs:** `emailIds` (required, array of email IDs)
-- **Behavior:** Moves each email via `POST /me/messages/{id}/move` with `destinationId: "archive"`
-- **Returns:** Count of successfully archived emails
+- **Behavior:** Moves each email via `POST /me/messages/{id}/move` with `destinationId: "archive"`. On first call, verifies the Archive folder exists via `GET /me/mailFolders/archive`; if it doesn't exist (404), returns a clear error asking the user to create an Archive folder in Outlook.
+- **Returns:** Count of successfully archived emails. On partial failure: `ok("Archived 3 of 5 emails. Failed: [id1, id2] (reason)")`. Uses `error()` only when all operations fail.
 - **Notification:** Yes — "Archived 5 emails"
 
 #### `mark_emails_read`
 - **Inputs:** `emailIds` (required, array of email IDs)
-- **Behavior:** PATCHes each email with `{ isRead: true }`
+- **Behavior:** PATCHes each email with `{ isRead: true }`. On partial failure: same pattern as `archive_emails`.
 - **Returns:** Count updated
+- **Notification:** No — marking emails read is a low-impact action that doesn't warrant a Signal notification.
 
 ### Deliberately Excluded
 
@@ -159,7 +164,7 @@ This workflow is handled entirely by Claude's system prompt instructions — no 
 Standalone CLI script (`npx tsx scripts/outlook-auth.ts`):
 
 1. Prints a Microsoft login URL with required scopes
-2. Starts temporary local HTTP server on `localhost:3333` to catch OAuth redirect
+2. Starts temporary local HTTP server on `localhost:8400` to catch OAuth redirect (port 3333 is reserved for the Dark Factory dashboard)
 3. User opens URL in browser, logs in, consents
 4. Script receives authorization code, exchanges for tokens via PKCE (no client secret)
 5. Prints refresh token + `OUTLOOK_CLIENT_ID` with instructions for `bot/.env`
@@ -173,27 +178,28 @@ No external dependencies — uses `node:http` and `node:crypto` for PKCE.
 After existing rsync step:
 
 1. Read `OUTLOOK_REFRESH_TOKEN` and `OUTLOOK_CLIENT_ID` from local `bot/.env`
-2. SSH into NUC, update those values in NUC's `bot/.env` (sed/replace on specific lines, leave rest untouched)
-3. If values don't exist in NUC's `.env` yet, append them
+2. SSH into NUC, update those values in NUC's `bot/.env` using a safe grep-and-append approach: remove existing lines with `grep -v '^OUTLOOK_REFRESH_TOKEN='` and `grep -v '^OUTLOOK_CLIENT_ID='`, then append the new values. This avoids sed escaping issues (Microsoft tokens contain `/`, `+`, `=` and other characters that break sed).
+3. Only sync if the values exist in the local `.env` (skip silently if not configured)
 
 The deploy skill documentation should be updated to mention these new env vars.
 
 ## Config & Registry Integration
 
-### `bot/src/config.ts` — New Fields
+### Config Changes (three interfaces need updating)
 
-```typescript
-outlookRefreshToken: string    // from OUTLOOK_REFRESH_TOKEN, optional (empty = Outlook disabled)
-outlookClientId: string        // from OUTLOOK_CLIENT_ID, optional
-```
+1. **`ConfigType` in `bot/src/config.ts`** — Add fields and load from env:
+   ```typescript
+   outlookRefreshToken: string    // from OUTLOOK_REFRESH_TOKEN, optional (empty = Outlook disabled)
+   outlookClientId: string        // from OUTLOOK_CLIENT_ID, optional
+   ```
+
+2. **`AppConfig` in `bot/src/types.ts`** — Add the same two fields to the interface (this is what `MessageContext` extends, and what `EnvMapping` resolves against via `keyof MessageContext`)
+
+3. **`appConfig` construction in `bot/src/index.ts`** — Copy the new fields from `ConfigType` into the `AppConfig` object that gets passed to `MessageHandler`
 
 ### Registry
 
 No changes to `bot/src/mcp/registry.ts`. The two servers are added to `ALL_SERVERS` in `bot/src/mcp/servers/index.ts` and autodiscovery handles the rest.
-
-### MessageContext Extension
-
-Two new fields: `outlookRefreshToken` and `outlookClientId`. Populated from config in `messageHandler.ts`.
 
 ### No Database Changes
 
@@ -233,16 +239,19 @@ Tests inject mock fetch to return canned Graph API responses, matching the patte
 ## File Summary
 
 New files:
-- `bot/src/mcp/servers/outlook-auth.ts` — shared auth module
+- `bot/src/mcp/outlookAuth.ts` — shared auth module (one level above `servers/`)
 - `bot/src/mcp/servers/outlookCalendar.ts` — calendar MCP server
 - `bot/src/mcp/servers/outlookEmail.ts` — email MCP server
 - `scripts/outlook-auth.ts` — one-time OAuth setup script
 - `bot/tests/outlookCalendarMcpServer.test.ts` — calendar server tests
 - `bot/tests/outlookEmailMcpServer.test.ts` — email server tests
-- `bot/tests/outlook-auth.test.ts` — auth module tests
+- `bot/tests/outlookAuth.test.ts` — auth module tests
 
 Modified files:
 - `bot/src/mcp/servers/index.ts` — add two imports to `ALL_SERVERS`
-- `bot/src/config.ts` — add `outlookRefreshToken` and `outlookClientId` fields
-- `bot/src/messageHandler.ts` — populate new `MessageContext` fields from config
+- `bot/src/config.ts` — add `outlookRefreshToken` and `outlookClientId` to `ConfigType`
+- `bot/src/types.ts` — add `outlookRefreshToken` and `outlookClientId` to `AppConfig`
+- `bot/src/index.ts` — copy new config fields into `appConfig` construction
+- `bot/src/messageHandler.ts` — add default values for new `AppConfig` fields
 - `scripts/deploy-nuc.sh` — add Outlook token sync step
+- `CLAUDE.md` — add `outlookCalendar.ts` and `outlookEmail.ts` to MCP Servers section, add `OUTLOOK_REFRESH_TOKEN` and `OUTLOOK_CLIENT_ID` to env vars, update NUC .env differences section
