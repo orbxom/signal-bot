@@ -51,6 +51,8 @@ export class MessageHandler {
       botPhoneNumber: '',
       attachmentsDir: './data/signal-attachments',
       whisperModelPath: './models/ggml-base.en.bin',
+      darkFactoryEnabled: '',
+      darkFactoryProjectRoot: '',
     };
     this.storage = deps.storage;
     this.llmClient = deps.llmClient;
