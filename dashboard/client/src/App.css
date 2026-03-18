@@ -86,39 +86,52 @@ a {
   padding: 1rem 1.25rem;
 }
 
-.status-card.success {
+.status-card--success {
   border-color: #6d6;
 }
 
-.status-card.error {
+.status-card--error {
   border-color: #e74;
 }
 
-.status-card.warning {
+.status-card--warning {
   border-color: #fa3;
 }
 
-.status-card-label {
+.status-card__label {
   font-size: 0.85rem;
   color: #aaa;
   margin-bottom: 0.25rem;
 }
 
-.status-card-value {
+.status-card__value {
   font-size: 1.5rem;
   font-weight: 700;
 }
 
-.status-card.success .status-card-value {
+.status-card__detail {
+  font-size: 0.8rem;
+  color: #888;
+  margin-top: 0.25rem;
+}
+
+.status-card--success .status-card__value {
   color: #8f8;
 }
 
-.status-card.error .status-card-value {
+.status-card--error .status-card__value {
   color: #e74;
 }
 
-.status-card.warning .status-card-value {
+.status-card--warning .status-card__value {
   color: #fa3;
+}
+
+.status-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
 }
 
 /* Data table */
