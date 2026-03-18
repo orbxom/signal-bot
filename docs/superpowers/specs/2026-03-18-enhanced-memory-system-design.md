@@ -79,18 +79,23 @@ A focused system prompt (~500 tokens) that instructs Claude to:
 }
 ```
 
-### Concurrency
+### Concurrency & Lifecycle
 
-- Separate from the existing `SpawnLimiter` (which caps at 2 concurrent Claude calls for responses)
+- Uses its own `SpawnLimiter(1)` instance — separate from the response limiter but **registered with the shutdown handler** in `index.ts` so extraction processes are killed on graceful shutdown (avoids orphaned `claude -p` processes)
 - Max 1 extraction running at a time
-- If an extraction is already running when a new one is requested, drop the new request (the next response will catch up)
+- **Debounced**: After a bot response, wait 5 seconds before firing extraction. If another response arrives during the wait, reset the timer. This way a burst of 10 rapid messages triggers one extraction at the end, not 10.
 - Extraction failures are logged but never surface to the group
+
+### Dossier Update Semantics
+
+Claude outputs the **complete merged notes** for each dossier update — i.e., it reads the existing notes, decides what to keep/add/remove, and outputs the full replacement text. The extraction code does a simple `upsert()` with the result. Claude is not outputting "just the new facts to append" — it owns the merge.
 
 ### Implementation Details
 
 - New file: `bot/src/memoryExtractor.ts` — encapsulates the extraction logic
-- Spawns `claude -p` directly (same as `claudeClient.ts` but without MCP config)
-- Model: Claude Haiku for speed (~5-10s per extraction)
+- Spawns `claude -p` directly (same pattern as `recurringReminderExecutor.ts` but without MCP config)
+- Uses a dedicated `SpawnLimiter(1)` registered with the shutdown handler
+- Model: Uses default Claude CLI model (Haiku via config)
 - Only triggers for groups where the bot actually responded (not store-only groups)
 - Timeout: 30s hard kill
 
@@ -167,7 +172,7 @@ Instructs Claude to:
 
 ### Daily Summaries
 
-- Stored as memory topics with prefix `daily:` (e.g., `daily:2026-03-18`)
+- Stored as memory topics with prefix `__daily:` (e.g., `__daily:2026-03-18`) — double-underscore prefix prevents clashes with user-created topics
 - Content: Brief recap — who was active, what was discussed, any notable events
 - Retention: Keep last 14 daily summaries. Older ones are auto-deleted during consolidation.
 - These summaries are loaded into context like any other memory, giving the bot a sense of recent history
@@ -178,22 +183,27 @@ Instructs Claude to:
 - Edit `bot/src/index.ts` — add daily check to maintenance loop
 - Add `consolidation_last_run` key to `schema_meta` table
 - Reuses the same JSON schema and DB application logic as the extraction feature
+- All writes for a single group wrapped in a `db.transaction()` for atomicity
+- If the bot was down when consolidation was due, run it on next startup (catch-up)
+- Message input for the consolidation Claude call is token-bounded (max 4000 tokens of messages, same pattern as `fitToTokenBudget()`)
 
 ---
 
 ## Token Budget Impact
 
-### Before (4,000 token budget)
+Budget is 10,000 tokens (recently increased from 4,000).
+
+### Before (10,000 tokens, with skills)
 
 | Component | Tokens | % |
 |-----------|--------|---|
-| System prompt + instructions | ~450 | 11% |
-| Skills | ~1,934 | 48% |
-| Dossiers (5 people) | ~250 | 6% |
-| Memories (3 topics) | ~800 | 20% |
-| **Chat history** | **~566** | **14%** |
+| System prompt + instructions | ~450 | 5% |
+| Skills | ~1,934 | 19% |
+| Dossiers (5 people) | ~250 | 3% |
+| Memories (3 topics) | ~800 | 8% |
+| **Chat history** | **~6,566** | **66%** |
 
-### After (10,000 token budget, skills slimmed)
+### After (10,000 tokens, skills slimmed)
 
 | Component | Tokens | % |
 |-----------|--------|---|
@@ -202,7 +212,7 @@ Instructs Claude to:
 | Memories (5 topics + dailies) | ~1,200 | 12% |
 | **Chat history** | **~7,950** | **80%** |
 
-Chat history goes from ~5-15 messages to ~100+ messages.
+Skills slimming frees ~1,400 tokens. Chat history improves from ~80-100 messages to ~100-120 messages. The big win was the budget increase from 4k to 10k (already done).
 
 ---
 
@@ -213,9 +223,9 @@ Chat history goes from ~5-15 messages to ~100+ messages.
 - `bot/src/memoryConsolidator.ts` — Daily consolidation logic
 
 ### Modified Files
-- `bot/src/messageHandler.ts` — Fire extraction after response, remove skill loading
-- `bot/src/contextBuilder.ts` — Add condensed capabilities text, remove `loadSkillContent()`
-- `bot/src/index.ts` — Add daily consolidation check to maintenance loop
+- `bot/src/messageHandler.ts` — Fire extraction after response, remove `loadSkillContent()` call from `assembleAdditionalContext()`
+- `bot/src/contextBuilder.ts` — Remove `loadSkillContent()` method and `cachedSkillContent` field. Add condensed capabilities text. Audit existing inline constants (`SOURCE_CODE_INSTRUCTIONS`, `MEMORY_INSTRUCTIONS`, `VOICE_MESSAGE_INSTRUCTIONS`, `IMAGE_INSTRUCTIONS`) to avoid duplication with the new capabilities section.
+- `bot/src/index.ts` — Add daily consolidation check to maintenance loop, register extraction SpawnLimiter with shutdown handler
 
 ### Deleted/Archived
 - `bot/src/skills/dossier-maintenance.md`
@@ -259,5 +269,5 @@ Chat history goes from ~5-15 messages to ~100+ messages.
 - Send a message to the bot mentioning a new fact about yourself
 - Check the database — dossier should auto-update within ~10s without the bot announcing it
 - Next day at 3am, verify consolidation ran (check logs + `schema_meta` for timestamp)
-- Verify daily summary appears as a `daily:YYYY-MM-DD` memory topic
+- Verify daily summary appears as a `__daily:YYYY-MM-DD` memory topic
 - Compare conversation quality — bot should reference more recent context in responses
