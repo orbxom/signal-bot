@@ -35,14 +35,15 @@ export const imagesServer: McpServerDefinition = {
   tools: TOOLS,
   envMapping: { DB_PATH: 'dbPath' },
   handlers: {
-    view_image(args): ToolResult {
+    view_image(args): ToolResult | Promise<ToolResult> {
       const id = requireString(args, 'attachmentId');
       if (id.error) return id.error;
 
       if (!store) return error('Image store not initialized.');
 
+      const s = store;
       return catchErrors(() => {
-        const attachment = store.get(id.value);
+        const attachment = s.get(id.value);
         if (!attachment) return error(`Attachment not found: ${id.value}`);
 
         const base64Data = Buffer.isBuffer(attachment.data) ? attachment.data.toString('base64') : attachment.data;

@@ -100,7 +100,6 @@ export const healthCheckServer: McpServerDefinition = {
     DB_PATH: 'dbPath',
     SIGNAL_CLI_URL: 'signalCliUrl',
     SIGNAL_ACCOUNT: 'botPhoneNumber',
-    BOT_START_TIME: 'botStartTime',
   },
   handlers: {
     health_check() {
