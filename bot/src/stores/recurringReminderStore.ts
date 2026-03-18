@@ -31,6 +31,8 @@ export class RecurringReminderStore {
     incrementFailures: Database.Statement;
     advanceNextDue: Database.Statement;
     getById: Database.Statement;
+    listAllNoFilter: Database.Statement;
+    listAllByGroup: Database.Statement;
   };
 
   constructor(conn: DatabaseConnection) {
@@ -84,6 +86,12 @@ export class RecurringReminderStore {
       getById: conn.db.prepare(`
         SELECT * FROM recurring_reminders WHERE id = ?
       `),
+      listAllNoFilter: conn.db.prepare(
+        `SELECT * FROM recurring_reminders WHERE status = '${STATUS.active}' ORDER BY nextDueAt ASC LIMIT ? OFFSET ?`,
+      ),
+      listAllByGroup: conn.db.prepare(
+        `SELECT * FROM recurring_reminders WHERE status = '${STATUS.active}' AND groupId = ? ORDER BY nextDueAt ASC LIMIT ? OFFSET ?`,
+      ),
     };
   }
 
@@ -186,29 +194,33 @@ export class RecurringReminderStore {
     return this.conn.runOp('list all recurring reminders', () => {
       const limit = Math.min(filters?.limit ?? 50, 200);
       const offset = filters?.offset ?? 0;
-      const conditions: string[] = ['status = ?'];
-      const params: unknown[] = ['active'];
 
+      let rows: Array<RecurringReminderRow>;
       if (filters?.groupId) {
-        conditions.push('groupId = ?');
-        params.push(filters.groupId);
+        rows = this.stmts.listAllByGroup.all(filters.groupId, limit, offset) as Array<RecurringReminderRow>;
+      } else {
+        rows = this.stmts.listAllNoFilter.all(limit, offset) as Array<RecurringReminderRow>;
       }
-
-      const where = `WHERE ${conditions.join(' AND ')}`;
-      const sql = `SELECT * FROM recurring_reminders ${where} ORDER BY nextDueAt ASC LIMIT ? OFFSET ?`;
-      params.push(limit, offset);
-
-      const rows = this.conn.db.prepare(sql).all(...params) as Array<RecurringReminderRow>;
       return rows.map(mapRow);
     });
   }
 
   resetFailures(id: number): boolean {
     return this.conn.runOp('reset recurring reminder failures', () => {
-      const result = this.conn.db.prepare(
-        'UPDATE recurring_reminders SET consecutiveFailures = 0 WHERE id = ?'
-      ).run(id);
+      const result = this.conn.db
+        .prepare('UPDATE recurring_reminders SET consecutiveFailures = 0 WHERE id = ?')
+        .run(id);
       return result.changes > 0;
+    });
+  }
+
+  handleFailure(id: number, nextDueAt: number): number {
+    return this.conn.transaction(() => {
+      const now = Date.now();
+      this.stmts.advanceNextDue.run(nextDueAt, now, id);
+      this.stmts.incrementFailures.run(now, id);
+      const row = this.stmts.getById.get(id) as RecurringReminderRow | undefined;
+      return row?.consecutiveFailures ?? 0;
     });
   }
 

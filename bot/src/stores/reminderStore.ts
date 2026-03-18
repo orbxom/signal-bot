@@ -23,12 +23,15 @@ export class ReminderStore {
     getDueByGroup: Database.Statement;
     getGroupsWithDueReminders: Database.Statement;
     markSent: Database.Statement;
+    completeReminder: Database.Statement;
     markFailed: Database.Statement;
     recordAttempt: Database.Statement;
     cancel: Database.Statement;
     listPending: Database.Statement;
-    selectDueReminders: Database.Statement;
-    incrementRetry: Database.Statement;
+    listAllNoFilter: Database.Statement;
+    listAllByGroup: Database.Statement;
+    listAllByStatus: Database.Statement;
+    listAllByGroupAndStatus: Database.Statement;
   };
 
   constructor(conn: DatabaseConnection) {
@@ -51,6 +54,10 @@ export class ReminderStore {
       markSent: conn.db.prepare(`
         UPDATE reminders SET status = '${STATUS.sent}', sentAt = ? WHERE id = ? AND status = '${STATUS.pending}'
       `),
+      completeReminder: conn.db.prepare(`
+        UPDATE reminders SET status = '${STATUS.sent}', sentAt = ?, lastAttemptAt = ?, retryCount = retryCount + 1
+        WHERE id = ? AND status = '${STATUS.pending}'
+      `),
       markFailed: conn.db.prepare(`
         UPDATE reminders SET status = '${STATUS.failed}', failureReason = ? WHERE id = ? AND status = '${STATUS.pending}'
       `),
@@ -65,17 +72,12 @@ export class ReminderStore {
         WHERE groupId = ? AND status = '${STATUS.pending}'
         ORDER BY dueAt ASC
       `),
-      // Legacy compat: due reminders without group filter
-      selectDueReminders: conn.db.prepare(`
-        SELECT * FROM reminders
-        WHERE status = '${STATUS.pending}' AND dueAt <= ?
-        ORDER BY dueAt ASC
-        LIMIT ?
-      `),
-      // Legacy compat: increment retry without setting lastAttemptAt
-      incrementRetry: conn.db.prepare(`
-        UPDATE reminders SET retryCount = retryCount + 1 WHERE id = ?
-      `),
+      listAllNoFilter: conn.db.prepare('SELECT * FROM reminders ORDER BY dueAt DESC LIMIT ? OFFSET ?'),
+      listAllByGroup: conn.db.prepare('SELECT * FROM reminders WHERE groupId = ? ORDER BY dueAt DESC LIMIT ? OFFSET ?'),
+      listAllByStatus: conn.db.prepare('SELECT * FROM reminders WHERE status = ? ORDER BY dueAt DESC LIMIT ? OFFSET ?'),
+      listAllByGroupAndStatus: conn.db.prepare(
+        'SELECT * FROM reminders WHERE groupId = ? AND status = ? ORDER BY dueAt DESC LIMIT ? OFFSET ?',
+      ),
     };
   }
 
@@ -123,6 +125,14 @@ export class ReminderStore {
     });
   }
 
+  completeReminder(id: number): boolean {
+    return this.conn.runOp('complete reminder', () => {
+      const now = Date.now();
+      const result = this.stmts.completeReminder.run(now, now, id);
+      return result.changes > 0;
+    });
+  }
+
   markFailed(id: number, reason: string): boolean {
     return this.conn.runOp('mark reminder failed', () => {
       const result = this.stmts.markFailed.run(reason, id);
@@ -157,52 +167,27 @@ export class ReminderStore {
     }
   }
 
-  // Legacy compatibility methods (used by existing Storage facade)
-  getDueReminders(now?: number, limit = 50): Reminder[] {
-    return this.conn.runOp('get due reminders', () => {
-      const rows = this.stmts.selectDueReminders.all(now ?? Date.now(), limit) as Array<ReminderRow>;
-      return rows.map(mapReminderRow);
-    });
-  }
-
-  /**
-   * Legacy: mark failed without reason (for backward compat with old Storage API)
-   */
-  markFailedLegacy(id: number): boolean {
-    return this.markFailed(id, '');
-  }
-
   listAll(filters?: { groupId?: string; status?: string; limit?: number; offset?: number }): Reminder[] {
     return this.conn.runOp('list all reminders', () => {
       const limit = Math.min(filters?.limit ?? 50, 200);
       const offset = filters?.offset ?? 0;
-      const conditions: string[] = [];
-      const params: unknown[] = [];
 
-      if (filters?.groupId) {
-        conditions.push('groupId = ?');
-        params.push(filters.groupId);
+      let rows: Array<ReminderRow>;
+      if (filters?.groupId && filters?.status) {
+        rows = this.stmts.listAllByGroupAndStatus.all(
+          filters.groupId,
+          filters.status,
+          limit,
+          offset,
+        ) as Array<ReminderRow>;
+      } else if (filters?.groupId) {
+        rows = this.stmts.listAllByGroup.all(filters.groupId, limit, offset) as Array<ReminderRow>;
+      } else if (filters?.status) {
+        rows = this.stmts.listAllByStatus.all(filters.status, limit, offset) as Array<ReminderRow>;
+      } else {
+        rows = this.stmts.listAllNoFilter.all(limit, offset) as Array<ReminderRow>;
       }
-      if (filters?.status) {
-        conditions.push('status = ?');
-        params.push(filters.status);
-      }
-
-      const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-      const sql = `SELECT * FROM reminders ${where} ORDER BY dueAt DESC LIMIT ? OFFSET ?`;
-      params.push(limit, offset);
-
-      const rows = this.conn.db.prepare(sql).all(...params) as Array<ReminderRow>;
       return rows.map(mapReminderRow);
-    });
-  }
-
-  /**
-   * Legacy: increment retry without setting lastAttemptAt
-   */
-  incrementRetry(id: number): void {
-    this.conn.runOp('increment reminder retry', () => {
-      this.stmts.incrementRetry.run(id);
     });
   }
 }

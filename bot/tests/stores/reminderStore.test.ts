@@ -227,6 +227,48 @@ describe('ReminderStore', () => {
     });
   });
 
+  describe('completeReminder', () => {
+    it('should transition pending to sent, set sentAt + lastAttemptAt, and increment retryCount', () => {
+      setup();
+      const now = Date.now();
+      vi.spyOn(Date, 'now').mockReturnValue(now - 120000);
+      const id = store.create('group1', 'Alice', 'Test', now - 60000);
+      vi.restoreAllMocks();
+
+      const result = store.completeReminder(id);
+      expect(result).toBe(true);
+
+      // Should no longer appear in due reminders (status changed to sent)
+      const due = store.getDueByGroup('group1', now, 50);
+      expect(due).toHaveLength(0);
+
+      // Check the fields via listAll
+      const all = store.listAll({ groupId: 'group1', status: 'sent' });
+      expect(all).toHaveLength(1);
+      expect(all[0].sentAt).toBeGreaterThan(0);
+      expect(all[0].lastAttemptAt).toBeGreaterThan(0);
+      expect(all[0].retryCount).toBe(1);
+    });
+
+    it('should return false for already-sent reminder (idempotent)', () => {
+      setup();
+      const now = Date.now();
+      vi.spyOn(Date, 'now').mockReturnValue(now - 120000);
+      const id = store.create('group1', 'Alice', 'Test', now - 60000);
+      vi.restoreAllMocks();
+
+      store.completeReminder(id);
+      const result = store.completeReminder(id);
+      expect(result).toBe(false);
+    });
+
+    it('should return false for non-existent ID', () => {
+      setup();
+      const result = store.completeReminder(999);
+      expect(result).toBe(false);
+    });
+  });
+
   describe('recordAttempt', () => {
     it('should increment retryCount and set lastAttemptAt', () => {
       setup();
