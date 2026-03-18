@@ -234,7 +234,7 @@ Following existing pattern (`bot/tests/helpers/mcpTestHelpers.ts`):
 - OAuth browser flow in setup script — manual one-time operation
 
 ### Mocking Approach
-Tests inject mock fetch to return canned Graph API responses, matching the pattern used by weather server tests.
+Tests inject mock fetch (or intercept at the network level) to return canned Graph API responses. Unlike the weather server tests (which make real BOM API calls), Outlook tests must be fully mocked since Graph API calls require authentication. The test infrastructure (`spawnMcpServer`, `sendAndReceive`, `initializeServer` from `mcpTestHelpers.ts`) is reused.
 
 ## File Summary
 
