@@ -94,4 +94,127 @@ describe('GroupProcessingQueue', () => {
     });
     expect(maxConcurrent).toBe(1);
   });
+
+  it('should allow different groups to process concurrently', async () => {
+    const order: string[] = [];
+    const slow = async (item: QueueItem) => {
+      const id = item.kind === 'single' ? item.request.groupId : item.requests[0].groupId;
+      order.push(`start:${id}`);
+      await new Promise(r => setTimeout(r, 30));
+      order.push(`end:${id}`);
+    };
+    queue = new GroupProcessingQueue(slow);
+
+    queue.enqueue(singleItem('g1'));
+    queue.enqueue(singleItem('g2'));
+
+    await vi.waitFor(() => {
+      expect(order.filter(o => o.startsWith('end:'))).toHaveLength(2);
+    });
+
+    const startG1 = order.indexOf('start:g1');
+    const startG2 = order.indexOf('start:g2');
+    const endG1 = order.indexOf('end:g1');
+    const endG2 = order.indexOf('end:g2');
+    expect(startG1).toBeLessThan(endG1);
+    expect(startG2).toBeLessThan(endG2);
+    expect(startG1).toBeLessThan(endG2);
+    expect(startG2).toBeLessThan(endG1);
+  });
+
+  it('should report processing state per group', async () => {
+    let resolveProcessing: () => void;
+    const blockingCallback = async () => {
+      await new Promise<void>(r => { resolveProcessing = r; });
+    };
+    queue = new GroupProcessingQueue(blockingCallback);
+
+    expect(queue.isProcessing('g1')).toBe(false);
+
+    queue.enqueue(singleItem('g1'));
+    await new Promise(r => setTimeout(r, 0));
+
+    expect(queue.isProcessing('g1')).toBe(true);
+    expect(queue.isProcessing('g2')).toBe(false);
+    expect(queue.getPendingCount('g1')).toBe(0);
+
+    resolveProcessing!();
+    await vi.waitFor(() => {
+      expect(queue.isProcessing('g1')).toBe(false);
+    });
+  });
+
+  describe('TTL safety valve', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('should release lock and move to next item when TTL expires', async () => {
+      const results: string[] = [];
+      const callback = async (item: QueueItem) => {
+        const content = item.kind === 'single' ? item.request.content : 'coalesced';
+        if (content === 'hang') {
+          await new Promise(() => {}); // never resolves
+        }
+        results.push(content);
+      };
+      queue = new GroupProcessingQueue(callback, { ttlMs: 1000 });
+
+      queue.enqueue(singleItem('g1', { content: 'hang' }));
+      queue.enqueue(singleItem('g1', { content: 'second' }));
+
+      await vi.advanceTimersByTimeAsync(0);
+      await vi.advanceTimersByTimeAsync(1000);
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(results).toContain('second');
+    });
+  });
+
+  describe('queue cap', () => {
+    it('should drop new items when queue is full', () => {
+      const callback = async () => {
+        await new Promise(() => {}); // block forever
+      };
+      queue = new GroupProcessingQueue(callback, { maxQueueSize: 2 });
+
+      queue.enqueue(singleItem('g1', { content: 'processing' }));
+      queue.enqueue(singleItem('g1', { content: 'queued1' }));
+      queue.enqueue(singleItem('g1', { content: 'queued2' }));
+      queue.enqueue(singleItem('g1', { content: 'dropped' }));
+
+      expect(queue.getPendingCount('g1')).toBe(2);
+    });
+  });
+
+  describe('shutdown', () => {
+    it('should stop accepting new items after shutdown', () => {
+      queue.shutdown();
+      queue.enqueue(singleItem('g1'));
+
+      expect(queue.isProcessing('g1')).toBe(false);
+      expect(queue.getPendingCount('g1')).toBe(0);
+    });
+
+    it('should clear pending queues on shutdown', async () => {
+      const callback = async () => {
+        await new Promise(() => {}); // block forever
+      };
+      queue = new GroupProcessingQueue(callback);
+
+      queue.enqueue(singleItem('g1', { content: 'processing' }));
+      queue.enqueue(singleItem('g1', { content: 'pending' }));
+
+      await new Promise(r => setTimeout(r, 0));
+
+      expect(queue.getPendingCount('g1')).toBe(1);
+
+      queue.shutdown();
+      expect(queue.getPendingCount('g1')).toBe(0);
+    });
+  });
 });
