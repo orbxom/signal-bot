@@ -2,6 +2,7 @@ import { ClaudeCLIClient, spawnLimiter } from './claudeClient';
 import { Config } from './config';
 import { logger } from './logger';
 import { MessageHandler } from './messageHandler';
+import { sendStartupNotification, sendErrorNotification } from './notifications';
 import { PollingBackoff } from './pollingBackoff';
 import { RecurringReminderExecutor } from './recurringReminderExecutor';
 import { ReminderScheduler } from './reminderScheduler';
@@ -86,13 +87,17 @@ async function main() {
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);
 
-  process.on('unhandledRejection', reason => {
+  process.on('unhandledRejection', async (reason) => {
     logger.error('Unhandled rejection:', reason);
+    await sendErrorNotification(signalClient, config, reason);
+    process.exit(1);
   });
 
   // Wait for signal-cli to be ready
   logger.info('Waiting for signal-cli...');
   await signalClient.waitForReady();
+
+  await sendStartupNotification(signalClient, config);
 
   // Start polling loop
   logger.success('Starting message polling...');
@@ -191,7 +196,18 @@ async function main() {
   }
 }
 
-main().catch(error => {
+main().catch(async (error) => {
   logger.error('Fatal error:', error);
+  // Best-effort: signalClient may not be initialized if error was during startup
+  // This catch can't access signalClient from main's scope, so create a temporary one
+  try {
+    const config = Config.load();
+    if (config.startupNotify) {
+      const tempClient = new SignalClient(config.signalCliUrl, config.botPhoneNumber);
+      await sendErrorNotification(tempClient, config, error);
+    }
+  } catch {
+    // Config or signal-cli not available — just exit
+  }
   process.exit(1);
 });
