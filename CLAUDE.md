@@ -180,6 +180,7 @@ The NUC has its own `bot/.env` with:
 - `EXCLUDE_GROUP_IDS=kKWs+FQPBZKe7N7CdxMjNAAjE2uWEmtBij55MOfWFU4=` (test group excluded)
 - `SIGNAL_CLI_URL=http://localhost:8080`
 - `ATTACHMENTS_DIR=/home/zknowles/signal-bot/data/signal-attachments`
+- `STARTUP_NOTIFY=true` (sends startup/error notifications to Bot Test channel)
 - No `DARK_FACTORY_ENABLED` (production bot only)
 
 ### Channel Filtering

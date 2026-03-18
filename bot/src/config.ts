@@ -25,6 +25,7 @@ export interface ConfigType {
   testChannelOnly: boolean;
   testGroupId: string;
   collaborativeTestingMode: boolean;
+  startupNotify: boolean;
 }
 
 const DEFAULT_SYSTEM_PROMPT =
@@ -110,6 +111,7 @@ export class Config {
       testChannelOnly,
       testGroupId,
       collaborativeTestingMode,
+      startupNotify: process.env.STARTUP_NOTIFY === 'true',
     };
   }
 }

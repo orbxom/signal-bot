@@ -20,6 +20,7 @@ describe('Config', () => {
     delete process.env.SYSTEM_PROMPT;
     delete process.env.CLAUDE_MAX_TURNS;
     delete process.env.EXCLUDE_GROUP_IDS;
+    delete process.env.STARTUP_NOTIFY;
   });
 
   afterEach(() => {
@@ -193,6 +194,21 @@ describe('Config', () => {
 
     const config = Config.load();
     expect(config.excludeGroupIds).toEqual(['group1', 'group2']);
+  });
+
+  it('should default startupNotify to false', () => {
+    process.env.BOT_PHONE_NUMBER = '+1234567890';
+
+    const config = Config.load();
+    expect(config.startupNotify).toBe(false);
+  });
+
+  it('should set startupNotify to true when STARTUP_NOTIFY is set', () => {
+    process.env.BOT_PHONE_NUMBER = '+1234567890';
+    process.env.STARTUP_NOTIFY = 'true';
+
+    const config = Config.load();
+    expect(config.startupNotify).toBe(true);
   });
 
   it('should include darkFactoryEnabled and darkFactoryProjectRoot in ConfigType', () => {
