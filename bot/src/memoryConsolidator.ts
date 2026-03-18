@@ -1,7 +1,10 @@
-import { spawnPromise } from './claudeClient';
+import { spawn } from 'node:child_process';
 import { logger } from './logger';
 import { estimateTokens } from './mcp/result';
+import { SpawnLimiter } from './spawnLimiter';
 import type { Storage } from './storage';
+
+export const consolidationLimiter = new SpawnLimiter(1);
 
 const MESSAGE_TOKEN_BUDGET = 4000;
 const DAILY_RETENTION_DAYS = 14;
@@ -137,25 +140,51 @@ export class MemoryConsolidator {
 
     const prompt = contextParts.join('\n');
 
+    await consolidationLimiter.acquire();
     try {
-      const { stdout } = await spawnPromise(
-        'claude',
-        [
-          '-p',
-          prompt,
-          '--output-format',
-          'json',
-          '--max-turns',
-          '1',
-          '--no-session-persistence',
-          '--system-prompt',
-          CONSOLIDATION_PROMPT,
-        ],
-        {
-          timeout: 60000,
+      const args = [
+        '-p',
+        prompt,
+        '--output-format',
+        'json',
+        '--max-turns',
+        '1',
+        '--no-session-persistence',
+        '--system-prompt',
+        CONSOLIDATION_PROMPT,
+      ];
+
+      const stdout = await new Promise<string>((resolve, reject) => {
+        const child = spawn('claude', args, {
           env: { ...process.env, CLAUDECODE: '' },
-        },
-      );
+          stdio: ['pipe', 'pipe', 'pipe'],
+        });
+        child.stdin.end();
+        consolidationLimiter.trackChild(child);
+
+        const chunks: Buffer[] = [];
+        child.stdout.on('data', (chunk: Buffer) => chunks.push(chunk));
+
+        const timer = setTimeout(() => {
+          child.kill();
+          setTimeout(() => {
+            try {
+              if (!child.killed) child.kill('SIGKILL');
+            } catch {}
+          }, 5000);
+          reject(new Error('Consolidation timed out'));
+        }, 60000);
+
+        child.on('close', code => {
+          clearTimeout(timer);
+          if (code !== 0) reject(new Error(`claude exited with code ${code}`));
+          else resolve(Buffer.concat(chunks).toString());
+        });
+        child.on('error', err => {
+          clearTimeout(timer);
+          reject(err);
+        });
+      });
 
       const result = this.parseConsolidationOutput(stdout);
       this.applyResult(groupId, result);
@@ -167,6 +196,8 @@ export class MemoryConsolidator {
       );
     } catch (error) {
       logger.error(`consolidator: spawn failed for group ${groupId}: ${error}`);
+    } finally {
+      consolidationLimiter.release();
     }
   }
 

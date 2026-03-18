@@ -1,4 +1,4 @@
-import { spawnPromise } from './claudeClient';
+import { spawn } from 'node:child_process';
 import { logger } from './logger';
 import { SpawnLimiter } from './spawnLimiter';
 import type { Storage } from './storage';
@@ -110,14 +110,40 @@ export class MemoryExtractor {
 
   private async doExtract(groupId: string): Promise<void> {
     const prompt = this.buildPrompt(groupId);
-
     const args = ['-p', prompt, '--output-format', 'json', '--max-turns', '1', '--no-session-persistence'];
 
     logger.step(`memory-extractor: spawning extraction for group ${groupId}`);
 
-    const { stdout } = await spawnPromise('claude', args, {
-      timeout: SPAWN_TIMEOUT_MS,
-      env: { ...process.env, CLAUDECODE: '' },
+    const stdout = await new Promise<string>((resolve, reject) => {
+      const child = spawn('claude', args, {
+        env: { ...process.env, CLAUDECODE: '' },
+        stdio: ['pipe', 'pipe', 'pipe'],
+      });
+      child.stdin.end();
+      this.limiter.trackChild(child);
+
+      const chunks: Buffer[] = [];
+      child.stdout.on('data', (chunk: Buffer) => chunks.push(chunk));
+
+      const timer = setTimeout(() => {
+        child.kill();
+        setTimeout(() => {
+          try {
+            if (!child.killed) child.kill('SIGKILL');
+          } catch {}
+        }, 5000);
+        reject(new Error('Extraction timed out'));
+      }, SPAWN_TIMEOUT_MS);
+
+      child.on('close', code => {
+        clearTimeout(timer);
+        if (code !== 0) reject(new Error(`claude exited with code ${code}`));
+        else resolve(Buffer.concat(chunks).toString());
+      });
+      child.on('error', err => {
+        clearTimeout(timer);
+        reject(err);
+      });
     });
 
     const result = this.parseResult(stdout);

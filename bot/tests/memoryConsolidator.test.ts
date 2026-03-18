@@ -1,18 +1,13 @@
+import { EventEmitter } from 'node:events';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Storage } from '../src/storage';
 
-const { mockSpawnPromise } = vi.hoisted(() => {
-  const mockSpawnPromise = vi.fn();
-  return { mockSpawnPromise };
-});
-
-vi.mock('../src/claudeClient', async importOriginal => {
-  const actual = await importOriginal<typeof import('../src/claudeClient')>();
-  return { ...actual, spawnPromise: mockSpawnPromise };
-});
+// Mock child_process.spawn to simulate Claude CLI
+const mockSpawn = vi.fn();
+vi.mock('node:child_process', () => ({ spawn: (...args: unknown[]) => mockSpawn(...args) }));
 
 vi.mock('../src/logger', () => ({
   logger: { step: vi.fn(), info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
@@ -31,6 +26,41 @@ function makeClaudeOutput(json: object): string {
   ]);
 }
 
+/** Create a fake child process that emits stdout data and exits with code 0 */
+function fakeChild(stdout: string) {
+  const child = new EventEmitter() as any;
+  child.stdout = new EventEmitter();
+  child.stderr = new EventEmitter();
+  child.stdin = { end: vi.fn() };
+  child.killed = false;
+  child.kill = vi.fn();
+  child.pid = Math.floor(Math.random() * 99999);
+
+  process.nextTick(() => {
+    child.stdout.emit('data', Buffer.from(stdout));
+    child.emit('close', 0);
+  });
+
+  return child;
+}
+
+/** Create a fake child process that exits with an error code */
+function fakeChildError(code = 1) {
+  const child = new EventEmitter() as any;
+  child.stdout = new EventEmitter();
+  child.stderr = new EventEmitter();
+  child.stdin = { end: vi.fn() };
+  child.killed = false;
+  child.kill = vi.fn();
+  child.pid = Math.floor(Math.random() * 99999);
+
+  process.nextTick(() => {
+    child.emit('close', code);
+  });
+
+  return child;
+}
+
 describe('MemoryConsolidator', () => {
   let storage: Storage;
   let consolidator: MemoryConsolidator;
@@ -47,7 +77,7 @@ describe('MemoryConsolidator', () => {
       .run(String(Date.now()));
 
     await consolidator.runIfDue();
-    expect(mockSpawnPromise).not.toHaveBeenCalled();
+    expect(mockSpawn).not.toHaveBeenCalled();
   });
 
   it('should store daily summary with __daily: prefix', async () => {
@@ -59,13 +89,15 @@ describe('MemoryConsolidator', () => {
       isBot: false,
     });
 
-    mockSpawnPromise.mockResolvedValue({
-      stdout: makeClaudeOutput({
-        dossierUpdates: [],
-        memoryUpdates: [],
-        dailySummary: 'Alice said hello. Quiet day.',
-      }),
-    });
+    mockSpawn.mockReturnValue(
+      fakeChild(
+        makeClaudeOutput({
+          dossierUpdates: [],
+          memoryUpdates: [],
+          dailySummary: 'Alice said hello. Quiet day.',
+        }),
+      ),
+    );
 
     await consolidator.consolidateGroup('g1');
 
@@ -96,7 +128,7 @@ describe('MemoryConsolidator', () => {
       isBot: false,
     });
 
-    mockSpawnPromise.mockRejectedValue(new Error('spawn failed'));
+    mockSpawn.mockReturnValue(fakeChildError(1));
     await expect(consolidator.consolidateGroup('g1')).resolves.not.toThrow();
   });
 
@@ -109,13 +141,15 @@ describe('MemoryConsolidator', () => {
       isBot: false,
     });
 
-    mockSpawnPromise.mockResolvedValue({
-      stdout: makeClaudeOutput({
-        dossierUpdates: [{ personId: 'alice', displayName: 'Alice', notes: 'Enjoys hiking on weekends' }],
-        memoryUpdates: [],
-        dailySummary: 'Alice mentioned she likes hiking.',
-      }),
-    });
+    mockSpawn.mockReturnValue(
+      fakeChild(
+        makeClaudeOutput({
+          dossierUpdates: [{ personId: 'alice', displayName: 'Alice', notes: 'Enjoys hiking on weekends' }],
+          memoryUpdates: [],
+          dailySummary: 'Alice mentioned she likes hiking.',
+        }),
+      ),
+    );
 
     await consolidator.consolidateGroup('g1');
 
@@ -133,13 +167,15 @@ describe('MemoryConsolidator', () => {
       isBot: false,
     });
 
-    mockSpawnPromise.mockResolvedValue({
-      stdout: makeClaudeOutput({
-        dossierUpdates: [],
-        memoryUpdates: [{ action: 'upsert', topic: 'movie-night', content: 'Movie night is every Friday' }],
-        dailySummary: 'Group discussed movie night schedule.',
-      }),
-    });
+    mockSpawn.mockReturnValue(
+      fakeChild(
+        makeClaudeOutput({
+          dossierUpdates: [],
+          memoryUpdates: [{ action: 'upsert', topic: 'movie-night', content: 'Movie night is every Friday' }],
+          dailySummary: 'Group discussed movie night schedule.',
+        }),
+      ),
+    );
 
     await consolidator.consolidateGroup('g1');
 
@@ -159,13 +195,15 @@ describe('MemoryConsolidator', () => {
       isBot: false,
     });
 
-    mockSpawnPromise.mockResolvedValue({
-      stdout: makeClaudeOutput({
-        dossierUpdates: [],
-        memoryUpdates: [{ action: 'delete', topic: 'old-topic' }],
-        dailySummary: 'Alice asked to forget old-topic.',
-      }),
-    });
+    mockSpawn.mockReturnValue(
+      fakeChild(
+        makeClaudeOutput({
+          dossierUpdates: [],
+          memoryUpdates: [{ action: 'delete', topic: 'old-topic' }],
+          dailySummary: 'Alice asked to forget old-topic.',
+        }),
+      ),
+    );
 
     await consolidator.consolidateGroup('g1');
 
@@ -174,9 +212,8 @@ describe('MemoryConsolidator', () => {
   });
 
   it('should skip groups with no messages in last 24h', async () => {
-    // No messages added
     await consolidator.consolidateGroup('g1');
-    expect(mockSpawnPromise).not.toHaveBeenCalled();
+    expect(mockSpawn).not.toHaveBeenCalled();
   });
 
   it('should run consolidation for all groups when runIfDue triggers', async () => {
@@ -195,17 +232,15 @@ describe('MemoryConsolidator', () => {
       isBot: false,
     });
 
-    mockSpawnPromise.mockResolvedValue({
-      stdout: makeClaudeOutput({
-        dossierUpdates: [],
-        memoryUpdates: [],
-        dailySummary: 'Quiet day.',
-      }),
+    const output = makeClaudeOutput({
+      dossierUpdates: [],
+      memoryUpdates: [],
+      dailySummary: 'Quiet day.',
     });
+    mockSpawn.mockImplementation(() => fakeChild(output));
 
     await consolidator.runIfDue();
 
-    // Should have been called for each group
-    expect(mockSpawnPromise).toHaveBeenCalledTimes(2);
+    expect(mockSpawn).toHaveBeenCalledTimes(2);
   });
 });
