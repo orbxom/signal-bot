@@ -8,6 +8,11 @@ NUC="${NUC_USER}@${NUC_HOST}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_DIR="$(dirname "$SCRIPT_DIR")"
 
+# Write commit hash for startup notification
+git rev-parse --short HEAD > "$REPO_DIR/VERSION"
+cleanup_version() { rm -f "$REPO_DIR/VERSION"; }
+trap cleanup_version EXIT
+
 echo "==> Deploying to ${NUC}:~/${NUC_PATH}"
 
 # Get remote package.json checksum before sync
