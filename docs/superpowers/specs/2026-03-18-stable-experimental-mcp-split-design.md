@@ -28,6 +28,7 @@ Replace the single `ALL_SERVERS` export with:
 - `STABLE_SERVERS: McpServerDefinition[]` — production-ready servers
 - `EXPERIMENTAL_SERVERS: McpServerDefinition[]` — dev-only servers
 - `getActiveServers(): McpServerDefinition[]` — returns stable-only or stable+experimental based on `process.env.INCLUDE_EXPERIMENTAL === 'true'`
+- Keep `ALL_SERVERS` as a convenience export (`[...STABLE_SERVERS, ...EXPERIMENTAL_SERVERS]`) for tests and diagnostics
 
 ### `bot/src/mcp/registry.ts`
 
@@ -38,20 +39,29 @@ Replace the single `ALL_SERVERS` export with:
 
 ### `bot/src/mcp/servers/healthCheck.ts`
 
-- Switch lazy require from `ALL_SERVERS` to `getActiveServers` so health check reports actually-active server count
+- Switch lazy require from `ALL_SERVERS` to `getActiveServers` so health check reports actually-active server count (it lazy-requires `./index` at runtime)
+
+### `bot/tests/mcp/registry.test.ts`
+
+- Update import from `ALL_SERVERS` (still exported as convenience alias, so no functional change needed — but verify tests pass)
 
 ### `bot/src/index.ts`
 
-- Add startup log line showing active server count, e.g. `"MCP servers: 13 active (11 stable + 2 experimental)"` or `"MCP servers: 11 active (stable only)"`
+- Import `STABLE_SERVERS` and `EXPERIMENTAL_SERVERS` from the barrel
+- Add startup log line showing active server count with breakdown, e.g. `"MCP servers: 13 active (11 stable + 2 experimental)"` or `"MCP servers: 11 active (stable only)"`
 
 ### `bot/.env`
 
 - Add `INCLUDE_EXPERIMENTAL=true` to the local dev `.env`
 - NUC `.env` does not set this variable — defaults to stable-only
 
+### `CLAUDE.md`
+
+- Update the `servers/index.ts` description to reference `STABLE_SERVERS`, `EXPERIMENTAL_SERVERS`, and `getActiveServers()` instead of `ALL_SERVERS`
+
 ## Caching
 
-`buildAllowedTools()` is cached once in `claudeClient.ts` via `getAllowedTools()`. Since `INCLUDE_EXPERIMENTAL` is set at process startup and never changes at runtime, the cached value is always correct.
+`buildAllowedTools()` is cached once in `claudeClient.ts` via `getAllowedTools()`. `recurringReminderExecutor.ts` calls `buildAllowedTools()` directly (uncached) on each recurring reminder execution. Both are correct since `INCLUDE_EXPERIMENTAL` is set at process startup and `getActiveServers()` reads the same env var each time.
 
 ## Promotion Workflow
 
@@ -69,4 +79,5 @@ One-line change, no other files affected.
 - `claudeClient.ts` — calls `buildAllowedTools()` and `buildMcpConfig()` as before
 - `recurringReminderExecutor.ts` — same
 - External servers — transcription and playwright handling untouched
-- No new tests needed — existing tests construct servers directly, not via registry
+- `healthCheck.ts` — not in `ALL_SERVERS` (standalone MCP server, not registered in barrel), out of scope
+- Existing tests — `registry.test.ts` imports `ALL_SERVERS` which remains as a convenience export
