@@ -1,13 +1,18 @@
 import { ClaudeCLIClient, spawnLimiter } from './claudeClient';
 import { Config } from './config';
+import { GroupProcessingQueue } from './groupProcessingQueue';
 import { logger } from './logger';
+import { MessageDeduplicator } from './messageDeduplicator';
 import { MessageHandler } from './messageHandler';
+import { ingestMessages } from './messageIngestion';
 import { sendStartupNotification, sendErrorNotification } from './notifications';
 import { PollingBackoff } from './pollingBackoff';
 import { RecurringReminderExecutor } from './recurringReminderExecutor';
 import { ReminderScheduler } from './reminderScheduler';
 import { SignalClient } from './signalClient';
 import { Storage } from './storage';
+import { TypingIndicatorManager } from './typingIndicator';
+import type { ExtractedMessage } from './types';
 
 async function main() {
   logger.info('Starting Signal Family Bot...');
@@ -51,7 +56,6 @@ async function main() {
   logger.success('Reminder scheduler initialized');
 
   const messageHandler = new MessageHandler(
-    config.mentionTriggers,
     {
       storage,
       llmClient,
@@ -65,9 +69,23 @@ async function main() {
       messageRetentionCount: config.messageRetentionCount,
       attachmentRetentionDays: config.attachmentRetentionDays,
       collaborativeTestingMode: config.collaborativeTestingMode,
+      mentionTriggers: config.mentionTriggers,
     },
   );
   logger.success(`Message handler initialized (triggers: ${config.mentionTriggers.join(', ')})`);
+
+  // Create top-level deduplicator and typing manager
+  const deduplicator = new MessageDeduplicator();
+  const typingManager = new TypingIndicatorManager(signalClient);
+
+  // Create per-group processing queue with typing indicator wrapper
+  const processingQueue = new GroupProcessingQueue(async (item) => {
+    const groupId = item.kind === 'single' ? item.request.groupId : item.requests[0].groupId;
+    await typingManager.withTyping(groupId, () => messageHandler.processRequest(item));
+  });
+
+  // Compute base storeOnly set from excludeGroupIds
+  const storeOnlyGroupIds = new Set(config.excludeGroupIds);
 
   if (config.testChannelOnly) {
     logger.warn(`*** TEST CHANNEL ONLY MODE — only processing group ${config.testGroupId} ***`);
@@ -79,6 +97,7 @@ async function main() {
   // Graceful shutdown
   const shutdown = () => {
     logger.info('Shutting down gracefully...');
+    processingQueue.shutdown();
     spawnLimiter.killAll();
     logger.close();
     storage.close();
@@ -123,8 +142,8 @@ async function main() {
         messagesSinceHeartbeat = 0;
       }
 
-      // Extract and group messages by groupId
-      const byGroup = new Map<string, import('./types').ExtractedMessage[]>();
+      // Extract messages into a flat array
+      const extracted: ExtractedMessage[] = [];
       for (const signalMsg of messages) {
         const data = signalClient.extractMessageData(signalMsg);
         if (!data) {
@@ -132,30 +151,42 @@ async function main() {
           continue;
         }
 
-        const storeOnly =
+        const isStoreOnly =
           (config.testChannelOnly && data.groupId !== config.testGroupId) ||
           config.excludeGroupIds.includes(data.groupId);
-        if (storeOnly) {
+        if (isStoreOnly) {
           logger.compact('STORED', `[${data.groupId}] ${data.sender}: ${data.content.substring(0, 80)}`);
         } else {
           logger.compact('RECV', `[${data.groupId}] ${data.sender}: ${data.content.substring(0, 80)}`);
         }
 
-        if (!byGroup.has(data.groupId)) {
-          byGroup.set(data.groupId, []);
-        }
-        byGroup.get(data.groupId)?.push(data);
+        extracted.push(data);
       }
 
-      // Process each group's messages as a batch
-      for (const [groupId, batch] of byGroup) {
-        try {
-          const storeOnly =
-            (config.testChannelOnly && groupId !== config.testGroupId) || config.excludeGroupIds.includes(groupId);
-          await messageHandler.handleMessageBatch(groupId, batch, { storeOnly });
-        } catch (error) {
-          logger.error(`Error processing group ${groupId}:`, error);
+      // Compute effective storeOnly set (extends base set with non-test groups in test mode)
+      let effectiveStoreOnly = storeOnlyGroupIds;
+      if (config.testChannelOnly && config.testGroupId) {
+        effectiveStoreOnly = new Set(storeOnlyGroupIds);
+        for (const msg of extracted) {
+          if (msg.groupId !== config.testGroupId) {
+            effectiveStoreOnly.add(msg.groupId);
+          }
         }
+      }
+
+      // Ingest messages and enqueue mentions (synchronous — does not await processing)
+      if (extracted.length > 0) {
+        ingestMessages({
+          messages: extracted,
+          mentionTriggers: config.mentionTriggers,
+          botPhoneNumber: config.botPhoneNumber,
+          storage,
+          signalClient,
+          enqueue: (item) => processingQueue.enqueue(item),
+          storeOnlyGroupIds: effectiveStoreOnly,
+          deduplicator,
+          attachmentsDir: config.attachmentsDir,
+        });
       }
 
       // Check for due reminders and run maintenance periodically
