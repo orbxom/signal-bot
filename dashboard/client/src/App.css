@@ -1,0 +1,180 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background: #0d0d1a;
+  color: #fff;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  line-height: 1.5;
+}
+
+a {
+  color: #7c7cff;
+  text-decoration: none;
+}
+
+.app {
+  display: flex;
+  min-height: 100vh;
+}
+
+/* Sidebar */
+.sidebar {
+  width: 200px;
+  min-width: 200px;
+  background: #1a1a2e;
+  padding: 1rem 0;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid #333;
+}
+
+.sidebar-header {
+  padding: 0.5rem 1rem 1rem;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #7c7cff;
+  border-bottom: 1px solid #333;
+  margin-bottom: 0.5rem;
+}
+
+.sidebar-link {
+  display: block;
+  padding: 0.5rem 1rem;
+  color: #aaa;
+  transition: background 0.15s, color 0.15s;
+}
+
+.sidebar-link:hover {
+  background: rgba(124, 124, 255, 0.1);
+  color: #fff;
+}
+
+.sidebar-link.active {
+  background: rgba(124, 124, 255, 0.15);
+  color: #7c7cff;
+  border-left: 3px solid #7c7cff;
+  padding-left: calc(1rem - 3px);
+}
+
+.sidebar-separator {
+  height: 1px;
+  background: #333;
+  margin: 0.5rem 0;
+}
+
+/* Main content */
+.main-content {
+  flex: 1;
+  padding: 1.5rem 2rem;
+  overflow-y: auto;
+}
+
+.main-content h1 {
+  margin-bottom: 1.5rem;
+  font-weight: 600;
+}
+
+/* Status cards */
+.status-card {
+  background: #1a1a2e;
+  border: 1px solid #333;
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+}
+
+.status-card.success {
+  border-color: #6d6;
+}
+
+.status-card.error {
+  border-color: #e74;
+}
+
+.status-card.warning {
+  border-color: #fa3;
+}
+
+.status-card-label {
+  font-size: 0.85rem;
+  color: #aaa;
+  margin-bottom: 0.25rem;
+}
+
+.status-card-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.status-card.success .status-card-value {
+  color: #8f8;
+}
+
+.status-card.error .status-card-value {
+  color: #e74;
+}
+
+.status-card.warning .status-card-value {
+  color: #fa3;
+}
+
+/* Data table */
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #1a1a2e;
+  border: 1px solid #333;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.data-table th,
+.data-table td {
+  padding: 0.75rem 1rem;
+  text-align: left;
+  border-bottom: 1px solid #333;
+}
+
+.data-table th {
+  background: rgba(124, 124, 255, 0.08);
+  color: #aaa;
+  font-weight: 600;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.data-table tr:last-child td {
+  border-bottom: none;
+}
+
+.data-table tr.clickable {
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.data-table tr.clickable:hover {
+  background: rgba(124, 124, 255, 0.08);
+}
+
+/* Loading and empty states */
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem;
+  color: #aaa;
+  font-size: 1.1rem;
+}
+
+.empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem;
+  color: #666;
+  font-size: 1.1rem;
+}
