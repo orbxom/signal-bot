@@ -62,7 +62,7 @@ describe('ingestMessages', () => {
       botPhoneNumber: '+61000',
       storage: mockStorage,
       signalClient: mockSignal,
-      enqueue: (item) => enqueuedItems.push(item),
+      enqueue: item => enqueuedItems.push(item),
     });
 
     expect(mockStorage.addMessage).toHaveBeenCalledTimes(2);
@@ -76,7 +76,7 @@ describe('ingestMessages', () => {
       botPhoneNumber: '+61000',
       storage: mockStorage,
       signalClient: mockSignal,
-      enqueue: (item) => enqueuedItems.push(item),
+      enqueue: item => enqueuedItems.push(item),
     });
 
     expect(mockStorage.addMessage).not.toHaveBeenCalled();
@@ -91,7 +91,7 @@ describe('ingestMessages', () => {
       botPhoneNumber: '+61000',
       storage: mockStorage,
       signalClient: mockSignal,
-      enqueue: (item) => enqueuedItems.push(item),
+      enqueue: item => enqueuedItems.push(item),
     });
 
     expect(enqueuedItems).toHaveLength(1);
@@ -106,7 +106,7 @@ describe('ingestMessages', () => {
       botPhoneNumber: '+61000',
       storage: mockStorage,
       signalClient: mockSignal,
-      enqueue: (item) => enqueuedItems.push(item),
+      enqueue: item => enqueuedItems.push(item),
     });
 
     expect(enqueuedItems).toHaveLength(0);
@@ -121,7 +121,7 @@ describe('ingestMessages', () => {
       botPhoneNumber: '+61000',
       storage: mockStorage,
       signalClient: mockSignal,
-      enqueue: (item) => enqueuedItems.push(item),
+      enqueue: item => enqueuedItems.push(item),
     });
 
     expect(mockStorage.addMessage).toHaveBeenCalledTimes(1); // still stored
@@ -136,7 +136,7 @@ describe('ingestMessages', () => {
       botPhoneNumber: '+61000',
       storage: mockStorage,
       signalClient: mockSignal,
-      enqueue: (item) => enqueuedItems.push(item),
+      enqueue: item => enqueuedItems.push(item),
       storeOnlyGroupIds: new Set(['g1']),
     });
 
@@ -159,7 +159,7 @@ describe('ingestMessages', () => {
       botPhoneNumber: '+61000',
       storage: mockStorage,
       signalClient: mockSignal,
-      enqueue: (item) => enqueuedItems.push(item),
+      enqueue: item => enqueuedItems.push(item),
       storeOnlyGroupIds: new Set(['g1']),
       attachmentsDir: '/tmp/attachments',
     });
@@ -183,7 +183,7 @@ describe('ingestMessages', () => {
       botPhoneNumber: '+61000',
       storage: mockStorage,
       signalClient: mockSignal,
-      enqueue: (item) => enqueuedItems.push(item),
+      enqueue: item => enqueuedItems.push(item),
       attachmentsDir: '/tmp/attachments',
     });
 
@@ -205,7 +205,7 @@ describe('ingestMessages', () => {
       botPhoneNumber: '+61000',
       storage: mockStorage,
       signalClient: mockSignal,
-      enqueue: (item) => enqueuedItems.push(item),
+      enqueue: item => enqueuedItems.push(item),
       attachmentsDir: '/tmp/attachments',
     });
 
@@ -233,7 +233,7 @@ describe('ingestMessages', () => {
       botPhoneNumber: '+61000',
       storage: mockStorage,
       signalClient: mockSignal,
-      enqueue: (item) => enqueuedItems.push(item),
+      enqueue: item => enqueuedItems.push(item),
       attachmentsDir: '/tmp/attachments',
     });
 
@@ -250,7 +250,7 @@ describe('ingestMessages', () => {
       botPhoneNumber: '+61000',
       storage: mockStorage,
       signalClient: mockSignal,
-      enqueue: (item) => enqueuedItems.push(item),
+      enqueue: item => enqueuedItems.push(item),
     });
 
     expect(enqueuedItems).toHaveLength(1);
@@ -265,7 +265,7 @@ describe('ingestMessages', () => {
       botPhoneNumber: '+61000',
       storage: mockStorage,
       signalClient: mockSignal,
-      enqueue: (item) => enqueuedItems.push(item),
+      enqueue: item => enqueuedItems.push(item),
     });
 
     expect(enqueuedItems).toHaveLength(0);
@@ -283,7 +283,7 @@ describe('ingestMessages', () => {
       botPhoneNumber: '+61000',
       storage: mockStorage,
       signalClient: mockSignal,
-      enqueue: (item) => enqueuedItems.push(item),
+      enqueue: item => enqueuedItems.push(item),
       realtimeThresholdMs: 5000,
     });
 
@@ -304,7 +304,7 @@ describe('ingestMessages', () => {
       botPhoneNumber: '+61000',
       storage: mockStorage,
       signalClient: mockSignal,
-      enqueue: (item) => enqueuedItems.push(item),
+      enqueue: item => enqueuedItems.push(item),
       realtimeThresholdMs: 5000,
     });
 
@@ -325,7 +325,7 @@ describe('ingestMessages', () => {
       botPhoneNumber: '+61000',
       storage: mockStorage,
       signalClient: mockSignal,
-      enqueue: (item) => enqueuedItems.push(item),
+      enqueue: item => enqueuedItems.push(item),
       realtimeThresholdMs: 5000,
     });
 
@@ -347,7 +347,7 @@ describe('ingestMessages', () => {
       botPhoneNumber: '+61000',
       storage: mockStorage,
       signalClient: mockSignal,
-      enqueue: (item) => enqueuedItems.push(item),
+      enqueue: item => enqueuedItems.push(item),
       realtimeThresholdMs: 5000,
     });
 
@@ -369,7 +369,7 @@ describe('ingestMessages', () => {
       botPhoneNumber: '+61000',
       storage: mockStorage,
       signalClient: mockSignal,
-      enqueue: (item) => enqueuedItems.push(item),
+      enqueue: item => enqueuedItems.push(item),
       deduplicator,
     });
 
@@ -389,7 +389,7 @@ describe('ingestMessages', () => {
       botPhoneNumber: '+61000',
       storage: mockStorage,
       signalClient: mockSignal,
-      enqueue: (item) => enqueuedItems.push(item),
+      enqueue: item => enqueuedItems.push(item),
     });
 
     expect(mockStorage.addMessage).toHaveBeenCalledTimes(3);
@@ -414,7 +414,7 @@ describe('ingestMessages', () => {
       botPhoneNumber: '+61000',
       storage: mockStorage,
       signalClient: mockSignal,
-      enqueue: (item) => enqueuedItems.push(item),
+      enqueue: item => enqueuedItems.push(item),
     });
 
     expect(enqueuedItems).toHaveLength(1);
@@ -441,7 +441,7 @@ describe('ingestMessages', () => {
       botPhoneNumber: '+61000',
       storage: mockStorage,
       signalClient: mockSignal,
-      enqueue: (item) => enqueuedItems.push(item),
+      enqueue: item => enqueuedItems.push(item),
       realtimeThresholdMs: 5000,
     });
 
@@ -470,7 +470,7 @@ describe('ingestMessages', () => {
       botPhoneNumber: '+61000',
       storage: mockStorage,
       signalClient: mockSignal,
-      enqueue: (item) => enqueuedItems.push(item),
+      enqueue: item => enqueuedItems.push(item),
       // no attachmentsDir
     });
 

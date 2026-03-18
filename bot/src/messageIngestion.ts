@@ -42,7 +42,7 @@ export function ingestMessages(options: IngestOptions): void {
     if (deduplicator?.isDuplicate(msg.groupId, msg.sender, msg.timestamp)) continue;
 
     if (!byGroup.has(msg.groupId)) byGroup.set(msg.groupId, []);
-    byGroup.get(msg.groupId)!.push(msg);
+    byGroup.get(msg.groupId)?.push(msg);
   }
 
   const now = Date.now();
