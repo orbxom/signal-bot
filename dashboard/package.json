@@ -1,18 +1,21 @@
 {
-  "name": "factory-dashboard",
-  "version": "1.0.0",
+  "name": "signal-bot-dashboard",
   "private": true,
-  "type": "commonjs",
-  "description": "Real-time Dark Factory pipeline dashboard",
   "scripts": {
     "dev": "tsx watch src/server.ts",
+    "dev:client": "cd client && npx vite",
+    "build:client": "cd client && npx vite build",
     "start": "tsx src/server.ts"
   },
   "dependencies": {
+    "better-sqlite3": "^11.0.0",
     "chokidar": "^5.0.0",
+    "express": "^4.21.0",
     "ws": "^8.19.0"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.0",
+    "@types/express": "^4.17.21",
     "@types/node": "^20.0.0",
     "@types/ws": "^8.18.0",
     "tsx": "^4.7.0",
