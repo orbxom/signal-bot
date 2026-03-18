@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process';
+import { type ChildProcess, spawn } from 'node:child_process';
 import { logger } from './logger';
 import { buildAllowedTools, buildMcpConfig } from './mcp/registry';
 import { getErrorMessage } from './mcp/result';
@@ -6,6 +6,63 @@ import { SpawnLimiter } from './spawnLimiter';
 import type { ChatMessage, LLMClient, LLMResponse, MessageContext } from './types';
 
 export const spawnLimiter = new SpawnLimiter(2);
+
+/** Strip markdown code fences (```json ... ```) that Claude sometimes wraps around JSON output. */
+export function stripCodeFences(text: string): string {
+  return text.replace(/^```(?:json)?\s*\n?/i, '').replace(/\n?```\s*$/i, '');
+}
+
+/**
+ * Spawn a command, collect stdout, and resolve on exit code 0.
+ * Handles timeout with SIGTERM→SIGKILL escalation. Does NOT manage concurrency —
+ * callers are responsible for their own limiter acquire/release.
+ */
+export function spawnCollect(
+  cmd: string,
+  args: string[],
+  options: { timeout?: number; env?: NodeJS.ProcessEnv; trackChild?: (child: ChildProcess) => void },
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(cmd, args, {
+      env: options.env,
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    child.stdin.end();
+    options.trackChild?.(child);
+
+    const stdoutChunks: Buffer[] = [];
+    let stderr = '';
+    child.stdout.on('data', (chunk: Buffer) => stdoutChunks.push(chunk));
+    child.stderr.on('data', (data: Buffer) => {
+      stderr += data.toString();
+    });
+
+    const timer = options.timeout
+      ? setTimeout(() => {
+          child.kill();
+          setTimeout(() => {
+            try {
+              if (!child.killed) child.kill('SIGKILL');
+            } catch {}
+          }, 5000);
+          reject(new Error(`${cmd} timed out`));
+        }, options.timeout)
+      : null;
+
+    child.on('close', code => {
+      if (timer) clearTimeout(timer);
+      if (code !== 0) {
+        reject(new Error(stderr || `${cmd} exited with code ${code}`));
+      } else {
+        resolve(Buffer.concat(stdoutChunks).toString());
+      }
+    });
+    child.on('error', err => {
+      if (timer) clearTimeout(timer);
+      reject(err);
+    });
+  });
+}
 
 interface ClaudeResultLine {
   type: 'result';
@@ -32,49 +89,11 @@ export async function spawnPromise(
 ): Promise<{ stdout: string }> {
   await spawnLimiter.acquire();
   try {
-    return await new Promise((resolve, reject) => {
-      const child = spawn(cmd, args, {
-        env: options.env,
-        stdio: ['pipe', 'pipe', 'pipe'],
-      });
-      child.stdin.end();
-      spawnLimiter.trackChild(child);
-
-      const stdoutChunks: Buffer[] = [];
-      let stderr = '';
-      child.stdout.on('data', (chunk: Buffer) => {
-        stdoutChunks.push(chunk);
-      });
-      child.stderr.on('data', (data: Buffer) => {
-        stderr += data.toString();
-      });
-
-      const timer = options.timeout
-        ? setTimeout(() => {
-            child.kill();
-            setTimeout(() => {
-              try {
-                if (!child.killed) child.kill('SIGKILL');
-              } catch {}
-            }, 5000);
-            reject(new Error('Claude CLI timed out'));
-          }, options.timeout)
-        : null;
-
-      child.on('close', code => {
-        if (timer) clearTimeout(timer);
-        const stdout = Buffer.concat(stdoutChunks).toString();
-        if (code !== 0) {
-          reject(new Error(stderr || `claude exited with code ${code}`));
-        } else {
-          resolve({ stdout });
-        }
-      });
-      child.on('error', err => {
-        if (timer) clearTimeout(timer);
-        reject(err);
-      });
+    const stdout = await spawnCollect(cmd, args, {
+      ...options,
+      trackChild: child => spawnLimiter.trackChild(child),
     });
+    return { stdout };
   } finally {
     spawnLimiter.release();
   }
@@ -91,7 +110,7 @@ interface ParsedClaudeOutput extends LLMResponse {
 }
 
 /** Parse raw Claude CLI stdout into entries (JSON array or NDJSON). */
-function parseEntries(stdout: string): Array<Record<string, unknown>> {
+export function parseEntries(stdout: string): Array<Record<string, unknown>> {
   const trimmed = stdout.trim();
   if (trimmed.startsWith('[')) {
     return JSON.parse(trimmed);

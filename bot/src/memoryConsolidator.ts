@@ -1,10 +1,8 @@
-import { spawn } from 'node:child_process';
+import { parseEntries, spawnCollect, stripCodeFences } from './claudeClient';
 import { logger } from './logger';
 import { estimateTokens } from './mcp/result';
 import { SpawnLimiter } from './spawnLimiter';
 import type { Storage } from './storage';
-
-export const consolidationLimiter = new SpawnLimiter(1);
 
 const MESSAGE_TOKEN_BUDGET = 4000;
 const DAILY_RETENTION_DAYS = 14;
@@ -58,10 +56,15 @@ Guidelines:
 export class MemoryConsolidator {
   private storage: Storage;
   private timezone: string;
+  private limiter = new SpawnLimiter(1);
 
   constructor(storage: Storage, timezone: string) {
     this.storage = storage;
     this.timezone = timezone;
+  }
+
+  killAll(): void {
+    this.limiter.killAll();
   }
 
   /**
@@ -140,7 +143,7 @@ export class MemoryConsolidator {
 
     const prompt = contextParts.join('\n');
 
-    await consolidationLimiter.acquire();
+    await this.limiter.acquire();
     try {
       const args = [
         '-p',
@@ -152,38 +155,16 @@ export class MemoryConsolidator {
         '--no-session-persistence',
         '--system-prompt',
         CONSOLIDATION_PROMPT,
+        '--model',
+        'claude-sonnet-4-6',
+        '--allowedTools',
+        '',
       ];
 
-      const stdout = await new Promise<string>((resolve, reject) => {
-        const child = spawn('claude', args, {
-          env: { ...process.env, CLAUDECODE: '' },
-          stdio: ['pipe', 'pipe', 'pipe'],
-        });
-        child.stdin.end();
-        consolidationLimiter.trackChild(child);
-
-        const chunks: Buffer[] = [];
-        child.stdout.on('data', (chunk: Buffer) => chunks.push(chunk));
-
-        const timer = setTimeout(() => {
-          child.kill();
-          setTimeout(() => {
-            try {
-              if (!child.killed) child.kill('SIGKILL');
-            } catch {}
-          }, 5000);
-          reject(new Error('Consolidation timed out'));
-        }, 60000);
-
-        child.on('close', code => {
-          clearTimeout(timer);
-          if (code !== 0) reject(new Error(`claude exited with code ${code}`));
-          else resolve(Buffer.concat(chunks).toString());
-        });
-        child.on('error', err => {
-          clearTimeout(timer);
-          reject(err);
-        });
+      const stdout = await spawnCollect('claude', args, {
+        timeout: 60_000,
+        env: { ...process.env, CLAUDECODE: '' },
+        trackChild: child => this.limiter.trackChild(child),
       });
 
       const result = this.parseConsolidationOutput(stdout);
@@ -197,7 +178,7 @@ export class MemoryConsolidator {
     } catch (error) {
       logger.error(`consolidator: spawn failed for group ${groupId}: ${error}`);
     } finally {
-      consolidationLimiter.release();
+      this.limiter.release();
     }
   }
 
@@ -221,14 +202,15 @@ export class MemoryConsolidator {
   }
 
   private parseConsolidationOutput(stdout: string): ConsolidationResult {
-    const entries = JSON.parse(stdout.trim().startsWith('[') ? stdout.trim() : `[${stdout.trim()}]`);
-    const resultEntry = entries.find((e: { type: string }) => e.type === 'result');
+    const entries = parseEntries(stdout);
+    const resultEntry = entries.find(e => e.type === 'result');
 
     if (!resultEntry) {
       throw new Error('No result entry in Claude output');
     }
 
-    const parsed = JSON.parse(resultEntry.result);
+    const resultText = typeof resultEntry.result === 'string' ? resultEntry.result : '';
+    const parsed = JSON.parse(stripCodeFences(resultText));
     return {
       dossierUpdates: parsed.dossierUpdates || [],
       memoryUpdates: parsed.memoryUpdates || [],

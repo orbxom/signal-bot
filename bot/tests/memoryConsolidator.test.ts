@@ -7,7 +7,10 @@ import { Storage } from '../src/storage';
 
 // Mock child_process.spawn to simulate Claude CLI
 const mockSpawn = vi.fn();
-vi.mock('node:child_process', () => ({ spawn: (...args: unknown[]) => mockSpawn(...args) }));
+vi.mock('node:child_process', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:child_process')>();
+  return { ...actual, spawn: (...args: unknown[]) => mockSpawn(...args) };
+});
 
 vi.mock('../src/logger', () => ({
   logger: { step: vi.fn(), info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
@@ -117,6 +120,32 @@ describe('MemoryConsolidator', () => {
     const recent = storage.memories.get('g1', '__daily:2026-03-17');
     expect(old).toBeNull();
     expect(recent).not.toBeNull();
+  });
+
+  it('should handle JSON wrapped in markdown code fences', async () => {
+    storage.addMessage({
+      groupId: 'g1',
+      sender: 'alice',
+      content: 'I like painting',
+      timestamp: Date.now() - 1000,
+      isBot: false,
+    });
+
+    const fencedJson = '```json\n' + JSON.stringify({
+      dossierUpdates: [{ personId: 'alice', displayName: 'Alice', notes: 'Likes painting' }],
+      memoryUpdates: [],
+      dailySummary: 'Alice mentioned painting.',
+    }) + '\n```';
+
+    mockSpawn.mockReturnValue(
+      fakeChild(JSON.stringify([{ type: 'result', result: fencedJson, is_error: false, usage: {} }])),
+    );
+
+    await consolidator.consolidateGroup('g1');
+
+    const dossier = storage.getDossier('g1', 'alice');
+    expect(dossier).toBeTruthy();
+    expect(dossier?.notes).toBe('Likes painting');
   });
 
   it('should handle spawn failure gracefully', async () => {

@@ -1,7 +1,7 @@
 import { ClaudeCLIClient, spawnLimiter } from './claudeClient';
 import { Config } from './config';
 import { logger } from './logger';
-import { consolidationLimiter, MemoryConsolidator } from './memoryConsolidator';
+import { MemoryConsolidator } from './memoryConsolidator';
 import { MemoryExtractor } from './memoryExtractor';
 import { MessageHandler } from './messageHandler';
 import { sendStartupNotification, sendErrorNotification } from './notifications';
@@ -88,7 +88,7 @@ async function main() {
     logger.info('Shutting down gracefully...');
     memoryExtractor.clearTimers();
     memoryExtractor.killAll();
-    consolidationLimiter.killAll();
+    memoryConsolidator.killAll();
     spawnLimiter.killAll();
     logger.close();
     storage.close();

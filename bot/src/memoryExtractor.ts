@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process';
+import { parseEntries, spawnCollect, stripCodeFences } from './claudeClient';
 import { logger } from './logger';
 import { SpawnLimiter } from './spawnLimiter';
 import type { Storage } from './storage';
@@ -48,7 +48,7 @@ Output ONLY valid JSON matching this schema (no markdown, no explanation):
 // --- Debounce interval ---
 
 const DEBOUNCE_MS = 5000;
-const SPAWN_TIMEOUT_MS = 30_000;
+const SPAWN_TIMEOUT_MS = 60_000;
 
 // --- Class ---
 
@@ -117,40 +117,26 @@ export class MemoryExtractor {
 
   private async doExtract(groupId: string): Promise<void> {
     const prompt = this.buildPrompt(groupId);
-    const args = ['-p', prompt, '--output-format', 'json', '--max-turns', '1', '--no-session-persistence'];
+    const args = [
+      '-p',
+      prompt,
+      '--output-format',
+      'json',
+      '--max-turns',
+      '1',
+      '--no-session-persistence',
+      '--model',
+      'claude-sonnet-4-6',
+      '--allowedTools',
+      '',
+    ];
 
     logger.step(`memory-extractor: spawning extraction for group ${groupId}`);
 
-    const stdout = await new Promise<string>((resolve, reject) => {
-      const child = spawn('claude', args, {
-        env: { ...process.env, CLAUDECODE: '' },
-        stdio: ['pipe', 'pipe', 'pipe'],
-      });
-      child.stdin.end();
-      this.limiter.trackChild(child);
-
-      const chunks: Buffer[] = [];
-      child.stdout.on('data', (chunk: Buffer) => chunks.push(chunk));
-
-      const timer = setTimeout(() => {
-        child.kill();
-        setTimeout(() => {
-          try {
-            if (!child.killed) child.kill('SIGKILL');
-          } catch {}
-        }, 5000);
-        reject(new Error('Extraction timed out'));
-      }, SPAWN_TIMEOUT_MS);
-
-      child.on('close', code => {
-        clearTimeout(timer);
-        if (code !== 0) reject(new Error(`claude exited with code ${code}`));
-        else resolve(Buffer.concat(chunks).toString());
-      });
-      child.on('error', err => {
-        clearTimeout(timer);
-        reject(err);
-      });
+    const stdout = await spawnCollect('claude', args, {
+      timeout: SPAWN_TIMEOUT_MS,
+      env: { ...process.env, CLAUDECODE: '' },
+      trackChild: child => this.limiter.trackChild(child),
     });
 
     const result = this.parseResult(stdout);
@@ -194,9 +180,8 @@ export class MemoryExtractor {
 
   private parseResult(stdout: string): ExtractionResult | null {
     try {
-      // Parse the Claude CLI JSON output to find the result line
-      const entries = JSON.parse(stdout.trim());
-      const resultEntry = Array.isArray(entries) ? entries.find((e: { type: string }) => e.type === 'result') : null;
+      const entries = parseEntries(stdout);
+      const resultEntry = entries.find(e => e.type === 'result');
 
       if (!resultEntry) {
         logger.warn('memory-extractor: no result entry in Claude output');
@@ -209,9 +194,8 @@ export class MemoryExtractor {
         return null;
       }
 
-      const parsed = JSON.parse(resultText);
+      const parsed = JSON.parse(stripCodeFences(resultText));
 
-      // Validate shape
       if (!Array.isArray(parsed.dossierUpdates) || !Array.isArray(parsed.memoryUpdates)) {
         logger.warn('memory-extractor: result missing dossierUpdates or memoryUpdates arrays');
         return null;

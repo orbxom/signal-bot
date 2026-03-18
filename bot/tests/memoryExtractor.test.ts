@@ -7,7 +7,10 @@ import { Storage } from '../src/storage';
 
 // Mock child_process.spawn to simulate Claude CLI
 const mockSpawn = vi.fn();
-vi.mock('node:child_process', () => ({ spawn: (...args: unknown[]) => mockSpawn(...args) }));
+vi.mock('node:child_process', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:child_process')>();
+  return { ...actual, spawn: (...args: unknown[]) => mockSpawn(...args) };
+});
 
 vi.mock('../src/logger', () => ({
   logger: { step: vi.fn(), info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
@@ -130,6 +133,24 @@ describe('MemoryExtractor', () => {
       mockSpawn.mockReturnValue(fakeChild(makeClaudeOutput({ dossierUpdates: [], memoryUpdates: [] })));
 
       await expect(extractor.extract('group-1')).resolves.not.toThrow();
+    });
+
+    it('should handle JSON wrapped in markdown code fences', async () => {
+      const fencedJson = '```json\n' + JSON.stringify({
+        dossierUpdates: [{ action: 'update', personId: 'user-2', displayName: 'Bob', notes: 'Loves hiking' }],
+        memoryUpdates: [],
+      }) + '\n```';
+
+      mockSpawn.mockReturnValue(
+        fakeChild(JSON.stringify([{ type: 'result', result: fencedJson, is_error: false, usage: {} }])),
+      );
+
+      await extractor.extract('group-1');
+
+      const dossier = storage.dossiers.get('group-1', 'user-2');
+      expect(dossier).not.toBeNull();
+      expect(dossier?.displayName).toBe('Bob');
+      expect(dossier?.notes).toBe('Loves hiking');
     });
 
     it('should handle malformed JSON gracefully', async () => {
