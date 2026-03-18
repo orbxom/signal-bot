@@ -7,10 +7,12 @@ export function createGroupRoutes(storage: Storage, signalClient: SignalClient):
 
   router.get('/groups', async (_req, res) => {
     try {
-      const signalGroups = await signalClient.listGroups() as Array<{
-        id: string; name: string; members: string[];
+      const signalGroups = (await signalClient.listGroups()) as Array<{
+        id: string;
+        name: string;
+        members: string[];
       }>;
-      const enriched = signalGroups.map(g => {
+      const enriched = signalGroups.map((g) => {
         const settings = storage.groupSettings.get(g.id);
         return {
           ...g,
@@ -27,7 +29,7 @@ export function createGroupRoutes(storage: Storage, signalClient: SignalClient):
 
   router.get('/groups/:id', async (req, res) => {
     try {
-      const group = await signalClient.getGroup(req.params.id) as Record<string, unknown>;
+      const group = (await signalClient.getGroup(req.params.id)) as Record<string, unknown>;
       const settings = storage.groupSettings.get(req.params.id);
       const activePersona = storage.personas.getActiveForGroup(req.params.id);
       res.json({ ...group, settings, activePersona });

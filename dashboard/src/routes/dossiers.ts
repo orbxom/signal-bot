@@ -25,9 +25,7 @@ export function createDossierRoutes(storage: Storage): Router {
 
   router.put('/dossiers/:groupId/:personId', (req, res) => {
     const { displayName, notes } = req.body;
-    const dossier = storage.dossiers.upsert(
-      req.params.groupId, req.params.personId, displayName, notes,
-    );
+    const dossier = storage.dossiers.upsert(req.params.groupId, req.params.personId, displayName, notes);
     res.json(dossier);
   });
 

@@ -16,16 +16,14 @@ export function createMessageRoutes(storage: Storage): Router {
     const lim = Math.min(Number(limit) || 50, 200);
 
     if (search) {
-      const messages = storage.messages.search(
-        groupId as string,
-        search as string,
-        { startTimestamp: startTs, endTimestamp: endTs, limit: lim },
-      );
+      const messages = storage.messages.search(groupId as string, search as string, {
+        startTimestamp: startTs,
+        endTimestamp: endTs,
+        limit: lim,
+      });
       res.json(messages);
     } else {
-      const messages = storage.messages.getByDateRange(
-        groupId as string, startTs, endTs, lim,
-      );
+      const messages = storage.messages.getByDateRange(groupId as string, startTs, endTs, lim);
       res.json(messages);
     }
   });
