@@ -157,6 +157,60 @@ This is designed for the dark factory's integration test stage (Stage 6), where 
 - **Log files**: Written to `logs/` at the repo root. Old log files beyond 10 are cleaned up automatically on startup. Logs use async writes via WriteStream.
 - **Orphaned Claude processes on shutdown**: The bot tracks all spawned `claude -p` processes. On SIGINT/SIGTERM, it sends SIGTERM to all children, waits 2s, then exits. Timed-out children also get SIGKILL escalation after 5s.
 
+## Deployment (NUC Production Server)
+
+### Architecture
+- **Development (this PC)**: Runs `npm run dev:test` with `--test-channel-only`. Only responds in the Bot Test group; stores messages from all other groups silently.
+- **Production (NUC at 192.168.0.239)**: Runs via systemd services. Uses `EXCLUDE_GROUP_IDS` to ignore the Bot Test group. Responds in all real groups.
+- Both instances share the same Signal phone number via signal-cli. Channel filtering ensures they don't produce duplicate responses — the group sets are disjoint.
+
+### NUC Services
+- `signal-cli.service` — signal-cli native binary, JSON-RPC daemon on port 8080
+- `signal-bot.service` — The bot (`npx tsx src/index.ts`), auto-restarts on failure
+- `signal-bot-dashboard.service` — Dark Factory dashboard on port 3333
+
+Service templates are in `scripts/systemd/` for reference. To install/update on NUC:
+```bash
+scp scripts/systemd/*.service zknowles@192.168.0.239:/tmp/
+ssh zknowles@192.168.0.239 "sudo cp /tmp/*.service /etc/systemd/system/ && sudo systemctl daemon-reload"
+```
+
+### NUC .env Differences
+The NUC has its own `bot/.env` with:
+- `EXCLUDE_GROUP_IDS=kKWs+FQPBZKe7N7CdxMjNAAjE2uWEmtBij55MOfWFU4=` (test group excluded)
+- `SIGNAL_CLI_URL=http://localhost:8080`
+- `ATTACHMENTS_DIR=/home/zknowles/signal-bot/data/signal-attachments`
+- No `DARK_FACTORY_ENABLED` (production bot only)
+
+### Channel Filtering
+- `--test-channel-only` / `TEST_CHANNEL_ONLY=true`: Only respond in the test group (dev mode)
+- `EXCLUDE_GROUP_IDS=id1,id2`: Comma-separated group IDs to ignore (production mode). Messages are still stored but LLM processing is skipped.
+
+### Deploying
+```bash
+./scripts/deploy-nuc.sh                          # deploy current source to NUC
+NUC_HOST=10.0.0.5 ./scripts/deploy-nuc.sh       # custom NUC IP
+```
+Syncs source via rsync (excludes data/.env/node_modules), runs `npm install` if package.json changed, restarts `signal-bot` service.
+
+### Health Check
+```bash
+./scripts/nuc-health.sh        # default 20 log lines
+./scripts/nuc-health.sh 50     # more log lines
+```
+Checks system resources, service status, signal-cli API, and recent logs.
+
+### Dashboard
+Access at http://192.168.0.239:3333 from any device on the local network.
+
+### Manual Operations
+```bash
+ssh zknowles@192.168.0.239                                           # SSH into NUC
+ssh zknowles@192.168.0.239 "journalctl -u signal-bot -f"            # live logs
+ssh zknowles@192.168.0.239 "sudo systemctl restart signal-bot"      # restart bot
+ssh zknowles@192.168.0.239 "sudo systemctl restart signal-cli"      # restart signal-cli
+```
+
 ## Testing
 
 ```bash

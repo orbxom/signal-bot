@@ -1,0 +1,13 @@
+[Unit]
+Description=signal-cli JSON-RPC daemon
+After=network.target
+
+[Service]
+Type=simple
+User=zknowles
+ExecStart=/usr/local/bin/signal-cli --config /var/lib/signal-cli daemon --http localhost:8080 --receive-mode manual
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

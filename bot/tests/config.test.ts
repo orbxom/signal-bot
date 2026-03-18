@@ -19,6 +19,7 @@ describe('Config', () => {
     delete process.env.DB_PATH;
     delete process.env.SYSTEM_PROMPT;
     delete process.env.CLAUDE_MAX_TURNS;
+    delete process.env.EXCLUDE_GROUP_IDS;
   });
 
   afterEach(() => {
@@ -169,6 +170,29 @@ describe('Config', () => {
 
     const config = Config.load();
     expect(config.mentionTriggers).toEqual(['claude:', 'c ']);
+  });
+
+  it('should parse EXCLUDE_GROUP_IDS', () => {
+    process.env.BOT_PHONE_NUMBER = '+1234567890';
+    process.env.EXCLUDE_GROUP_IDS = 'group1,group2';
+
+    const config = Config.load();
+    expect(config.excludeGroupIds).toEqual(['group1', 'group2']);
+  });
+
+  it('should default to empty array when EXCLUDE_GROUP_IDS not set', () => {
+    process.env.BOT_PHONE_NUMBER = '+1234567890';
+
+    const config = Config.load();
+    expect(config.excludeGroupIds).toEqual([]);
+  });
+
+  it('should trim whitespace in EXCLUDE_GROUP_IDS', () => {
+    process.env.BOT_PHONE_NUMBER = '+1234567890';
+    process.env.EXCLUDE_GROUP_IDS = ' group1 , group2 ';
+
+    const config = Config.load();
+    expect(config.excludeGroupIds).toEqual(['group1', 'group2']);
   });
 
   it('should include darkFactoryEnabled and darkFactoryProjectRoot in ConfigType', () => {
