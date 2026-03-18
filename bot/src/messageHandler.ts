@@ -71,6 +71,23 @@ export class MessageHandler {
     this.typingManager = new TypingIndicatorManager(deps.signalClient);
   }
 
+  runMaintenance(): void {
+    const groupIds = this.storage.getDistinctGroupIds();
+    for (const groupId of groupIds) {
+      try {
+        this.storage.trimMessages(groupId, this.messageRetentionCount);
+      } catch (error) {
+        logger.error(`Failed to trim messages for group ${groupId}:`, error);
+      }
+    }
+    try {
+      const cutoff = Date.now() - this.attachmentRetentionDays * 24 * 60 * 60 * 1000;
+      this.storage.trimAttachments(cutoff);
+    } catch (error) {
+      logger.error('Failed to trim attachments:', error);
+    }
+  }
+
   async handleMessage(
     groupId: string,
     sender: string,
@@ -114,7 +131,9 @@ export class MessageHandler {
       attachments: attachments.length > 0 ? attachments : undefined,
     });
 
-    this.ingestImageAttachments(groupId, sender, attachments, timestamp);
+    if (!options?.storeOnly) {
+      this.ingestImageAttachments(groupId, sender, attachments, timestamp);
+    }
 
     if (options?.storeOnly || !mentioned) {
       return;
@@ -168,8 +187,10 @@ export class MessageHandler {
       });
     }
 
-    for (const msg of validMessages) {
-      this.ingestImageAttachments(groupId, msg.sender, msg.attachments, msg.timestamp);
+    if (!options?.storeOnly) {
+      for (const msg of validMessages) {
+        this.ingestImageAttachments(groupId, msg.sender, msg.attachments, msg.timestamp);
+      }
     }
 
     if (options?.storeOnly || mentionMessages.length === 0) {
@@ -401,11 +422,6 @@ export class MessageHandler {
         });
         logger.step('delivery: sent via fallback');
       }
-
-      // Trim old messages and expired attachments
-      this.storage.trimMessages(groupId, this.messageRetentionCount);
-      const attachmentCutoff = Date.now() - this.attachmentRetentionDays * 24 * 60 * 60 * 1000;
-      this.storage.trimAttachments(attachmentCutoff);
 
       logger.groupEnd();
     } catch (error) {

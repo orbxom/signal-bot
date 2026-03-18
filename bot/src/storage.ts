@@ -189,6 +189,10 @@ export class Storage {
 
   // === Lifecycle ===
 
+  checkpoint(): void {
+    this.conn.checkpoint();
+  }
+
   close(): void {
     this.conn.close();
   }

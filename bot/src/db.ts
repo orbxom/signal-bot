@@ -275,6 +275,15 @@ export class DatabaseConnection {
     `);
   }
 
+  checkpoint(): void {
+    this.ensureOpen();
+    try {
+      this.db.pragma('wal_checkpoint(TRUNCATE)');
+    } catch (error) {
+      wrapSqliteError(error, 'WAL checkpoint');
+    }
+  }
+
   runOp<T>(name: string, fn: () => T): T {
     this.ensureOpen();
     try {

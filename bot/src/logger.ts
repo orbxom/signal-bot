@@ -1,8 +1,9 @@
-import { appendFileSync, mkdirSync } from 'node:fs';
+import { createWriteStream, mkdirSync, readdirSync, unlinkSync, type WriteStream } from 'node:fs';
 import path from 'node:path';
 
 export interface LoggerOptions {
   logDir: string;
+  maxLogFiles?: number;
 }
 
 // ANSI color codes
@@ -24,6 +25,7 @@ const ANSI_STRIP_RE = /\x1b\[[0-9;]*m/g;
 
 export class Logger {
   private readonly logFile: string;
+  private readonly stream: WriteStream;
 
   constructor(options: LoggerOptions) {
     mkdirSync(options.logDir, { recursive: true });
@@ -32,6 +34,8 @@ export class Logger {
       .replace(/:/g, '-')
       .replace(/\.\d+Z$/, '');
     this.logFile = path.join(options.logDir, `bot-${timestamp}.log`);
+    this.stream = createWriteStream(this.logFile, { flags: 'a' });
+    this.cleanOldLogs(options.logDir, options.maxLogFiles ?? 10);
   }
 
   info(message: string): void {
@@ -75,6 +79,10 @@ export class Logger {
     this.write(`${this.formatTimestamp()} ${DASH} ${tag}  ${detail}\n`);
   }
 
+  close(): void {
+    this.stream.end();
+  }
+
   private formatTimestamp(): string {
     const now = new Date();
     const h = String(now.getHours()).padStart(2, '0');
@@ -86,7 +94,17 @@ export class Logger {
   private write(line: string): void {
     process.stdout.write(line);
     const stripped = line.replace(ANSI_STRIP_RE, '');
-    appendFileSync(this.logFile, stripped);
+    this.stream.write(stripped);
+  }
+
+  private cleanOldLogs(logDir: string, keepCount: number): void {
+    const files = readdirSync(logDir)
+      .filter(f => typeof f === 'string' && f.startsWith('bot-') && f.endsWith('.log'))
+      .sort()
+      .reverse();
+    for (const file of files.slice(keepCount)) {
+      unlinkSync(path.join(logDir, file));
+    }
   }
 }
 

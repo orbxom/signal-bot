@@ -192,7 +192,7 @@ describe('MessageHandler', () => {
       );
     });
 
-    it('should trim messages after responding', async () => {
+    it('should NOT trim messages after responding (trimming moved to periodic maintenance)', async () => {
       const handler = new MessageHandler(
         ['@bot'],
         { storage: mockStorage, llmClient: mockLLM, signalClient: mockSignal },
@@ -201,13 +201,10 @@ describe('MessageHandler', () => {
 
       await handler.handleMessage('g1', 'Alice', '@bot hello', 1000);
 
-      expect(mockStorage.trimMessages).toHaveBeenCalledWith('g1', 1000);
+      expect(mockStorage.trimMessages).not.toHaveBeenCalled();
     });
 
-    it('should call trimAttachments with correct cutoff after LLM response', async () => {
-      const mockNow = 1700000000000;
-      vi.spyOn(Date, 'now').mockReturnValue(mockNow);
-
+    it('should NOT call trimAttachments after LLM response (trimming moved to periodic maintenance)', async () => {
       const handler = new MessageHandler(
         ['@bot'],
         { storage: mockStorage, llmClient: mockLLM, signalClient: mockSignal },
@@ -216,11 +213,7 @@ describe('MessageHandler', () => {
 
       await handler.handleMessage('g1', 'Alice', '@bot hello', 1000);
 
-      expect(mockStorage.trimAttachments).toHaveBeenCalledTimes(1);
-      const expectedCutoff = mockNow - 30 * 24 * 60 * 60 * 1000;
-      expect(mockStorage.trimAttachments).toHaveBeenCalledWith(expectedCutoff);
-
-      vi.restoreAllMocks();
+      expect(mockStorage.trimAttachments).not.toHaveBeenCalled();
     });
 
     it('should handle LLM errors gracefully', async () => {
@@ -267,7 +260,6 @@ describe('MessageHandler', () => {
       await handler.handleMessage('g1', 'Alice', '@bot hello', 1000);
 
       expect(mockStorage.getRecentMessages).toHaveBeenCalledWith('g1', 10);
-      expect(mockStorage.trimMessages).toHaveBeenCalledWith('g1', 1000);
     });
 
     it('should log response with token usage', async () => {

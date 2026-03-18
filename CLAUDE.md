@@ -5,9 +5,11 @@ Claude-powered Signal bot for family group chat. Responds to mention triggers in
 ## Architecture
 
 ### Core
-- `bot/src/index.ts` — Composition root: wires dependencies, runs polling loop, checks reminders every 30s
-- `bot/src/messageHandler.ts` — Slim orchestrator: dedup, store, detect mention, build context, invoke LLM, route response
-- `bot/src/claudeClient.ts` — Spawns `claude -p` with MCP config from registry. Parses NDJSON/JSON output
+- `bot/src/index.ts` — Composition root: wires dependencies, runs polling loop with exponential backoff (auto-reconnects to signal-cli), periodic maintenance every 30s (reminders, message/attachment trimming), WAL checkpoint every 5 min, graceful shutdown (kills child processes, flushes logs)
+- `bot/src/messageHandler.ts` — Slim orchestrator: dedup, store, detect mention, build context, invoke LLM, route response. `runMaintenance()` trims messages/attachments for all groups. Store-only groups skip attachment ingestion.
+- `bot/src/claudeClient.ts` — Spawns `claude -p` with MCP config from registry. Parses NDJSON/JSON output. Uses `SpawnLimiter` (max 2 concurrent) with SIGKILL escalation on timeout.
+- `bot/src/pollingBackoff.ts` — Exponential backoff for polling loop: tracks consecutive errors, calculates delay (`base * 2^errorCount`, capped), triggers reconnection at threshold
+- `bot/src/spawnLimiter.ts` — Promise-based semaphore limiting concurrent Claude CLI spawns. Tracks child processes for graceful shutdown (`killAll` with SIGTERM→SIGKILL escalation)
 - `bot/src/mentionDetector.ts` — Pure: `isMentioned()`, `extractQuery()`
 - `bot/src/contextBuilder.ts` — Builds LLM context: system prompt + history + dossiers + personas + skills
 - `bot/src/messageDeduplicator.ts` — Map-based LRU deduplication
@@ -15,11 +17,12 @@ Claude-powered Signal bot for family group chat. Responds to mention triggers in
 - `bot/src/reminderScheduler.ts` — Per-group processing, exponential backoff, claim-then-send, failure notifications, recurring reminder orchestration
 - `bot/src/recurringReminderExecutor.ts` — Spawns `claude -p` with full MCP config + agents when recurring reminders fire
 - `bot/src/signalClient.ts` — JSON-RPC client for signal-cli's HTTP API
+- `bot/src/logger.ts` — Async file logging via WriteStream, ANSI-stripped file output, log file rotation (keeps last 10), `close()` for graceful shutdown
 - `bot/src/config.ts` — Loads env vars via dotenv
 
 ### Storage
-- `bot/src/db.ts` — DatabaseConnection: WAL mode, schema migrations via `schema_meta` table
-- `bot/src/storage.ts` — Facade delegating to domain stores (backward compatible)
+- `bot/src/db.ts` — DatabaseConnection: WAL mode, schema migrations via `schema_meta` table, `checkpoint()` for WAL truncation
+- `bot/src/storage.ts` — Facade delegating to domain stores (backward compatible), `checkpoint()` for periodic WAL maintenance
 - `bot/src/stores/messageStore.ts` — Message CRUD, search, date range queries
 - `bot/src/stores/reminderStore.ts` — Per-group reminders with idempotent markSent, retry tracking
 - `bot/src/stores/recurringReminderStore.ts` — Recurring reminders with cron scheduling, in-flight guards, failure tracking
@@ -150,6 +153,9 @@ This is designed for the dark factory's integration test stage (Stage 6), where 
 - **Bot not receiving messages**: The `extractMessageData` method only processes group messages with `dataMessage.message` and `groupInfo.groupId`. DMs and reactions are silently dropped.
 - **MCP tools not working**: MCP servers run via `npx tsx` on the `.ts` source files. The `resolveMcpServerPath` helper in `mcp/registry.ts` handles path resolution.
 - **Port already in use**: The mock server defaults to port 9090 (to avoid conflicts with real signal-cli on 8080). Use `MOCK_SIGNAL_PORT=XXXX` and `SIGNAL_CLI_URL=http://localhost:XXXX` to change it.
+- **Signal-cli goes down during operation**: The polling loop auto-reconnects with exponential backoff (2s → 4s → 8s → ... → 60s max). After every 5 consecutive failures, it calls `waitForReady()` to re-establish the connection. Check logs for "Attempting signal-cli reconnection..." messages.
+- **Log files**: Written to `logs/` at the repo root. Old log files beyond 10 are cleaned up automatically on startup. Logs use async writes via WriteStream.
+- **Orphaned Claude processes on shutdown**: The bot tracks all spawned `claude -p` processes. On SIGINT/SIGTERM, it sends SIGTERM to all children, waits 2s, then exits. Timed-out children also get SIGKILL escalation after 5s.
 
 ## Testing
 

@@ -2,7 +2,10 @@ import { spawn } from 'node:child_process';
 import { logger } from './logger';
 import { buildAllowedTools, buildMcpConfig } from './mcp/registry';
 import { getErrorMessage } from './mcp/result';
+import { SpawnLimiter } from './spawnLimiter';
 import type { ChatMessage, LLMClient, LLMResponse, MessageContext } from './types';
+
+export const spawnLimiter = new SpawnLimiter(2);
 
 interface ClaudeResultLine {
   type: 'result';
@@ -22,48 +25,59 @@ function getAllowedTools(): string {
   return cachedAllowedTools;
 }
 
-export function spawnPromise(
+export async function spawnPromise(
   cmd: string,
   args: string[],
   options: { timeout?: number; env?: NodeJS.ProcessEnv },
 ): Promise<{ stdout: string }> {
-  return new Promise((resolve, reject) => {
-    const child = spawn(cmd, args, {
-      env: options.env,
-      stdio: ['pipe', 'pipe', 'pipe'],
-    });
-    child.stdin.end();
+  await spawnLimiter.acquire();
+  try {
+    return await new Promise((resolve, reject) => {
+      const child = spawn(cmd, args, {
+        env: options.env,
+        stdio: ['pipe', 'pipe', 'pipe'],
+      });
+      child.stdin.end();
+      spawnLimiter.trackChild(child);
 
-    const stdoutChunks: Buffer[] = [];
-    let stderr = '';
-    child.stdout.on('data', (chunk: Buffer) => {
-      stdoutChunks.push(chunk);
-    });
-    child.stderr.on('data', (data: Buffer) => {
-      stderr += data.toString();
-    });
+      const stdoutChunks: Buffer[] = [];
+      let stderr = '';
+      child.stdout.on('data', (chunk: Buffer) => {
+        stdoutChunks.push(chunk);
+      });
+      child.stderr.on('data', (data: Buffer) => {
+        stderr += data.toString();
+      });
 
-    const timer = options.timeout
-      ? setTimeout(() => {
-          child.kill();
-          reject(new Error('Claude CLI timed out'));
-        }, options.timeout)
-      : null;
+      const timer = options.timeout
+        ? setTimeout(() => {
+            child.kill();
+            setTimeout(() => {
+              try {
+                if (!child.killed) child.kill('SIGKILL');
+              } catch {}
+            }, 5000);
+            reject(new Error('Claude CLI timed out'));
+          }, options.timeout)
+        : null;
 
-    child.on('close', code => {
-      if (timer) clearTimeout(timer);
-      const stdout = Buffer.concat(stdoutChunks).toString();
-      if (code !== 0) {
-        reject(new Error(stderr || `claude exited with code ${code}`));
-      } else {
-        resolve({ stdout });
-      }
+      child.on('close', code => {
+        if (timer) clearTimeout(timer);
+        const stdout = Buffer.concat(stdoutChunks).toString();
+        if (code !== 0) {
+          reject(new Error(stderr || `claude exited with code ${code}`));
+        } else {
+          resolve({ stdout });
+        }
+      });
+      child.on('error', err => {
+        if (timer) clearTimeout(timer);
+        reject(err);
+      });
     });
-    child.on('error', err => {
-      if (timer) clearTimeout(timer);
-      reject(err);
-    });
-  });
+  } finally {
+    spawnLimiter.release();
+  }
 }
 
 interface ToolCall {

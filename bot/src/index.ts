@@ -1,7 +1,8 @@
-import { ClaudeCLIClient } from './claudeClient';
+import { ClaudeCLIClient, spawnLimiter } from './claudeClient';
 import { Config } from './config';
 import { logger } from './logger';
 import { MessageHandler } from './messageHandler';
+import { PollingBackoff } from './pollingBackoff';
 import { RecurringReminderExecutor } from './recurringReminderExecutor';
 import { ReminderScheduler } from './reminderScheduler';
 import { SignalClient } from './signalClient';
@@ -22,22 +23,21 @@ async function main() {
   const signalClient = new SignalClient(config.signalCliUrl, config.botPhoneNumber);
   logger.success('Signal client initialized');
 
-  const recurringExecutor = new RecurringReminderExecutor(
-    {
-      dbPath: config.dbPath,
-      timezone: config.timezone,
-      githubRepo: config.githubRepo,
-      sourceRoot: config.sourceRoot,
-      signalCliUrl: config.signalCliUrl,
-      botPhoneNumber: config.botPhoneNumber,
-      attachmentsDir: config.attachmentsDir,
-      whisperModelPath: config.whisperModelPath,
-      darkFactoryEnabled: config.darkFactoryEnabled,
-      darkFactoryProjectRoot: config.darkFactoryProjectRoot,
-    },
-    signalClient,
-    config.claude.maxTurns,
-    groupId => storage.toolNotifications.isEnabled(groupId),
+  const appConfig = {
+    dbPath: config.dbPath,
+    timezone: config.timezone,
+    githubRepo: config.githubRepo,
+    sourceRoot: config.sourceRoot,
+    signalCliUrl: config.signalCliUrl,
+    botPhoneNumber: config.botPhoneNumber,
+    attachmentsDir: config.attachmentsDir,
+    whisperModelPath: config.whisperModelPath,
+    darkFactoryEnabled: config.darkFactoryEnabled,
+    darkFactoryProjectRoot: config.darkFactoryProjectRoot,
+  };
+
+  const recurringExecutor = new RecurringReminderExecutor(appConfig, signalClient, config.claude.maxTurns, groupId =>
+    storage.toolNotifications.isEnabled(groupId),
   );
   logger.success('Recurring reminder executor initialized');
 
@@ -55,18 +55,7 @@ async function main() {
       storage,
       llmClient,
       signalClient,
-      appConfig: {
-        dbPath: config.dbPath,
-        timezone: config.timezone,
-        githubRepo: config.githubRepo,
-        sourceRoot: config.sourceRoot,
-        signalCliUrl: config.signalCliUrl,
-        botPhoneNumber: config.botPhoneNumber,
-        attachmentsDir: config.attachmentsDir,
-        whisperModelPath: config.whisperModelPath,
-        darkFactoryEnabled: config.darkFactoryEnabled,
-        darkFactoryProjectRoot: config.darkFactoryProjectRoot,
-      },
+      appConfig,
     },
     {
       systemPrompt: config.systemPrompt,
@@ -86,11 +75,17 @@ async function main() {
   // Graceful shutdown
   const shutdown = () => {
     logger.info('Shutting down gracefully...');
+    spawnLimiter.killAll();
+    logger.close();
     storage.close();
-    process.exit(0);
+    setTimeout(() => process.exit(0), 2000);
   };
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);
+
+  process.on('unhandledRejection', reason => {
+    logger.error('Unhandled rejection:', reason);
+  });
 
   // Wait for signal-cli to be ready
   logger.info('Waiting for signal-cli...');
@@ -99,7 +94,10 @@ async function main() {
   // Start polling loop
   logger.success('Starting message polling...');
   const REMINDER_CHECK_MS = 30_000;
+  const CHECKPOINT_MS = 5 * 60 * 1000; // 5 minutes
   let lastReminderCheck = 0;
+  let lastCheckpoint = 0;
+  const backoff = new PollingBackoff();
 
   let pollCount = 0;
   let messagesSinceHeartbeat = 0;
@@ -107,6 +105,7 @@ async function main() {
     try {
       pollCount++;
       const messages = await signalClient.receiveMessages();
+      backoff.recordSuccess();
       if (messages.length > 0) {
         logger.compact('POLL', `#${pollCount} received ${messages.length} message(s)`);
         messagesSinceHeartbeat += messages.length;
@@ -139,25 +138,50 @@ async function main() {
 
       // Process each group's messages as a batch
       for (const [groupId, batch] of byGroup) {
-        const storeOnly = config.testChannelOnly && groupId !== config.testGroupId;
-        await messageHandler.handleMessageBatch(groupId, batch, { storeOnly });
+        try {
+          const storeOnly = config.testChannelOnly && groupId !== config.testGroupId;
+          await messageHandler.handleMessageBatch(groupId, batch, { storeOnly });
+        } catch (error) {
+          logger.error(`Error processing group ${groupId}:`, error);
+        }
       }
 
-      // Check for due reminders periodically
+      // Check for due reminders and run maintenance periodically
       const now = Date.now();
       if (now - lastReminderCheck >= REMINDER_CHECK_MS) {
         lastReminderCheck = now;
         try {
           await reminderScheduler.processDueReminders();
+          messageHandler.runMaintenance();
         } catch (error) {
           logger.error('Error processing reminders:', error);
         }
       }
+
+      // Checkpoint less frequently
+      if (now - lastCheckpoint >= CHECKPOINT_MS) {
+        lastCheckpoint = now;
+        try {
+          storage.checkpoint();
+        } catch (error) {
+          logger.error('WAL checkpoint failed:', error);
+        }
+      }
     } catch (error) {
       logger.error(`[poll #${pollCount}] Error in polling loop:`, error);
+      backoff.recordError();
+      if (backoff.shouldReconnect()) {
+        try {
+          logger.info('Attempting signal-cli reconnection...');
+          await signalClient.waitForReady();
+          logger.success('signal-cli reconnected');
+        } catch (reconnectError) {
+          logger.error('signal-cli reconnection failed:', reconnectError);
+        }
+      }
     }
 
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    await new Promise(resolve => setTimeout(resolve, backoff.getDelay()));
   }
 }
 

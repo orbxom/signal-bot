@@ -170,4 +170,14 @@ describe('Config', () => {
     const config = Config.load();
     expect(config.mentionTriggers).toEqual(['claude:', 'c ']);
   });
+
+  it('should include darkFactoryEnabled and darkFactoryProjectRoot in ConfigType', () => {
+    process.env.BOT_PHONE_NUMBER = '+1234567890';
+    process.env.DARK_FACTORY_ENABLED = 'true';
+    process.env.DARK_FACTORY_PROJECT_ROOT = '/some/path';
+
+    const config = Config.load();
+    expect(config.darkFactoryEnabled).toBe('true');
+    expect(config.darkFactoryProjectRoot).toBe('/some/path');
+  });
 });

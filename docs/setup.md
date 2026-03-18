@@ -107,12 +107,21 @@ docker compose ps
 - Check logs: `docker compose logs bot`
 - Verify signal-cli is running: `docker compose ps`
 - Test Signal connection: `docker exec -it signal-cli signal-cli listGroups`
+- The bot auto-reconnects to signal-cli with exponential backoff if the connection drops. Look for "Attempting signal-cli reconnection..." in logs.
 
 **Claude CLI errors:**
 - Verify Claude CLI is authenticated: `claude --version`
 - Check your Max subscription is active
 - Look for "Claude CLI not found" or "timed out" in bot logs
+- Max 2 concurrent Claude CLI processes are spawned at a time. Additional requests queue until a slot frees up.
 
 **Database issues:**
 - Database at `./data/bot/bot.db`
 - Inspect: `sqlite3 ./data/bot/bot.db "SELECT count(*) FROM messages;"`
+- WAL checkpoint runs automatically every 5 minutes to keep the WAL file small
+- Message trimming runs every 30s (keeps last 1000 messages per group by default)
+
+**Log files:**
+- Written to `logs/` at the repo root (one file per startup session)
+- Old log files beyond 10 are cleaned up automatically on startup
+- Logs use async writes for minimal event loop impact

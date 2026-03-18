@@ -16,7 +16,7 @@ vi.mock('child_process', async importOriginal => {
   };
 });
 
-import { ClaudeCLIClient, parseClaudeOutput } from '../src/claudeClient';
+import { ClaudeCLIClient, parseClaudeOutput, spawnLimiter, spawnPromise } from '../src/claudeClient';
 
 function makeResultOutput(result: string, isError = false, usage?: { output_tokens: number }) {
   const initLine = JSON.stringify({ type: 'system', subtype: 'init', session_id: 'test' });
@@ -824,6 +824,67 @@ describe('ClaudeCLIClient', () => {
       ].join('\n');
       const result = parseClaudeOutput(output);
       expect(result.content).toBe('Fallback text');
+    });
+  });
+
+  describe('spawnPromise limiter integration', () => {
+    beforeEach(() => {
+      // Reset limiter state between tests by releasing any held slots
+      // and clearing tracked children
+      spawnLimiter.killAll(0);
+    });
+
+    it('should export a spawnLimiter singleton', () => {
+      expect(spawnLimiter).toBeDefined();
+      expect(spawnLimiter.getActiveCount).toBeDefined();
+      expect(spawnLimiter.acquire).toBeDefined();
+      expect(spawnLimiter.release).toBeDefined();
+      expect(spawnLimiter.killAll).toBeDefined();
+      expect(spawnLimiter.trackChild).toBeDefined();
+    });
+
+    it('should release slot after successful spawn', async () => {
+      mockSpawnSuccess(makeResultOutput('Hello!'));
+
+      await spawnPromise('echo', ['hi'], {});
+
+      // Slot should be released — two more acquires should both resolve immediately
+      await spawnLimiter.acquire();
+      await spawnLimiter.acquire();
+      spawnLimiter.release();
+      spawnLimiter.release();
+    });
+
+    it('should release slot after failed spawn', async () => {
+      mockSpawnError('spawn failed ENOENT');
+
+      await expect(spawnPromise('bad', [], {})).rejects.toThrow();
+
+      // Slot should still be released
+      await spawnLimiter.acquire();
+      spawnLimiter.release();
+    });
+
+    it('should add SIGKILL escalation on timeout', async () => {
+      vi.useFakeTimers();
+      const child = createMockChild();
+      mockSpawn.mockReturnValue(child);
+
+      const promise = spawnPromise('claude', [], { timeout: 1000 }).catch(() => {});
+
+      // Let acquire() resolve and fire the timeout
+      await vi.advanceTimersByTimeAsync(1000);
+
+      // child.kill() called by timeout handler (SIGTERM)
+      expect(child.kill).toHaveBeenCalled();
+
+      // Advance to trigger SIGKILL escalation
+      await vi.advanceTimersByTimeAsync(5000);
+
+      expect(child.kill).toHaveBeenCalledWith('SIGKILL');
+
+      await promise;
+      vi.useRealTimers();
     });
   });
 });

@@ -18,6 +18,8 @@ export interface ConfigType {
   sourceRoot: string;
   attachmentsDir: string;
   whisperModelPath: string;
+  darkFactoryEnabled: string;
+  darkFactoryProjectRoot: string;
   attachmentRetentionDays: number;
   testChannelOnly: boolean;
   testGroupId: string;
