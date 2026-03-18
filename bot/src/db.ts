@@ -1,3 +1,5 @@
+import { mkdirSync } from 'node:fs';
+import path from 'node:path';
 import Database from 'better-sqlite3';
 
 export function wrapSqliteError(error: unknown, operation: string): never {
@@ -20,6 +22,7 @@ export class DatabaseConnection {
 
   constructor(dbPath: string) {
     try {
+      mkdirSync(path.dirname(dbPath), { recursive: true });
       this.db = new Database(dbPath);
       this.db.pragma('journal_mode = WAL');
       this.initTables();
