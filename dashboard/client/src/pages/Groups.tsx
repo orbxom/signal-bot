@@ -31,7 +31,7 @@ const columns = [
 ]
 
 export default function Groups() {
-  const { data: groups, loading, setData: setGroups, refetch } = useApi<Group[]>('/api/groups')
+  const { data: groups, loading, setData: setGroups } = useApi<Group[]>('/api/groups')
   const navigate = useNavigate()
   const [uri, setUri] = useState('')
   const [joining, setJoining] = useState(false)
