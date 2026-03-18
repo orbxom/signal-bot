@@ -1,7 +1,7 @@
 import { ClaudeCLIClient, spawnLimiter } from './claudeClient';
 import { Config } from './config';
 import { logger } from './logger';
-import { MemoryConsolidator, consolidationLimiter } from './memoryConsolidator';
+import { consolidationLimiter, MemoryConsolidator } from './memoryConsolidator';
 import { MemoryExtractor } from './memoryExtractor';
 import { MessageHandler } from './messageHandler';
 import { sendStartupNotification, sendErrorNotification } from './notifications';
