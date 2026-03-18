@@ -1,6 +1,7 @@
 import { ContextBuilder } from './contextBuilder';
 import { logger } from './logger';
 import { estimateTokens } from './mcp/result';
+import type { MemoryExtractor } from './memoryExtractor';
 import { MentionDetector } from './mentionDetector';
 import { MessageDeduplicator } from './messageDeduplicator';
 import type { SignalClient } from './signalClient';
@@ -28,6 +29,7 @@ export class MessageHandler {
   private storage: Storage;
   private llmClient: LLMClient;
   private signalClient: SignalClient;
+  private memoryExtractor?: MemoryExtractor;
   private contextWindowSize: number;
   private messageRetentionCount: number;
   private readonly attachmentRetentionDays: number;
@@ -39,6 +41,7 @@ export class MessageHandler {
       llmClient: LLMClient;
       signalClient: SignalClient;
       appConfig?: AppConfig;
+      memoryExtractor?: MemoryExtractor;
     },
     options?: MessageHandlerOptions,
   ) {
@@ -57,6 +60,7 @@ export class MessageHandler {
     this.storage = deps.storage;
     this.llmClient = deps.llmClient;
     this.signalClient = deps.signalClient;
+    this.memoryExtractor = deps.memoryExtractor;
     this.contextWindowSize = options?.contextWindowSize || 200;
     this.messageRetentionCount = options?.messageRetentionCount || 1000;
     this.attachmentRetentionDays = options?.attachmentRetentionDays || 30;
@@ -437,6 +441,10 @@ export class MessageHandler {
           isBot: true,
         });
         logger.step('delivery: sent via fallback');
+      }
+
+      if (this.memoryExtractor) {
+        this.memoryExtractor.scheduleExtraction(groupId);
       }
 
       logger.groupEnd();

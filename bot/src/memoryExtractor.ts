@@ -106,6 +106,13 @@ export class MemoryExtractor {
     this.timers.clear();
   }
 
+  /**
+   * Kill all in-flight extraction spawns. Call on shutdown.
+   */
+  killAll(): void {
+    this.limiter.killAll();
+  }
+
   // --- Private helpers ---
 
   private async doExtract(groupId: string): Promise<void> {
