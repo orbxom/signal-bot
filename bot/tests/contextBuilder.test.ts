@@ -286,6 +286,27 @@ describe('ContextBuilder', () => {
       const systemContent = chatMessages[0].content;
       expect(systemContent).not.toContain('Collaborative Testing Mode');
     });
+
+    it('should include capabilities prompt in system content', () => {
+      const builder = new ContextBuilder(defaultConfig);
+      const chatMessages = builder.buildContext({
+        history: [],
+        query: 'Hello',
+        groupId: 'g1',
+        sender: 'Alice',
+      });
+
+      const system = chatMessages[0].content;
+      expect(system).toContain('update_dossier');
+      expect(system).toContain('save_memory');
+      expect(system).toContain('switch_persona');
+      expect(system).toContain('search_messages');
+    });
+
+    it('should not contain loadSkillContent method', () => {
+      const builder = new ContextBuilder(defaultConfig);
+      expect((builder as any).loadSkillContent).toBeUndefined();
+    });
   });
 
   describe('fitToTokenBudget', () => {
