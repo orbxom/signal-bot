@@ -2,6 +2,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { logger } from './logger';
 
+export type NotifySignalClient = { sendMessage(groupId: string, message: string): Promise<void> };
+
 export interface NotifyConfig {
   startupNotify: boolean;
   testGroupId: string;
@@ -9,7 +11,7 @@ export interface NotifyConfig {
 }
 
 export async function sendStartupNotification(
-  signalClient: { sendMessage(groupId: string, message: string): Promise<void> },
+  signalClient: NotifySignalClient,
   config: NotifyConfig,
 ): Promise<void> {
   if (!config.startupNotify) return;
@@ -41,7 +43,7 @@ export async function sendStartupNotification(
 }
 
 export async function sendErrorNotification(
-  signalClient: { sendMessage(groupId: string, message: string): Promise<void> },
+  signalClient: NotifySignalClient,
   config: NotifyConfig,
   error: unknown,
 ): Promise<void> {

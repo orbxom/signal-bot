@@ -87,10 +87,11 @@ async function main() {
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);
 
-  process.on('unhandledRejection', async (reason) => {
+  process.on('unhandledRejection', (reason) => {
     logger.error('Unhandled rejection:', reason);
-    await sendErrorNotification(signalClient, config, reason);
-    process.exit(1);
+    sendErrorNotification(signalClient, config, reason).finally(() => {
+      process.exit(1);
+    });
   });
 
   // Wait for signal-cli to be ready
@@ -204,7 +205,10 @@ main().catch(async (error) => {
     const config = Config.load();
     if (config.startupNotify) {
       const tempClient = new SignalClient(config.signalCliUrl, config.botPhoneNumber);
-      await sendErrorNotification(tempClient, config, error);
+      await Promise.race([
+        sendErrorNotification(tempClient, config, error),
+        new Promise(resolve => setTimeout(resolve, 5000)),
+      ]);
     }
   } catch {
     // Config or signal-cli not available — just exit
