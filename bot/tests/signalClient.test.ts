@@ -592,6 +592,76 @@ describe('SignalClient', () => {
     });
   });
 
+  describe('listGroups', () => {
+    let fetchMock: ReturnType<typeof vi.fn>;
+
+    beforeEach(() => {
+      fetchMock = vi.fn();
+      global.fetch = fetchMock;
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it('returns groups via JSON-RPC', async () => {
+      const mockGroups = [{ id: 'group1', name: 'Family Chat' }];
+      fetchMock.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ jsonrpc: '2.0', id: '1', result: mockGroups }),
+      });
+      const client = new SignalClient('http://localhost:8080', '+61400000000');
+      const groups = await client.listGroups();
+      expect(groups).toEqual(mockGroups);
+    });
+  });
+
+  describe('getGroup', () => {
+    let fetchMock: ReturnType<typeof vi.fn>;
+
+    beforeEach(() => {
+      fetchMock = vi.fn();
+      global.fetch = fetchMock;
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it('returns group details via JSON-RPC', async () => {
+      const mockGroup = { id: 'group1', name: 'Family Chat', members: [] };
+      fetchMock.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ jsonrpc: '2.0', id: '1', result: mockGroup }),
+      });
+      const client = new SignalClient('http://localhost:8080', '+61400000000');
+      const group = await client.getGroup('group1');
+      expect(group).toEqual(mockGroup);
+    });
+  });
+
+  describe('quitGroup', () => {
+    let fetchMock: ReturnType<typeof vi.fn>;
+
+    beforeEach(() => {
+      fetchMock = vi.fn();
+      global.fetch = fetchMock;
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it('calls quitGroup RPC method', async () => {
+      fetchMock.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ jsonrpc: '2.0', id: '1', result: {} }),
+      });
+      const client = new SignalClient('http://localhost:8080', '+61400000000');
+      await expect(client.quitGroup('group1')).resolves.not.toThrow();
+    });
+  });
+
   describe('waitForReady', () => {
     let fetchMock: ReturnType<typeof vi.fn>;
 

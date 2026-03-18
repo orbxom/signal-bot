@@ -67,6 +67,18 @@ export class SignalClient {
     return (await this.rpc<SignalMessage[]>('receive', { timeout: 5 })) ?? [];
   }
 
+  async listGroups(): Promise<unknown[]> {
+    return this.rpc<unknown[]>('listGroups', {});
+  }
+
+  async getGroup(groupId: string): Promise<unknown> {
+    return this.rpc<unknown>('getGroup', { groupId });
+  }
+
+  async quitGroup(groupId: string): Promise<void> {
+    await this.rpc<void>('quitGroup', { groupId });
+  }
+
   async waitForReady(maxRetries: number = 10, baseDelay: number = 2000): Promise<void> {
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
