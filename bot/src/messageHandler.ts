@@ -1,6 +1,7 @@
 import { ContextBuilder } from './contextBuilder';
 import { logger } from './logger';
 import { estimateTokens } from './mcp/result';
+import type { MemoryExtractor } from './memoryExtractor';
 import { MentionDetector } from './mentionDetector';
 import { MessageDeduplicator } from './messageDeduplicator';
 import type { SignalClient } from './signalClient';
@@ -28,6 +29,7 @@ export class MessageHandler {
   private storage: Storage;
   private llmClient: LLMClient;
   private signalClient: SignalClient;
+  private memoryExtractor?: MemoryExtractor;
   private contextWindowSize: number;
   private messageRetentionCount: number;
   private readonly attachmentRetentionDays: number;
@@ -39,6 +41,7 @@ export class MessageHandler {
       llmClient: LLMClient;
       signalClient: SignalClient;
       appConfig?: AppConfig;
+      memoryExtractor?: MemoryExtractor;
     },
     options?: MessageHandlerOptions,
   ) {
@@ -57,6 +60,7 @@ export class MessageHandler {
     this.storage = deps.storage;
     this.llmClient = deps.llmClient;
     this.signalClient = deps.signalClient;
+    this.memoryExtractor = deps.memoryExtractor;
     this.contextWindowSize = options?.contextWindowSize || 200;
     this.messageRetentionCount = options?.messageRetentionCount || 1000;
     this.attachmentRetentionDays = options?.attachmentRetentionDays || 30;
@@ -277,7 +281,7 @@ export class MessageHandler {
     return `You were offline and missed the following messages:\n${lines.join('\n')}\n\nRespond to all of these in a single message.`;
   }
 
-  /** Assemble additional context (dossiers, memories, skills, persona) for the LLM request. */
+  /** Assemble additional context (dossiers, memories, persona) for the LLM request. */
   private assembleAdditionalContext(groupId: string): {
     additionalContext: string | undefined;
     nameMap: Map<string, string>;
@@ -310,11 +314,6 @@ export class MessageHandler {
         contextParts.push(`## Group Memory\n${memoryLines.join('\n')}`);
       }
     }
-    const skillContent = this.contextBuilder.loadSkillContent();
-    if (skillContent) {
-      contextParts.push(skillContent);
-    }
-
     // Look up active persona for this group
     const activePersona = this.storage.getActivePersonaForGroup(groupId);
     const personaPrompt = activePersona?.description;
@@ -442,6 +441,10 @@ export class MessageHandler {
           isBot: true,
         });
         logger.step('delivery: sent via fallback');
+      }
+
+      if (this.memoryExtractor) {
+        this.memoryExtractor.scheduleExtraction(groupId);
       }
 
       logger.groupEnd();

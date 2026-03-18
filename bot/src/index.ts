@@ -1,6 +1,8 @@
 import { ClaudeCLIClient, spawnLimiter } from './claudeClient';
 import { Config } from './config';
 import { logger } from './logger';
+import { MemoryConsolidator } from './memoryConsolidator';
+import { MemoryExtractor } from './memoryExtractor';
 import { MessageHandler } from './messageHandler';
 import { sendStartupNotification, sendErrorNotification } from './notifications';
 import { PollingBackoff } from './pollingBackoff';
@@ -50,6 +52,10 @@ async function main() {
   );
   logger.success('Reminder scheduler initialized');
 
+  const memoryExtractor = new MemoryExtractor(storage);
+  const memoryConsolidator = new MemoryConsolidator(storage, config.timezone);
+  logger.success('Memory extractor and consolidator initialized');
+
   const messageHandler = new MessageHandler(
     config.mentionTriggers,
     {
@@ -57,6 +63,7 @@ async function main() {
       llmClient,
       signalClient,
       appConfig,
+      memoryExtractor,
     },
     {
       systemPrompt: config.systemPrompt,
@@ -79,6 +86,9 @@ async function main() {
   // Graceful shutdown
   const shutdown = () => {
     logger.info('Shutting down gracefully...');
+    memoryExtractor.clearTimers();
+    memoryExtractor.killAll();
+    memoryConsolidator.killAll();
     spawnLimiter.killAll();
     logger.close();
     storage.close();
@@ -167,6 +177,11 @@ async function main() {
           messageHandler.runMaintenance();
         } catch (error) {
           logger.error('Error processing reminders:', error);
+        }
+        try {
+          await memoryConsolidator.runIfDue();
+        } catch (error) {
+          logger.error('Daily consolidation check failed:', error);
         }
       }
 
