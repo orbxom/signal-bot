@@ -129,6 +129,34 @@ describe('MemoryStore', () => {
     });
   });
 
+  describe('listAll', () => {
+    it('lists memories across all groups', () => {
+      setup();
+      store.upsert('group1', 'groceries', 'Buy milk');
+      store.upsert('group2', 'todos', 'Fix fence');
+      const all = store.listAll();
+      expect(all).toHaveLength(2);
+    });
+
+    it('filters by groupId', () => {
+      setup();
+      store.upsert('group1', 'groceries', 'Buy milk');
+      store.upsert('group2', 'todos', 'Fix fence');
+      const filtered = store.listAll({ groupId: 'group1' });
+      expect(filtered).toHaveLength(1);
+      expect(filtered[0].topic).toBe('groceries');
+    });
+
+    it('supports pagination', () => {
+      setup();
+      for (let i = 0; i < 5; i++) {
+        store.upsert('group1', `topic${i}`, `content ${i}`);
+      }
+      const page = store.listAll({ limit: 2, offset: 2 });
+      expect(page).toHaveLength(2);
+    });
+  });
+
   describe('delete', () => {
     it('should delete an existing memory', () => {
       setup();

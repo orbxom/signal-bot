@@ -267,6 +267,61 @@ describe('RecurringReminderStore', () => {
     });
   });
 
+  describe('listAll', () => {
+    it('lists active recurring reminders across all groups', () => {
+      setup();
+      store.create('group1', 'user1', 'task1', '0 9 * * *', 'UTC', NOW + 1000);
+      store.create('group2', 'user2', 'task2', '0 10 * * *', 'UTC', NOW + 2000);
+      const all = store.listAll();
+      expect(all).toHaveLength(2);
+    });
+
+    it('filters by groupId', () => {
+      setup();
+      store.create('group1', 'user1', 'task1', '0 9 * * *', 'UTC', NOW + 1000);
+      store.create('group2', 'user2', 'task2', '0 10 * * *', 'UTC', NOW + 2000);
+      const filtered = store.listAll({ groupId: 'group1' });
+      expect(filtered).toHaveLength(1);
+      expect(filtered[0].groupId).toBe('group1');
+    });
+
+    it('excludes cancelled reminders', () => {
+      setup();
+      const id = store.create('group1', 'user1', 'task1', '0 9 * * *', 'UTC', NOW + 1000);
+      store.create('group1', 'user2', 'task2', '0 10 * * *', 'UTC', NOW + 2000);
+      store.cancel(id, 'group1');
+      const all = store.listAll();
+      expect(all).toHaveLength(1);
+    });
+
+    it('supports pagination', () => {
+      setup();
+      for (let i = 0; i < 5; i++) {
+        store.create('group1', 'user1', `task${i}`, '0 9 * * *', 'UTC', NOW + i * 1000);
+      }
+      const page = store.listAll({ limit: 2, offset: 2 });
+      expect(page).toHaveLength(2);
+    });
+  });
+
+  describe('resetFailures', () => {
+    it('resets consecutiveFailures to zero', () => {
+      setup();
+      const id = store.create('group1', 'user1', 'task', '0 9 * * *', 'UTC', NOW + 1000);
+      store.incrementFailures(id);
+      store.incrementFailures(id);
+      const result = store.resetFailures(id);
+      expect(result).toBe(true);
+      const all = store.listAll();
+      expect(all[0].consecutiveFailures).toBe(0);
+    });
+
+    it('returns false for non-existent id', () => {
+      setup();
+      expect(store.resetFailures(999)).toBe(false);
+    });
+  });
+
   describe('incrementFailures', () => {
     it('should increment count and return new value', () => {
       setup();

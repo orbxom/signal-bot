@@ -72,6 +72,94 @@ describe('AttachmentStore', () => {
     });
   });
 
+  describe('listMetadata', () => {
+    it('lists attachment metadata without data', () => {
+      const now = Date.now();
+      store.save({
+        id: 'a1', groupId: 'g1', sender: 's1', contentType: 'image/jpeg',
+        size: 100, filename: 'a.jpg', data: Buffer.from('data1'), timestamp: now,
+      });
+      store.save({
+        id: 'a2', groupId: 'g2', sender: 's2', contentType: 'image/png',
+        size: 200, filename: 'b.png', data: Buffer.from('data2'), timestamp: now + 1000,
+      });
+      const list = store.listMetadata();
+      expect(list).toHaveLength(2);
+      expect((list[0] as any).data).toBeUndefined();
+      expect(list[0].id).toBeDefined();
+    });
+
+    it('filters by groupId', () => {
+      const now = Date.now();
+      store.save({
+        id: 'a1', groupId: 'g1', sender: 's1', contentType: 'image/jpeg',
+        size: 100, filename: null, data: Buffer.from('data1'), timestamp: now,
+      });
+      store.save({
+        id: 'a2', groupId: 'g2', sender: 's2', contentType: 'image/png',
+        size: 200, filename: null, data: Buffer.from('data2'), timestamp: now,
+      });
+      const filtered = store.listMetadata({ groupId: 'g1' });
+      expect(filtered).toHaveLength(1);
+      expect(filtered[0].groupId).toBe('g1');
+    });
+
+    it('supports pagination', () => {
+      const now = Date.now();
+      for (let i = 0; i < 5; i++) {
+        store.save({
+          id: `a${i}`, groupId: 'g1', sender: 's1', contentType: 'image/jpeg',
+          size: 100, filename: null, data: Buffer.from(`data${i}`), timestamp: now + i,
+        });
+      }
+      const page = store.listMetadata({ limit: 2, offset: 2 });
+      expect(page).toHaveLength(2);
+    });
+  });
+
+  describe('getStats', () => {
+    it('returns stats grouped by groupId', () => {
+      const now = Date.now();
+      store.save({
+        id: 'a1', groupId: 'g1', sender: 's1', contentType: 'image/jpeg',
+        size: 100, filename: null, data: Buffer.from('data1'), timestamp: now,
+      });
+      store.save({
+        id: 'a2', groupId: 'g1', sender: 's1', contentType: 'image/png',
+        size: 200, filename: null, data: Buffer.from('data22'), timestamp: now,
+      });
+      store.save({
+        id: 'a3', groupId: 'g2', sender: 's2', contentType: 'image/jpeg',
+        size: 50, filename: null, data: Buffer.from('data3'), timestamp: now,
+      });
+      const stats = store.getStats();
+      expect(stats.countByGroup).toHaveLength(2);
+      expect(stats.totalSize).toBeGreaterThan(0);
+    });
+
+    it('returns empty stats when no attachments', () => {
+      const stats = store.getStats();
+      expect(stats.totalSize).toBe(0);
+      expect(stats.countByGroup).toHaveLength(0);
+    });
+  });
+
+  describe('deleteById', () => {
+    it('deletes an attachment by id', () => {
+      store.save({
+        id: 'a1', groupId: 'g1', sender: 's1', contentType: 'image/jpeg',
+        size: 100, filename: null, data: Buffer.from('data'), timestamp: Date.now(),
+      });
+      const result = store.deleteById('a1');
+      expect(result).toBe(true);
+      expect(store.get('a1')).toBeNull();
+    });
+
+    it('returns false for non-existent id', () => {
+      expect(store.deleteById('nonexistent')).toBe(false);
+    });
+  });
+
   describe('trimOlderThan', () => {
     it('should delete attachments older than cutoff', () => {
       const now = Date.now();

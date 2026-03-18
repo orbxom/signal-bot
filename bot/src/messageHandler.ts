@@ -167,7 +167,26 @@ export class MessageHandler {
       validMessages.push(msg);
     }
 
-    const mentionMessages = validMessages.filter(msg => this.mentionDetector.isMentioned(msg.content));
+    // Check if bot is disabled for this group — still store messages but don't process
+    if (!this.storage.groupSettings.isEnabled(groupId)) {
+      for (const msg of validMessages) {
+        this.storage.addMessage({
+          groupId,
+          sender: msg.sender,
+          content: msg.content,
+          timestamp: msg.timestamp,
+          isBot: false,
+          attachments: msg.attachments.length > 0 ? msg.attachments : undefined,
+        });
+      }
+      return;
+    }
+
+    // Resolve per-group triggers or fall back to global
+    const customTriggers = this.storage.groupSettings.getTriggers(groupId);
+    const detector = customTriggers ? new MentionDetector(customTriggers) : this.mentionDetector;
+
+    const mentionMessages = validMessages.filter(msg => detector.isMentioned(msg.content));
 
     let history: Message[] = [];
     let historyFormatted: string[] | undefined;
@@ -388,7 +407,7 @@ export class MessageHandler {
 
       // Get LLM response
       const startTime = Date.now();
-      const toolNotificationsEnabled = this.storage.toolNotifications.isEnabled(groupId);
+      const toolNotificationsEnabled = this.storage.groupSettings.getToolNotifications(groupId);
       const response = await this.llmClient.generateResponse(messages, {
         ...this.appConfig,
         groupId,

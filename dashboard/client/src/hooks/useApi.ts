@@ -1,0 +1,38 @@
+import { useState, useEffect, useCallback } from 'react'
+
+export function useApi<T>(url: string, deps: unknown[] = []) {
+  const [data, setData] = useState<T | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  const refetch = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await fetch(url)
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      setData(await res.json())
+    } catch (err) {
+      setError((err as Error).message)
+    } finally {
+      setLoading(false)
+    }
+  }, [url])
+
+  useEffect(() => { refetch() }, [refetch, ...deps])
+
+  return { data, loading, error, refetch }
+}
+
+export async function apiCall(method: string, url: string, body?: unknown): Promise<unknown> {
+  const res = await fetch(url, {
+    method,
+    headers: body ? { 'Content-Type': 'application/json' } : {},
+    body: body ? JSON.stringify(body) : undefined,
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }))
+    throw new Error(err.error || `HTTP ${res.status}`)
+  }
+  return res.json()
+}

@@ -2,32 +2,82 @@ import { EventEmitter } from 'node:events';
 import fs from 'node:fs';
 import path from 'node:path';
 import { type FSWatcher, watch } from 'chokidar';
-import type { EventFile, Run, StatusFile, UpdateMessage } from './types.js';
 
-export class RunWatcher extends EventEmitter {
-  private runs: Map<string, Run> = new Map();
-  private runsDir: string;
-  private fsWatcher?: FSWatcher;
+export type StageStatus = 'pending' | 'in-progress' | 'complete' | 'deferred' | 'abandoned';
 
-  constructor(runsDir: string) {
+export interface StageMap {
+  plan: StageStatus;
+  build: StageStatus;
+  test: StageStatus;
+  simplify: StageStatus;
+  pr: StageStatus;
+  'integration-test': StageStatus;
+  review: StageStatus;
+}
+
+export const STAGE_ORDER: (keyof StageMap)[] = [
+  'plan', 'build', 'test', 'simplify', 'pr', 'integration-test', 'review',
+];
+
+export interface StatusFile {
+  runId: string;
+  currentStage: string;
+  stages: Partial<StageMap>;
+  updatedAt?: string;
+}
+
+export interface EventFile {
+  source?: string;
+  issueNumber?: number;
+  issueUrl?: string;
+  title: string;
+  description?: string;
+  acceptanceCriteria?: string[];
+  mode?: string;
+  createdAt?: string;
+}
+
+export interface Run {
+  runId: string;
+  event: EventFile;
+  status: StatusFile;
+  diary: string;
+}
+
+export interface UpdateMessage {
+  type: 'update';
+  runId: string;
+  file: 'status' | 'diary' | 'event';
+  data: StatusFile | EventFile | string;
+}
+
+export class FactoryService extends EventEmitter {
+  private watcher: FSWatcher | null = null;
+  private runs = new Map<string, Run>();
+
+  constructor(private runsDir: string) {
     super();
-    this.runsDir = runsDir;
   }
 
   start(): void {
-    this.fsWatcher = watch(this.runsDir, {
+    if (!fs.existsSync(this.runsDir)) {
+      console.log('Factory runs dir not found, factory tab will be empty');
+      return;
+    }
+
+    this.watcher = watch(this.runsDir, {
       ignoreInitial: false,
       depth: 1,
       awaitWriteFinish: { stabilityThreshold: 300 },
     });
 
-    this.fsWatcher.on('add', (filePath) => this.handleFile(filePath));
-    this.fsWatcher.on('change', (filePath) => this.handleFile(filePath));
-    this.fsWatcher.on('ready', () => this.emit('ready'));
+    this.watcher.on('add', (fp) => this.handleFile(fp));
+    this.watcher.on('change', (fp) => this.handleFile(fp));
+    this.watcher.on('ready', () => this.emit('ready'));
   }
 
   async stop(): Promise<void> {
-    await this.fsWatcher?.close();
+    await this.watcher?.close();
   }
 
   getSnapshot(): Record<string, Run> {

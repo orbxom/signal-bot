@@ -37,7 +37,7 @@ async function main() {
   };
 
   const recurringExecutor = new RecurringReminderExecutor(appConfig, signalClient, config.claude.maxTurns, groupId =>
-    storage.toolNotifications.isEnabled(groupId),
+    storage.groupSettings.getToolNotifications(groupId),
   );
   logger.success('Recurring reminder executor initialized');
 

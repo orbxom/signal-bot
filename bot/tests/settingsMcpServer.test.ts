@@ -168,7 +168,7 @@ describe('Settings MCP Server', () => {
     }
   });
 
-  it('get_tool_notification_status returns disabled by default', async () => {
+  it('get_tool_notification_status returns enabled by default', async () => {
     const proc = spawnMcpServer();
     try {
       await initializeServer(proc);
@@ -184,7 +184,7 @@ describe('Settings MCP Server', () => {
 
       const result = response.result as { content: Array<{ text: string }>; isError?: boolean };
       expect(result.isError).toBeFalsy();
-      expect(result.content[0].text).toContain('disabled');
+      expect(result.content[0].text).toContain('enabled');
     } finally {
       proc.kill();
     }

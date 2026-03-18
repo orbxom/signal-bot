@@ -1,5 +1,5 @@
 import { DatabaseConnection } from '../../db';
-import { ToolNotificationStore } from '../../stores/toolNotificationStore';
+import { GroupSettingsStore } from '../../stores/groupSettingsStore';
 import { readStorageEnv } from '../env';
 import { catchErrors, ok } from '../result';
 import { runServer } from '../runServer';
@@ -36,7 +36,7 @@ const TOOLS = [
 ];
 
 let conn: DatabaseConnection;
-let store: ToolNotificationStore;
+let store: GroupSettingsStore;
 
 export const settingsServer: McpServerDefinition = {
   serverName: 'signal-bot-settings',
@@ -51,7 +51,7 @@ export const settingsServer: McpServerDefinition = {
 
       return catchErrors(() => {
         const enabled = args.enabled === true || args.enabled === 'true';
-        store.setEnabled(groupId.value, enabled);
+        store.upsert(groupId.value, { toolNotifications: enabled });
         return ok(`Tool notifications ${enabled ? 'enabled' : 'disabled'} for this group.`);
       }, 'Failed to toggle tool notifications');
     },
@@ -61,7 +61,7 @@ export const settingsServer: McpServerDefinition = {
       if (groupId.error) return groupId.error;
 
       return catchErrors(() => {
-        const enabled = store.isEnabled(groupId.value);
+        const enabled = store.getToolNotifications(groupId.value);
         return ok(`Tool notifications are currently ${enabled ? 'enabled' : 'disabled'} for this group.`);
       }, 'Failed to get tool notification status');
     },
@@ -69,7 +69,7 @@ export const settingsServer: McpServerDefinition = {
   onInit() {
     const env = readStorageEnv();
     conn = new DatabaseConnection(env.dbPath);
-    store = new ToolNotificationStore(conn);
+    store = new GroupSettingsStore(conn);
     console.error(`Settings MCP server started (group: ${env.groupId || 'none'})`);
   },
   onClose() {

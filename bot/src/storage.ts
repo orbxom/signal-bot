@@ -6,11 +6,15 @@ import { MessageStore } from './stores/messageStore';
 import { PersonaStore } from './stores/personaStore';
 import { RecurringReminderStore } from './stores/recurringReminderStore';
 import { ReminderStore } from './stores/reminderStore';
-import { ToolNotificationStore } from './stores/toolNotificationStore';
+import { GroupSettingsStore } from './stores/groupSettingsStore';
 import type { Attachment, Dossier, Memory, Message, Persona, Reminder, ReminderMode } from './types';
 
 export class Storage {
-  private conn: DatabaseConnection;
+  private _conn: DatabaseConnection;
+
+  get conn(): DatabaseConnection {
+    return this._conn;
+  }
   readonly messages: MessageStore;
   readonly reminders: ReminderStore;
   readonly dossiers: DossierStore;
@@ -18,18 +22,18 @@ export class Storage {
   readonly personas: PersonaStore;
   readonly attachments: AttachmentStore;
   readonly recurringReminders: RecurringReminderStore;
-  readonly toolNotifications: ToolNotificationStore;
+  readonly groupSettings: GroupSettingsStore;
 
   constructor(dbPath: string) {
-    this.conn = new DatabaseConnection(dbPath);
-    this.messages = new MessageStore(this.conn);
-    this.reminders = new ReminderStore(this.conn);
-    this.dossiers = new DossierStore(this.conn);
-    this.memories = new MemoryStore(this.conn);
-    this.personas = new PersonaStore(this.conn);
-    this.attachments = new AttachmentStore(this.conn);
-    this.recurringReminders = new RecurringReminderStore(this.conn);
-    this.toolNotifications = new ToolNotificationStore(this.conn);
+    this._conn = new DatabaseConnection(dbPath);
+    this.messages = new MessageStore(this._conn);
+    this.reminders = new ReminderStore(this._conn);
+    this.dossiers = new DossierStore(this._conn);
+    this.memories = new MemoryStore(this._conn);
+    this.personas = new PersonaStore(this._conn);
+    this.attachments = new AttachmentStore(this._conn);
+    this.recurringReminders = new RecurringReminderStore(this._conn);
+    this.groupSettings = new GroupSettingsStore(this._conn);
 
     // Seed default persona (previously done in initTables)
     this.personas.seedDefault();
@@ -190,10 +194,10 @@ export class Storage {
   // === Lifecycle ===
 
   checkpoint(): void {
-    this.conn.checkpoint();
+    this._conn.checkpoint();
   }
 
   close(): void {
-    this.conn.close();
+    this._conn.close();
   }
 }

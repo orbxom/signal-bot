@@ -4,3 +4,5 @@ logs/
 factory/sessions/
 dashboard/node_modules/
 dashboard/dist/
+dashboard/client/node_modules/
+dashboard/client/dist/

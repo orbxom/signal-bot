@@ -131,6 +131,34 @@ describe('DossierStore', () => {
     });
   });
 
+  describe('listAll', () => {
+    it('lists dossiers across all groups', () => {
+      setup();
+      store.upsert('group1', 'person1', 'Alice', 'Notes A');
+      store.upsert('group2', 'person2', 'Bob', 'Notes B');
+      const all = store.listAll();
+      expect(all).toHaveLength(2);
+    });
+
+    it('filters by groupId', () => {
+      setup();
+      store.upsert('group1', 'person1', 'Alice', 'Notes A');
+      store.upsert('group2', 'person2', 'Bob', 'Notes B');
+      const filtered = store.listAll({ groupId: 'group1' });
+      expect(filtered).toHaveLength(1);
+      expect(filtered[0].displayName).toBe('Alice');
+    });
+
+    it('supports pagination', () => {
+      setup();
+      for (let i = 0; i < 5; i++) {
+        store.upsert('group1', `person${i}`, `Person ${i}`, `Notes ${i}`);
+      }
+      const page = store.listAll({ limit: 2, offset: 2 });
+      expect(page).toHaveLength(2);
+    });
+  });
+
   describe('delete', () => {
     it('should delete an existing dossier', () => {
       setup();

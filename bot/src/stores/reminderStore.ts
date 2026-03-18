@@ -172,6 +172,31 @@ export class ReminderStore {
     return this.markFailed(id, '');
   }
 
+  listAll(filters?: { groupId?: string; status?: string; limit?: number; offset?: number }): Reminder[] {
+    return this.conn.runOp('list all reminders', () => {
+      const limit = Math.min(filters?.limit ?? 50, 200);
+      const offset = filters?.offset ?? 0;
+      const conditions: string[] = [];
+      const params: unknown[] = [];
+
+      if (filters?.groupId) {
+        conditions.push('groupId = ?');
+        params.push(filters.groupId);
+      }
+      if (filters?.status) {
+        conditions.push('status = ?');
+        params.push(filters.status);
+      }
+
+      const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+      const sql = `SELECT * FROM reminders ${where} ORDER BY dueAt DESC LIMIT ? OFFSET ?`;
+      params.push(limit, offset);
+
+      const rows = this.conn.db.prepare(sql).all(...params) as Array<ReminderRow>;
+      return rows.map(mapReminderRow);
+    });
+  }
+
   /**
    * Legacy: increment retry without setting lastAttemptAt
    */
