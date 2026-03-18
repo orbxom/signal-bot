@@ -38,31 +38,6 @@ export function createGroupRoutes(storage: Storage, signalClient: SignalClient):
     }
   });
 
-  router.post('/groups/:id/leave', async (req, res) => {
-    try {
-      await signalClient.quitGroup(req.params.id);
-      storage.groupSettings.upsert(req.params.id, { enabled: false });
-      res.json({ success: true });
-    } catch {
-      res.status(500).json({ error: 'Failed to leave group' });
-    }
-  });
-
-  router.patch('/groups/:id/settings', (req, res) => {
-    try {
-      const { enabled, customTriggers, contextWindowSize, toolNotifications } = req.body;
-      storage.groupSettings.upsert(req.params.id, {
-        enabled,
-        customTriggers,
-        contextWindowSize,
-        toolNotifications,
-      });
-      res.json(storage.groupSettings.get(req.params.id));
-    } catch {
-      res.status(500).json({ error: 'Failed to update settings' });
-    }
-  });
-
   router.post('/groups/join', async (req, res) => {
     const { uri } = req.body;
     if (!uri || typeof uri !== 'string' || !uri.startsWith('https://signal.group/#')) {
@@ -107,6 +82,31 @@ export function createGroupRoutes(storage: Storage, signalClient: SignalClient):
         return res.status(503).json({ error: 'Signal service unavailable' });
       }
       res.status(500).json({ error: 'Failed to join group' });
+    }
+  });
+
+  router.post('/groups/:id/leave', async (req, res) => {
+    try {
+      await signalClient.quitGroup(req.params.id);
+      storage.groupSettings.upsert(req.params.id, { enabled: false });
+      res.json({ success: true });
+    } catch {
+      res.status(500).json({ error: 'Failed to leave group' });
+    }
+  });
+
+  router.patch('/groups/:id/settings', (req, res) => {
+    try {
+      const { enabled, customTriggers, contextWindowSize, toolNotifications } = req.body;
+      storage.groupSettings.upsert(req.params.id, {
+        enabled,
+        customTriggers,
+        contextWindowSize,
+        toolNotifications,
+      });
+      res.json(storage.groupSettings.get(req.params.id));
+    } catch {
+      res.status(500).json({ error: 'Failed to update settings' });
     }
   });
 
