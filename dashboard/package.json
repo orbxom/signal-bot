@@ -5,6 +5,7 @@
     "dev": "tsx watch src/server.ts",
     "dev:client": "cd client && npx vite",
     "build:client": "cd client && npx vite build",
+    "build": "cd client && npx vite build",
     "start": "tsx src/server.ts",
     "test": "vitest run"
   },
