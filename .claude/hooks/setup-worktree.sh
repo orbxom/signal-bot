@@ -45,3 +45,39 @@ if [ -f "$MAIN_REPO/.claude/settings.local.json" ]; then
   rm -f "$WORKTREE/.claude/settings.local.json"
   ln -s "$MAIN_REPO/.claude/settings.local.json" "$WORKTREE/.claude/settings.local.json"
 fi
+
+# 3. Symlink bot/.env to main repo's copy
+if [ -f "$MAIN_REPO/bot/.env" ]; then
+  rm -f "$WORKTREE/bot/.env"
+  ln -s "$MAIN_REPO/bot/.env" "$WORKTREE/bot/.env"
+fi
+
+# 4. Symlink bot/data/ to main repo's copy
+if [ -d "$MAIN_REPO/bot/data" ]; then
+  rm -rf "$WORKTREE/bot/data"
+  ln -s "$MAIN_REPO/bot/data" "$WORKTREE/bot/data"
+fi
+
+# 5. Symlink bot/node_modules/ to main repo's copy
+if [ -d "$MAIN_REPO/bot/node_modules" ]; then
+  rm -rf "$WORKTREE/bot/node_modules"
+  ln -s "$MAIN_REPO/bot/node_modules" "$WORKTREE/bot/node_modules"
+fi
+
+# 6. Symlink dashboard/node_modules/ to main repo's copy
+if [ -d "$MAIN_REPO/dashboard/node_modules" ]; then
+  rm -rf "$WORKTREE/dashboard/node_modules"
+  ln -s "$MAIN_REPO/dashboard/node_modules" "$WORKTREE/dashboard/node_modules"
+fi
+
+# 7. Symlink dashboard/client/node_modules/ to main repo's copy
+if [ -d "$MAIN_REPO/dashboard/client/node_modules" ]; then
+  rm -rf "$WORKTREE/dashboard/client/node_modules"
+  ln -s "$MAIN_REPO/dashboard/client/node_modules" "$WORKTREE/dashboard/client/node_modules"
+fi
+
+# 8. Symlink logs/ to main repo's copy
+if [ -d "$MAIN_REPO/logs" ]; then
+  rm -rf "$WORKTREE/logs"
+  ln -s "$MAIN_REPO/logs" "$WORKTREE/logs"
+fi
