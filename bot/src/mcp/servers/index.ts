@@ -11,6 +11,7 @@ import { reminderServer } from './reminders';
 import { settingsServer } from './settings';
 import { signalServer } from './signal';
 import { sourceCodeServer } from './sourceCode';
+import { webAppsServer } from './webApps';
 import { weatherServer } from './weather';
 
 export const ALL_SERVERS: McpServerDefinition[] = [
@@ -27,4 +28,5 @@ export const ALL_SERVERS: McpServerDefinition[] = [
   settingsServer,
   signalServer,
   personaServer,
+  webAppsServer,
 ];

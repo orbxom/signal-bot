@@ -113,6 +113,9 @@ export interface AppConfig {
   whisperModelPath: string;
   darkFactoryEnabled: string;
   darkFactoryProjectRoot: string;
+  swaDeploymentToken: string;
+  swaHostname: string;
+  webAppsDir: string;
 }
 
 /** Per-message request context. */

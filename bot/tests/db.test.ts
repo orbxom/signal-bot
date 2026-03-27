@@ -204,12 +204,12 @@ describe('DatabaseConnection', () => {
       expect(indexNames).toContain('idx_attachment_data_group');
     });
 
-    it('should set schema version to 8 after migrations', () => {
+    it('should set schema version to 9 after migrations', () => {
       db = createTestDb('signal-bot-db-test-');
       const row = db.conn.db.prepare("SELECT value FROM schema_meta WHERE key = 'schema_version'").get() as {
         value: string;
       };
-      expect(Number.parseInt(row.value, 10)).toBe(8);
+      expect(Number.parseInt(row.value, 10)).toBe(9);
     });
 
     it('should add mode column with default simple in v6 migration', () => {

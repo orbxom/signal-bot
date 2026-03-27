@@ -7,3 +7,4 @@ dashboard/dist/
 dashboard/client/node_modules/
 dashboard/client/dist/
 VERSION
+bot/data/web-apps/
