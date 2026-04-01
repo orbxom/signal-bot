@@ -16,7 +16,7 @@ describe('getRecentErrors', () => {
   });
 
   function writeLogFile(name: string, lines: string[]): void {
-    fs.writeFileSync(path.join(tempDir, name), lines.join('\n') + '\n');
+    fs.writeFileSync(path.join(tempDir, name), `${lines.join('\n')}\n`);
   }
 
   it('should filter ERROR and WARN lines from log files', () => {
@@ -37,15 +37,9 @@ describe('getRecentErrors', () => {
   });
 
   it('should read multiple files with most recent first', () => {
-    writeLogFile('bot-2026-03-30.log', [
-      '10:00:00 [ERROR] Old error from March 30',
-    ]);
-    writeLogFile('bot-2026-04-01.log', [
-      '10:00:00 [ERROR] Recent error from April 1',
-    ]);
-    writeLogFile('bot-2026-03-31.log', [
-      '10:00:00 [ERROR] Middle error from March 31',
-    ]);
+    writeLogFile('bot-2026-03-30.log', ['10:00:00 [ERROR] Old error from March 30']);
+    writeLogFile('bot-2026-04-01.log', ['10:00:00 [ERROR] Recent error from April 1']);
+    writeLogFile('bot-2026-03-31.log', ['10:00:00 [ERROR] Middle error from March 31']);
 
     const result = getRecentErrors(tempDir, 50);
     const april1Pos = result.indexOf('Recent error from April 1');
@@ -71,17 +65,12 @@ describe('getRecentErrors', () => {
 
     const result = getRecentErrors(tempDir, 3);
     // Should only have 3 matching lines (plus header)
-    const matchingLines = result
-      .split('\n')
-      .filter(l => l.includes('[ERROR]') || l.includes('[WARN]'));
+    const matchingLines = result.split('\n').filter(l => l.includes('[ERROR]') || l.includes('[WARN]'));
     expect(matchingLines).toHaveLength(3);
   });
 
   it('should return message when no errors found', () => {
-    writeLogFile('bot-2026-04-01.log', [
-      '10:00:00 [INFO] Everything is fine',
-      '10:00:01 [INFO] Still fine',
-    ]);
+    writeLogFile('bot-2026-04-01.log', ['10:00:00 [INFO] Everything is fine', '10:00:01 [INFO] Still fine']);
 
     const result = getRecentErrors(tempDir, 50);
     expect(result).toBe('No errors or warnings found in recent log files.');
@@ -93,15 +82,9 @@ describe('getRecentErrors', () => {
   });
 
   it('should only read bot-*.log files', () => {
-    writeLogFile('bot-2026-04-01.log', [
-      '10:00:00 [ERROR] Real bot error',
-    ]);
-    writeLogFile('other-2026-04-01.log', [
-      '10:00:00 [ERROR] Not a bot log',
-    ]);
-    writeLogFile('bot-2026-04-01.txt', [
-      '10:00:00 [ERROR] Wrong extension',
-    ]);
+    writeLogFile('bot-2026-04-01.log', ['10:00:00 [ERROR] Real bot error']);
+    writeLogFile('other-2026-04-01.log', ['10:00:00 [ERROR] Not a bot log']);
+    writeLogFile('bot-2026-04-01.txt', ['10:00:00 [ERROR] Wrong extension']);
 
     const result = getRecentErrors(tempDir, 50);
     expect(result).toContain('Real bot error');
@@ -110,9 +93,7 @@ describe('getRecentErrors', () => {
   });
 
   it('should include file headers in output', () => {
-    writeLogFile('bot-2026-04-01.log', [
-      '10:00:00 [ERROR] Some error',
-    ]);
+    writeLogFile('bot-2026-04-01.log', ['10:00:00 [ERROR] Some error']);
 
     const result = getRecentErrors(tempDir, 50);
     expect(result).toContain('--- bot-2026-04-01.log ---');
@@ -144,7 +125,7 @@ describe('searchBotLogs', () => {
   });
 
   function writeLogFile(name: string, lines: string[]): void {
-    fs.writeFileSync(path.join(tempDir, name), lines.join('\n') + '\n');
+    fs.writeFileSync(path.join(tempDir, name), `${lines.join('\n')}\n`);
   }
 
   it('should find matching lines with context lines', () => {
@@ -162,12 +143,8 @@ describe('searchBotLogs', () => {
   });
 
   it('should search across multiple log files most recent first', () => {
-    writeLogFile('bot-2026-03-31.log', [
-      '10:00:00 [ERROR] Old timeout error',
-    ]);
-    writeLogFile('bot-2026-04-01.log', [
-      '10:00:00 [ERROR] Recent timeout error',
-    ]);
+    writeLogFile('bot-2026-03-31.log', ['10:00:00 [ERROR] Old timeout error']);
+    writeLogFile('bot-2026-04-01.log', ['10:00:00 [ERROR] Recent timeout error']);
 
     const result = searchBotLogs(tempDir, 'timeout', 0, 30);
     const recentPos = result.indexOf('Recent timeout');
@@ -192,27 +169,21 @@ describe('searchBotLogs', () => {
   });
 
   it('should return message when no matches found', () => {
-    writeLogFile('bot-2026-04-01.log', [
-      '10:00:00 [INFO] All good',
-    ]);
+    writeLogFile('bot-2026-04-01.log', ['10:00:00 [INFO] All good']);
 
     const result = searchBotLogs(tempDir, 'CATASTROPHE', 0, 30);
     expect(result).toContain('No matches found');
   });
 
   it('should handle case-insensitive search', () => {
-    writeLogFile('bot-2026-04-01.log', [
-      '10:00:00 [ERROR] Connection TIMEOUT occurred',
-    ]);
+    writeLogFile('bot-2026-04-01.log', ['10:00:00 [ERROR] Connection TIMEOUT occurred']);
 
     const result = searchBotLogs(tempDir, 'connection timeout', 0, 30);
     expect(result).toContain('> 10:00:00 [ERROR] Connection TIMEOUT occurred');
   });
 
   it('should return error message for invalid regex pattern', () => {
-    writeLogFile('bot-2026-04-01.log', [
-      '10:00:00 [INFO] Some line',
-    ]);
+    writeLogFile('bot-2026-04-01.log', ['10:00:00 [INFO] Some line']);
 
     const result = searchBotLogs(tempDir, '[invalid', 0, 30);
     expect(result).toContain('Invalid search pattern');
