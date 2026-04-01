@@ -1,10 +1,11 @@
+import path from 'node:path';
 import { ClaudeCLIClient, spawnLimiter } from './claudeClient';
 import { Config } from './config';
 import { logger } from './logger';
 import { MemoryConsolidator } from './memoryConsolidator';
 import { MemoryExtractor } from './memoryExtractor';
 import { MessageHandler } from './messageHandler';
-import { sendStartupNotification, sendErrorNotification } from './notifications';
+import { sendErrorNotification, sendStartupNotification } from './notifications';
 import { PollingBackoff } from './pollingBackoff';
 import { RecurringReminderExecutor } from './recurringReminderExecutor';
 import { ReminderScheduler } from './reminderScheduler';
@@ -37,6 +38,7 @@ async function main() {
     whisperModelPath: config.whisperModelPath,
     darkFactoryEnabled: config.darkFactoryEnabled,
     darkFactoryProjectRoot: config.darkFactoryProjectRoot,
+    logsDir: path.resolve(__dirname, '..', '..', 'logs'),
   };
 
   const recurringExecutor = new RecurringReminderExecutor(appConfig, signalClient, config.claude.maxTurns, groupId =>
@@ -76,7 +78,6 @@ async function main() {
   );
   logger.success(`Message handler initialized (triggers: ${config.mentionTriggers.join(', ')})`);
 
-
   // Graceful shutdown
   const shutdown = () => {
     logger.info('Shutting down gracefully...');
@@ -91,7 +92,7 @@ async function main() {
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);
 
-  process.on('unhandledRejection', (reason) => {
+  process.on('unhandledRejection', reason => {
     logger.error('Unhandled rejection:', reason);
     sendErrorNotification(signalClient, config, reason).finally(() => {
       process.exit(1);
@@ -197,7 +198,7 @@ async function main() {
   }
 }
 
-main().catch(async (error) => {
+main().catch(async error => {
   logger.error('Fatal error:', error);
   // Best-effort: signalClient may not be initialized if error was during startup
   // This catch can't access signalClient from main's scope, so create a temporary one
