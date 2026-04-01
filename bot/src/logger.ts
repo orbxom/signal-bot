@@ -39,19 +39,19 @@ export class Logger {
   }
 
   info(message: string): void {
-    this.write(`${this.formatTimestamp()} ${message}\n`);
+    this.write(`${this.formatTimestamp()} [INFO] ${message}\n`);
   }
 
   success(message: string): void {
-    this.write(`${this.formatTimestamp()} ${GREEN}${message}${RESET}\n`);
+    this.write(`${this.formatTimestamp()} [SUCCESS] ${GREEN}${message}${RESET}\n`);
   }
 
   warn(message: string): void {
-    this.write(`${this.formatTimestamp()} ${YELLOW}${message}${RESET}\n`);
+    this.write(`${this.formatTimestamp()} [WARN] ${YELLOW}${message}${RESET}\n`);
   }
 
   error(message: string, err?: unknown): void {
-    let line = `${this.formatTimestamp()} ${RED}${message}${RESET}`;
+    let line = `${this.formatTimestamp()} [ERROR] ${RED}${message}${RESET}`;
     if (err !== undefined) {
       const detail = err instanceof Error ? err.message : String(err);
       line += ` ${RED}(${detail})${RESET}`;
@@ -60,23 +60,23 @@ export class Logger {
   }
 
   debug(message: string): void {
-    this.write(`${this.formatTimestamp()} ${DIM}${message}${RESET}\n`);
+    this.write(`${this.formatTimestamp()} [DEBUG] ${DIM}${message}${RESET}\n`);
   }
 
   group(label: string): void {
-    this.write(`${this.formatTimestamp()} ${CYAN}${BOX_TOP}${RESET} ${label}\n`);
+    this.write(`${this.formatTimestamp()} [INFO] ${CYAN}${BOX_TOP}${RESET} ${label}\n`);
   }
 
   step(message: string): void {
-    this.write(`${this.formatTimestamp()} ${CYAN}${BOX_SIDE}${RESET} ${message}\n`);
+    this.write(`${this.formatTimestamp()} [INFO] ${CYAN}${BOX_SIDE}${RESET} ${message}\n`);
   }
 
   groupEnd(): void {
-    this.write(`${this.formatTimestamp()} ${CYAN}${BOX_BOTTOM}${RESET} COMPLETE\n`);
+    this.write(`${this.formatTimestamp()} [INFO] ${CYAN}${BOX_BOTTOM}${RESET} COMPLETE\n`);
   }
 
   compact(tag: string, detail: string): void {
-    this.write(`${this.formatTimestamp()} ${DASH} ${tag}  ${detail}\n`);
+    this.write(`${this.formatTimestamp()} [INFO] ${DASH} ${tag}  ${detail}\n`);
   }
 
   close(): void {
