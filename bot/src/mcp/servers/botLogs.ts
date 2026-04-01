@@ -79,11 +79,13 @@ function addLine(line: string, output: string[], budget: ScanBudget, lineLimit: 
 export function getRecentErrors(logsDir: string, lineLimit: number): string {
   const { sections, files } = scanLogFiles(logsDir, lineLimit, (lines, budget) => {
     const output: string[] = [];
-    for (const line of lines) {
+    for (let i = lines.length - 1; i >= 0; i--) {
+      const line = lines[i];
       if (line.includes('[ERROR]') || line.includes('[WARN]')) {
         if (!addLine(line, output, budget, lineLimit)) break;
       }
     }
+    output.reverse();
     return output;
   });
 
@@ -101,12 +103,10 @@ export function searchBotLogs(logsDir: string, pattern: string, contextLines: nu
     return `Invalid search pattern: "${pattern}" — must be a valid regular expression.`;
   }
 
-  const { sections, files } = scanLogFiles(logsDir, lineLimit, (rawLines, budget) => {
-    const lines = rawLines.filter(l => l.length > 0);
-
+  const { sections, files } = scanLogFiles(logsDir, lineLimit, (lines, budget) => {
     const matchIndices: number[] = [];
     for (let i = 0; i < lines.length; i++) {
-      if (regex.test(lines[i])) matchIndices.push(i);
+      if (lines[i].length > 0 && regex.test(lines[i])) matchIndices.push(i);
     }
     if (matchIndices.length === 0) return [];
 
