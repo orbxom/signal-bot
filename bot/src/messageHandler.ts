@@ -438,7 +438,7 @@ export class MessageHandler {
       }
 
       if (this.memoryExtractor) {
-        this.memoryExtractor.scheduleExtraction(groupId);
+        this.memoryExtractor.scheduleExtraction(groupId, query, response.content);
       }
 
       logger.groupEnd();

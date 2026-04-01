@@ -1,71 +1,84 @@
-import { parseEntries, spawnCollect, stripCodeFences } from './claudeClient';
+import path from 'node:path';
+import { parseEntries, spawnCollect } from './claudeClient';
 import { logger } from './logger';
 import { SpawnLimiter } from './spawnLimiter';
-import type { Storage } from './storage';
 
-// --- Types ---
-
-interface DossierUpdate {
-  action: 'add' | 'update';
-  personId: string;
-  displayName: string;
-  notes: string;
-}
-
-interface MemoryUpdate {
-  action: 'add' | 'update' | 'delete';
-  topic: string;
-  content?: string;
-}
-
-interface ExtractionResult {
-  dossierUpdates: DossierUpdate[];
-  memoryUpdates: MemoryUpdate[];
-}
-
-// --- Prompt ---
-
-const EXTRACTION_PROMPT = `You are a memory extraction assistant. Analyze the recent conversation and existing dossiers/memories, then output a JSON object with updates.
-
-Rules:
-- Only output dossier updates when you learn NEW information about a person (name, preferences, facts).
-- Only output memory updates when the group establishes a new fact, plan, or preference worth remembering.
-- Use action "update" for dossiers (creates or updates). Use action "add"/"update" for new/changed memories, "delete" for obsolete ones.
-- personId for dossiers should be the sender's phone number or identifier.
-- Keep notes concise (under 500 tokens). Keep memory content concise (under 300 tokens).
-- If there is nothing worth extracting, return empty arrays.
-
-Output ONLY valid JSON matching this schema (no markdown, no explanation):
-{
-  "dossierUpdates": [
-    { "action": "update", "personId": "string", "displayName": "string", "notes": "string" }
-  ],
-  "memoryUpdates": [
-    { "action": "add|update|delete", "topic": "string", "content": "string (optional for delete)" }
-  ]
-}`;
-
-// --- Debounce interval ---
+// --- Constants ---
 
 const DEBOUNCE_MS = 5000;
-const SPAWN_TIMEOUT_MS = 60_000;
+const READ_TIMEOUT_MS = 10_000;
+const WRITE_TIMEOUT_MS = 60_000;
+const CLI_PATH = path.resolve(__dirname, 'memory/cli.ts');
 
 // --- Class ---
 
 export class MemoryExtractor {
-  private storage: Storage;
+  private dbPath: string;
   private limiter = new SpawnLimiter(1);
   private timers = new Map<string, ReturnType<typeof setTimeout>>();
 
-  constructor(storage: Storage) {
-    this.storage = storage;
+  constructor(dbPath: string) {
+    this.dbPath = dbPath;
   }
 
   /**
-   * Schedule a debounced extraction for a group.
-   * Multiple calls within DEBOUNCE_MS are coalesced into one extraction.
+   * Pre-response: search group memories for anything relevant to the message.
+   * Returns a concise summary string, or null if nothing relevant / timeout / error.
    */
-  scheduleExtraction(groupId: string): void {
+  async readMemories(groupId: string, message: string): Promise<string | null> {
+    const prompt = `You are a memory retrieval assistant. Given a message from a group chat, search the group's memories for anything relevant.
+
+Use the Bash tool to run memory CLI commands:
+DB_PATH=${this.dbPath} npx tsx ${CLI_PATH} search --group ${groupId} --keyword <word>
+DB_PATH=${this.dbPath} npx tsx ${CLI_PATH} search --group ${groupId} --tag <tag>
+DB_PATH=${this.dbPath} npx tsx ${CLI_PATH} search --group ${groupId}
+
+Extract 2-3 keywords from the message and search. Also try searching by likely tags.
+
+Output a concise summary of relevant memories, or "No relevant memories found." if nothing matches.
+
+Message: ${message}`;
+
+    const args = [
+      '-p',
+      prompt,
+      '--output-format',
+      'json',
+      '--max-turns',
+      '5',
+      '--no-session-persistence',
+      '--model',
+      'claude-haiku-4-5-20251001',
+      '--allowedTools',
+      'Bash',
+    ];
+
+    try {
+      const stdout = await spawnCollect('claude', args, {
+        timeout: READ_TIMEOUT_MS,
+        env: { ...process.env, DB_PATH: this.dbPath, CLAUDECODE: '' },
+        trackChild: child => this.limiter.trackChild(child),
+      });
+
+      const entries = parseEntries(stdout);
+      const resultEntry = entries.find(e => e.type === 'result');
+      if (!resultEntry) return null;
+
+      const text = typeof resultEntry.result === 'string' ? resultEntry.result.trim() : '';
+      if (!text || text === 'No relevant memories found.') return null;
+
+      return text;
+    } catch (err) {
+      logger.warn(`memory-extractor: readMemories failed for group ${groupId}: ${err}`);
+      return null;
+    }
+  }
+
+  /**
+   * Schedule a debounced writeMemories call for a group.
+   * Multiple calls within DEBOUNCE_MS are coalesced into one write.
+   */
+  scheduleExtraction(groupId: string, message: string, botResponse: string): void {
     const existing = this.timers.get(groupId);
     if (existing) {
       clearTimeout(existing);
@@ -73,7 +86,7 @@ export class MemoryExtractor {
 
     const timer = setTimeout(() => {
       this.timers.delete(groupId);
-      this.extract(groupId).catch(err => {
+      this.writeMemories(groupId, message, botResponse).catch(err => {
         logger.error(`memory-extractor: unhandled error for group ${groupId}: ${err}`);
       });
     }, DEBOUNCE_MS);
@@ -82,15 +95,15 @@ export class MemoryExtractor {
   }
 
   /**
-   * Run extraction for a group: read recent context, spawn Claude, parse and apply updates.
-   * Concurrency-limited to 1. Failures are logged silently.
+   * Post-response: analyze the conversation and save anything worth remembering.
+   * Uses haiku with Bash tool to run CLI commands for listing types/tags, searching, and saving.
    */
-  async extract(groupId: string): Promise<void> {
+  async writeMemories(groupId: string, message: string, botResponse: string): Promise<void> {
     await this.limiter.acquire();
     try {
-      await this.doExtract(groupId);
+      await this.doWriteMemories(groupId, message, botResponse);
     } catch (err) {
-      logger.error(`memory-extractor: extraction failed for group ${groupId}: ${err}`);
+      logger.error(`memory-extractor: writeMemories failed for group ${groupId}: ${err}`);
     } finally {
       this.limiter.release();
     }
@@ -115,133 +128,52 @@ export class MemoryExtractor {
 
   // --- Private helpers ---
 
-  private async doExtract(groupId: string): Promise<void> {
-    const prompt = this.buildPrompt(groupId);
+  private async doWriteMemories(groupId: string, message: string, botResponse: string): Promise<void> {
+    const prompt = `You are a memory extraction assistant. Analyze the conversation and decide what's worth remembering.
+
+Use the Bash tool to run memory CLI commands:
+DB_PATH=${this.dbPath} npx tsx ${CLI_PATH} save --group ${groupId} --title "<title>" --type <type> [--description "<desc>"] [--content "<content>"] [--tags <t1,t2>]
+DB_PATH=${this.dbPath} npx tsx ${CLI_PATH} search --group ${groupId} [--keyword <kw>]
+DB_PATH=${this.dbPath} npx tsx ${CLI_PATH} list-types --group ${groupId}
+DB_PATH=${this.dbPath} npx tsx ${CLI_PATH} list-tags --group ${groupId}
+
+IMPORTANT: First run list-types and list-tags to see existing categories, then search to avoid duplicates.
+
+Save anything worth remembering: facts, preferences, URLs, plans, notable events.
+Be aggressive but don't duplicate existing memories.
+
+Conversation:
+User: ${message}
+Bot: ${botResponse}`;
+
     const args = [
       '-p',
       prompt,
       '--output-format',
       'json',
       '--max-turns',
-      '1',
+      '10',
       '--no-session-persistence',
       '--model',
-      'claude-sonnet-4-6',
+      'claude-haiku-4-5-20251001',
       '--allowedTools',
-      '',
+      'Bash',
     ];
 
-    logger.step(`memory-extractor: spawning extraction for group ${groupId}`);
+    logger.step(`memory-extractor: spawning writeMemories for group ${groupId}`);
 
     const stdout = await spawnCollect('claude', args, {
-      timeout: SPAWN_TIMEOUT_MS,
-      env: { ...process.env, CLAUDECODE: '' },
+      timeout: WRITE_TIMEOUT_MS,
+      env: { ...process.env, DB_PATH: this.dbPath, CLAUDECODE: '' },
       trackChild: child => this.limiter.trackChild(child),
     });
 
-    const result = this.parseResult(stdout);
-    if (result) {
-      this.applyUpdates(groupId, result);
-    }
-  }
+    const entries = parseEntries(stdout);
+    const resultEntry = entries.find(e => e.type === 'result');
+    const resultText = typeof resultEntry?.result === 'string' ? resultEntry.result.trim() : '';
 
-  private buildPrompt(groupId: string): string {
-    // Gather recent messages
-    const messages = this.storage.getRecentMessages(groupId, 20);
-    const messageLines = messages.map(m => {
-      const time = new Date(m.timestamp).toISOString();
-      const sender = m.isBot ? 'Bot' : m.sender;
-      return `[${time}] ${sender}: ${m.content}`;
-    });
-
-    // Gather existing dossiers
-    const dossiers = this.storage.getDossiersByGroup(groupId);
-    const dossierLines = dossiers.map(d => `- ${d.displayName} (${d.personId}): ${d.notes}`);
-
-    // Gather existing memories
-    const memories = this.storage.getMemoriesByGroup(groupId);
-    const memoryLines = memories.map(m => `- ${m.topic}: ${m.content}`);
-
-    const parts = [
-      EXTRACTION_PROMPT,
-      '',
-      '## Recent Messages',
-      messageLines.length > 0 ? messageLines.join('\n') : '(none)',
-      '',
-      '## Existing Dossiers',
-      dossierLines.length > 0 ? dossierLines.join('\n') : '(none)',
-      '',
-      '## Existing Memories',
-      memoryLines.length > 0 ? memoryLines.join('\n') : '(none)',
-    ];
-
-    return parts.join('\n');
-  }
-
-  private parseResult(stdout: string): ExtractionResult | null {
-    try {
-      const entries = parseEntries(stdout);
-      const resultEntry = entries.find(e => e.type === 'result');
-
-      if (!resultEntry) {
-        logger.warn('memory-extractor: no result entry in Claude output');
-        return null;
-      }
-
-      const resultText = typeof resultEntry.result === 'string' ? resultEntry.result : '';
-      if (!resultText) {
-        logger.warn('memory-extractor: empty result text');
-        return null;
-      }
-
-      const parsed = JSON.parse(stripCodeFences(resultText));
-
-      if (!Array.isArray(parsed.dossierUpdates) || !Array.isArray(parsed.memoryUpdates)) {
-        logger.warn('memory-extractor: result missing dossierUpdates or memoryUpdates arrays');
-        return null;
-      }
-
-      return parsed as ExtractionResult;
-    } catch (err) {
-      logger.warn(`memory-extractor: failed to parse extraction result: ${err}`);
-      return null;
-    }
-  }
-
-  private applyUpdates(groupId: string, result: ExtractionResult): void {
-    let dossierCount = 0;
-    let memoryCount = 0;
-
-    for (const du of result.dossierUpdates) {
-      try {
-        if (!du.personId || !du.displayName) continue;
-        this.storage.upsertDossier(groupId, du.personId, du.displayName, du.notes || '');
-        dossierCount++;
-      } catch (err) {
-        logger.warn(`memory-extractor: failed to upsert dossier ${du.personId}: ${err}`);
-      }
-    }
-
-    for (const mu of result.memoryUpdates) {
-      try {
-        if (!mu.topic) continue;
-
-        if (mu.action === 'delete') {
-          this.storage.deleteMemory(groupId, mu.topic);
-          memoryCount++;
-        } else if (mu.content) {
-          this.storage.upsertMemory(groupId, mu.topic, mu.content);
-          memoryCount++;
-        }
-      } catch (err) {
-        logger.warn(`memory-extractor: failed to apply memory update for "${mu.topic}": ${err}`);
-      }
-    }
-
-    if (dossierCount > 0 || memoryCount > 0) {
-      logger.step(
-        `memory-extractor: applied ${dossierCount} dossier + ${memoryCount} memory updates for group ${groupId}`,
-      );
+    if (resultText) {
+      logger.step(`memory-extractor: saved memories for group ${groupId}: ${resultText.substring(0, 200)}`);
     }
   }
 }
