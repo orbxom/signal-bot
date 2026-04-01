@@ -7,7 +7,7 @@ import { MessageStore } from './stores/messageStore';
 import { PersonaStore } from './stores/personaStore';
 import { RecurringReminderStore } from './stores/recurringReminderStore';
 import { ReminderStore } from './stores/reminderStore';
-import type { Attachment, Dossier, Memory, Message, Persona, Reminder, ReminderMode } from './types';
+import type { Attachment, Dossier, Memory, MemoryWithTags, Message, Persona, Reminder, ReminderMode } from './types';
 
 export class Storage {
   private _conn: DatabaseConnection;
@@ -106,21 +106,8 @@ export class Storage {
   }
 
   // === Memory methods (delegate to MemoryStore) ===
-
-  upsertMemory(groupId: string, topic: string, content: string): Memory {
-    return this.memories.upsert(groupId, topic, content);
-  }
-
-  getMemory(groupId: string, topic: string): Memory | null {
-    return this.memories.get(groupId, topic);
-  }
-
-  getMemoriesByGroup(groupId: string): Memory[] {
+  getMemoriesByGroup(groupId: string): MemoryWithTags[] {
     return this.memories.getByGroup(groupId);
-  }
-
-  deleteMemory(groupId: string, topic: string): boolean {
-    return this.memories.delete(groupId, topic);
   }
 
   // === Persona methods (delegate to PersonaStore) ===
