@@ -79,10 +79,16 @@ export interface Dossier {
 export interface Memory {
   id: number;
   groupId: string;
-  topic: string;
-  content: string;
+  title: string;
+  description: string | null;
+  content: string | null;
+  type: string;
   createdAt: number;
   updatedAt: number;
+}
+
+export interface MemoryWithTags extends Memory {
+  tags: string[];
 }
 
 export interface Persona {
