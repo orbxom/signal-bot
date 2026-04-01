@@ -116,6 +116,7 @@ export interface AppConfig {
   swaDeploymentToken: string;
   swaHostname: string;
   webAppsDir: string;
+  logsDir: string;
 }
 
 /** Per-message request context. */

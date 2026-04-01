@@ -1,4 +1,5 @@
 import type { McpServerDefinition } from '../types';
+import { botLogsServer } from './botLogs';
 import { darkFactoryServer } from './darkFactory';
 import { dossierServer } from './dossiers';
 import { githubServer } from './github';
@@ -11,10 +12,11 @@ import { reminderServer } from './reminders';
 import { settingsServer } from './settings';
 import { signalServer } from './signal';
 import { sourceCodeServer } from './sourceCode';
-import { webAppsServer } from './webApps';
 import { weatherServer } from './weather';
+import { webAppsServer } from './webApps';
 
 export const ALL_SERVERS: McpServerDefinition[] = [
+  botLogsServer,
   darkFactoryServer,
   githubServer,
   reminderServer,
