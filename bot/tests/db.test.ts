@@ -181,13 +181,14 @@ describe('DatabaseConnection', () => {
       expect(tables.map(t => t.name)).toContain('memories');
     });
 
-    it('should create memories indexes in v2 migration', () => {
+    it('should create memories indexes (updated by v10 migration)', () => {
       db = createTestDb('signal-bot-db-test-');
       const indexes = db.conn.db.prepare("SELECT name FROM sqlite_master WHERE type='index'").all() as Array<{
         name: string;
       }>;
       const indexNames = indexes.map(i => i.name);
-      expect(indexNames).toContain('idx_memories_group_topic');
+      // After V10 migration, old idx_memories_group_topic is replaced by idx_memories_group_title
+      expect(indexNames).toContain('idx_memories_group_title');
       expect(indexNames).toContain('idx_memories_group');
     });
 
@@ -204,12 +205,134 @@ describe('DatabaseConnection', () => {
       expect(indexNames).toContain('idx_attachment_data_group');
     });
 
-    it('should set schema version to 9 after migrations', () => {
+    it('should set schema version to 10 after migrations', () => {
       db = createTestDb('signal-bot-db-test-');
       const row = db.conn.db.prepare("SELECT value FROM schema_meta WHERE key = 'schema_version'").get() as {
         value: string;
       };
-      expect(Number.parseInt(row.value, 10)).toBe(9);
+      expect(Number.parseInt(row.value, 10)).toBe(10);
+    });
+
+    it('should migrate memories table from old schema (topic) to new schema (title/description/type)', () => {
+      const dbPath = createManualTestDbPath();
+
+      // Create a pre-V10 database with the old memories schema (topic column)
+      const rawDb = new Database(dbPath);
+      rawDb.pragma('journal_mode = WAL');
+      rawDb.exec(`
+        CREATE TABLE IF NOT EXISTS messages (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          groupId TEXT NOT NULL,
+          sender TEXT NOT NULL,
+          content TEXT NOT NULL,
+          timestamp INTEGER NOT NULL,
+          isBot INTEGER NOT NULL DEFAULT 0,
+          attachments TEXT
+        );
+        CREATE TABLE IF NOT EXISTS reminders (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          groupId TEXT NOT NULL,
+          requester TEXT NOT NULL,
+          reminderText TEXT NOT NULL,
+          dueAt INTEGER NOT NULL,
+          status TEXT NOT NULL DEFAULT 'pending',
+          retryCount INTEGER NOT NULL DEFAULT 0,
+          createdAt INTEGER NOT NULL,
+          sentAt INTEGER,
+          mode TEXT NOT NULL DEFAULT 'simple',
+          lastAttemptAt INTEGER,
+          failureReason TEXT
+        );
+        CREATE TABLE IF NOT EXISTS dossiers (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          groupId TEXT NOT NULL,
+          personId TEXT NOT NULL,
+          displayName TEXT NOT NULL DEFAULT '',
+          notes TEXT NOT NULL DEFAULT '',
+          createdAt INTEGER NOT NULL,
+          updatedAt INTEGER NOT NULL
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_dossiers_group_person ON dossiers(groupId, personId);
+        CREATE INDEX IF NOT EXISTS idx_dossiers_group ON dossiers(groupId);
+        CREATE TABLE IF NOT EXISTS personas (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL,
+          description TEXT NOT NULL,
+          tags TEXT NOT NULL DEFAULT '',
+          isDefault INTEGER NOT NULL DEFAULT 0,
+          createdAt INTEGER NOT NULL,
+          updatedAt INTEGER NOT NULL
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_personas_name ON personas(name COLLATE NOCASE);
+        CREATE TABLE IF NOT EXISTS active_personas (
+          groupId TEXT NOT NULL PRIMARY KEY,
+          personaId INTEGER NOT NULL,
+          activatedAt INTEGER NOT NULL,
+          FOREIGN KEY (personaId) REFERENCES personas(id)
+        );
+        CREATE TABLE IF NOT EXISTS memories (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          groupId TEXT NOT NULL,
+          topic TEXT NOT NULL,
+          content TEXT NOT NULL,
+          createdAt INTEGER NOT NULL,
+          updatedAt INTEGER NOT NULL
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_memories_group_topic ON memories(groupId, topic);
+        CREATE INDEX IF NOT EXISTS idx_memories_group ON memories(groupId);
+        CREATE TABLE IF NOT EXISTS schema_meta (
+          key TEXT PRIMARY KEY,
+          value TEXT NOT NULL
+        );
+        INSERT INTO schema_meta (key, value) VALUES ('schema_version', '9');
+      `);
+
+      // Insert a legacy memory using the old schema
+      rawDb
+        .prepare('INSERT INTO memories (groupId, topic, content, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?)')
+        .run('group1', 'Family Rules', 'No phones at dinner', Date.now(), Date.now());
+      rawDb.close();
+
+      // Open with DatabaseConnection — triggers V10 migration
+      const conn = new DatabaseConnection(dbPath);
+      try {
+        // New columns should exist
+        const cols = conn.db.pragma('table_info(memories)') as Array<{ name: string }>;
+        const colNames = cols.map(c => c.name);
+        expect(colNames).toContain('title');
+        expect(colNames).toContain('description');
+        expect(colNames).toContain('type');
+        // Old column should be gone
+        expect(colNames).not.toContain('topic');
+
+        // Data should be migrated: topic→title, type='text', description=null
+        const row = conn.db.prepare('SELECT * FROM memories WHERE groupId = ?').get('group1') as any;
+        expect(row.title).toBe('Family Rules');
+        expect(row.content).toBe('No phones at dinner');
+        expect(row.type).toBe('text');
+        expect(row.description).toBeNull();
+
+        // memory_tags table should exist
+        const tables = conn.db
+          .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='memory_tags'")
+          .all() as Array<{ name: string }>;
+        expect(tables).toHaveLength(1);
+
+        // Unique index on (groupId, title) should exist
+        const indexes = conn.db
+          .prepare("SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='memories'")
+          .all() as Array<{ name: string }>;
+        const indexNames = indexes.map(i => i.name);
+        expect(indexNames).toContain('idx_memories_group_title');
+
+        // Schema version should be 10
+        const versionRow = conn.db
+          .prepare("SELECT value FROM schema_meta WHERE key = 'schema_version'")
+          .get() as { value: string };
+        expect(Number.parseInt(versionRow.value, 10)).toBe(10);
+      } finally {
+        conn.close();
+      }
     });
 
     it('should add mode column with default simple in v6 migration', () => {
