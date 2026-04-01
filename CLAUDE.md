@@ -11,7 +11,9 @@ Claude-powered Signal bot for family group chat. Responds to mention triggers in
 - `bot/src/pollingBackoff.ts` — Exponential backoff for polling loop: tracks consecutive errors, calculates delay (`base * 2^errorCount`, capped), triggers reconnection at threshold
 - `bot/src/spawnLimiter.ts` — Promise-based semaphore limiting concurrent Claude CLI spawns. Tracks child processes for graceful shutdown (`killAll` with SIGTERM→SIGKILL escalation)
 - `bot/src/mentionDetector.ts` — Pure: `isMentioned()`, `extractQuery()`
-- `bot/src/contextBuilder.ts` — Builds LLM context: system prompt + history + dossiers + personas + skills
+- `bot/src/contextBuilder.ts` — Builds LLM context: system prompt + history + dossiers + memory summary + personas + skills
+- `bot/src/memoryExtractor.ts` — Haiku subagent pipeline: pre-response memory read (synchronous, 10s timeout), post-response memory write (async, fire-and-forget). Uses CLI scripts via Bash tool.
+- `bot/src/memory/cli.ts` — Memory CLI for haiku subagents: search, save, list-types, list-tags, delete. Plain text output.
 - `bot/src/messageDeduplicator.ts` — Map-based LRU deduplication
 - `bot/src/typingIndicator.ts` — `withTyping()` lifecycle wrapper
 - `bot/src/reminderScheduler.ts` — Per-group processing, exponential backoff, claim-then-send, failure notifications, recurring reminder orchestration
@@ -27,6 +29,7 @@ Claude-powered Signal bot for family group chat. Responds to mention triggers in
 - `bot/src/stores/reminderStore.ts` — Per-group reminders with idempotent markSent, retry tracking
 - `bot/src/stores/recurringReminderStore.ts` — Recurring reminders with cron scheduling, in-flight guards, failure tracking
 - `bot/src/stores/dossierStore.ts` — Person dossiers scoped by group
+- `bot/src/stores/memoryStore.ts` — Versatile memory store: save/update/search/delete with title, description, content, type, and tags (via memory_tags join table)
 - `bot/src/stores/personaStore.ts` — Bot personas with active-per-group management
 - `bot/src/stores/attachmentStore.ts` — Image attachment BLOB storage and cleanup
 
@@ -46,6 +49,7 @@ Image attachments sent in Signal messages are stored as BLOBs in the `attachment
 - `reminders.ts` — set/list/cancel reminders + set/list/cancel recurring reminders (6 tools)
 - `weather.ts` — BOM weather: search, observations, forecast, warnings (4 tools)
 - `github.ts` — GitHub integration: feature request issues, PR list/view/diff/comment/review/merge (7 tools)
+- `memories.ts` — Versatile memory store: save/update/get/search/delete memories with types, tags, descriptions (8 tools). CLI scripts at `memory/cli.ts` for haiku subagent access.
 - `dossiers.ts` — Person dossier CRUD (3 tools)
 - `sourceCode.ts` — List/read/search source files (3 tools). Paths are relative to `bot/`, not the repo root (e.g., use `src/index.ts` not `bot/src/index.ts`)
 - `messageHistory.ts` — Search and date-range message queries (2 tools)
