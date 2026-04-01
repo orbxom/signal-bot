@@ -17,7 +17,17 @@ function parseArgs(argv: string[]): { command: string; flags: Record<string, str
   return { command, flags };
 }
 
-function formatMemory(index: number, mem: { id: number; title: string; type: string; description?: string | null; content?: string | null; tags?: string[] }): string {
+function formatMemory(
+  index: number,
+  mem: {
+    id: number;
+    title: string;
+    type: string;
+    description?: string | null;
+    content?: string | null;
+    tags?: string[];
+  },
+): string {
   const lines: string[] = [];
   lines.push(`#${mem.id} "${mem.title}" [${mem.type}]`);
   if (mem.description) {
@@ -42,11 +52,25 @@ function main(): void {
     switch (command) {
       case 'save': {
         const { group, title, type } = flags;
-        if (!group) { console.error('Error: --group is required'); process.exit(1); }
-        if (!title) { console.error('Error: --title is required'); process.exit(1); }
-        if (!type) { console.error('Error: --type is required'); process.exit(1); }
+        if (!group) {
+          console.error('Error: --group is required');
+          process.exit(1);
+        }
+        if (!title) {
+          console.error('Error: --title is required');
+          process.exit(1);
+        }
+        if (!type) {
+          console.error('Error: --type is required');
+          process.exit(1);
+        }
 
-        const tags = flags.tags ? flags.tags.split(',').map(t => t.trim()).filter(Boolean) : undefined;
+        const tags = flags.tags
+          ? flags.tags
+              .split(',')
+              .map(t => t.trim())
+              .filter(Boolean)
+          : undefined;
         const mem = store.save(group, title, type, {
           description: flags.description || undefined,
           content: flags.content || undefined,
@@ -58,7 +82,10 @@ function main(): void {
 
       case 'search': {
         const { group } = flags;
-        if (!group) { console.error('Error: --group is required'); process.exit(1); }
+        if (!group) {
+          console.error('Error: --group is required');
+          process.exit(1);
+        }
 
         const results = store.search(group, {
           keyword: flags.keyword || undefined,
@@ -76,7 +103,10 @@ function main(): void {
 
       case 'list-types': {
         const { group } = flags;
-        if (!group) { console.error('Error: --group is required'); process.exit(1); }
+        if (!group) {
+          console.error('Error: --group is required');
+          process.exit(1);
+        }
 
         const types = store.listTypes(group);
         if (types.length === 0) {
@@ -89,7 +119,10 @@ function main(): void {
 
       case 'list-tags': {
         const { group } = flags;
-        if (!group) { console.error('Error: --group is required'); process.exit(1); }
+        if (!group) {
+          console.error('Error: --group is required');
+          process.exit(1);
+        }
 
         const tags = store.listTags(group);
         if (tags.length === 0) {
@@ -102,11 +135,20 @@ function main(): void {
 
       case 'delete': {
         const { group, id } = flags;
-        if (!group) { console.error('Error: --group is required'); process.exit(1); }
-        if (!id) { console.error('Error: --id is required'); process.exit(1); }
+        if (!group) {
+          console.error('Error: --group is required');
+          process.exit(1);
+        }
+        if (!id) {
+          console.error('Error: --id is required');
+          process.exit(1);
+        }
 
         const memId = Number.parseInt(id, 10);
-        if (Number.isNaN(memId)) { console.error('Error: --id must be a number'); process.exit(1); }
+        if (Number.isNaN(memId)) {
+          console.error('Error: --id must be a number');
+          process.exit(1);
+        }
 
         const deleted = store.deleteById(memId);
         if (deleted) {

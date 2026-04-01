@@ -29,13 +29,17 @@ describe('memory cli', () => {
   const group = 'group-123';
 
   it('saves a memory and returns confirmation', () => {
-    const out = run(`save --group ${group} --title "Pizza Place" --type url --content http://pizza.com --description "Dad loves this" --tags family,food`);
+    const out = run(
+      `save --group ${group} --title "Pizza Place" --type url --content http://pizza.com --description "Dad loves this" --tags family,food`,
+    );
     expect(out).toContain('Pizza Place');
     expect(out).not.toMatch(/^\{/); // not JSON
   });
 
   it('search returns saved memory in plain text format', () => {
-    run(`save --group ${group} --title "Pizza Place" --type url --content http://pizza.com --description "Dad loves this" --tags family,food`);
+    run(
+      `save --group ${group} --title "Pizza Place" --type url --content http://pizza.com --description "Dad loves this" --tags family,food`,
+    );
     const out = run(`search --group ${group}`);
     expect(out).toContain('Pizza Place');
     expect(out).toContain('[url]');

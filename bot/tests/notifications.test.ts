@@ -1,5 +1,5 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../src/logger', () => ({
   logger: {
@@ -13,7 +13,7 @@ vi.mock('../src/logger', () => ({
   },
 }));
 
-import { sendStartupNotification, sendErrorNotification } from '../src/notifications';
+import { sendErrorNotification, sendStartupNotification } from '../src/notifications';
 
 describe('sendStartupNotification', () => {
   const mockSignalClient = {
@@ -66,9 +66,7 @@ describe('sendStartupNotification', () => {
     vi.spyOn(fs, 'readFileSync').mockReturnValue('abc1234\n');
     mockSignalClient.sendMessage.mockRejectedValueOnce(new Error('signal-cli down'));
 
-    await expect(
-      sendStartupNotification(mockSignalClient as any, baseConfig)
-    ).resolves.toBeUndefined();
+    await expect(sendStartupNotification(mockSignalClient as any, baseConfig)).resolves.toBeUndefined();
   });
 });
 
@@ -126,11 +124,7 @@ describe('sendErrorNotification', () => {
   });
 
   it('should not send when startupNotify is false', async () => {
-    await sendErrorNotification(
-      mockSignalClient as any,
-      { ...baseConfig, startupNotify: false },
-      new Error('test'),
-    );
+    await sendErrorNotification(mockSignalClient as any, { ...baseConfig, startupNotify: false }, new Error('test'));
 
     expect(mockSignalClient.sendMessage).not.toHaveBeenCalled();
   });
@@ -139,7 +133,7 @@ describe('sendErrorNotification', () => {
     mockSignalClient.sendMessage.mockRejectedValueOnce(new Error('signal-cli down'));
 
     await expect(
-      sendErrorNotification(mockSignalClient as any, baseConfig, new Error('test'))
+      sendErrorNotification(mockSignalClient as any, baseConfig, new Error('test')),
     ).resolves.toBeUndefined();
   });
 });

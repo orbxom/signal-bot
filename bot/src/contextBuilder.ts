@@ -173,7 +173,17 @@ export class ContextBuilder {
     nameMap?: Map<string, string>;
     preFormatted?: string[];
   }): ChatMessage[] {
-    const { history, query, groupId, sender, dossierContext, memorySummary, personaDescription, nameMap, preFormatted } = params;
+    const {
+      history,
+      query,
+      groupId,
+      sender,
+      dossierContext,
+      memorySummary,
+      personaDescription,
+      nameMap,
+      preFormatted,
+    } = params;
     const effectivePrompt = personaDescription || this.systemPrompt;
     let systemContent: string;
 

@@ -151,10 +151,7 @@ export class MessageHandler {
     );
   }
 
-  async handleMessageBatch(
-    groupId: string,
-    messages: ExtractedMessage[],
-  ): Promise<void> {
+  async handleMessageBatch(groupId: string, messages: ExtractedMessage[]): Promise<void> {
     const validMessages: ExtractedMessage[] = [];
     for (const msg of messages) {
       if (this.appConfig.botPhoneNumber && msg.sender === this.appConfig.botPhoneNumber) {

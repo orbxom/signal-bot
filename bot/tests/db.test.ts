@@ -326,9 +326,9 @@ describe('DatabaseConnection', () => {
         expect(indexNames).toContain('idx_memories_group_title');
 
         // Schema version should be 10
-        const versionRow = conn.db
-          .prepare("SELECT value FROM schema_meta WHERE key = 'schema_version'")
-          .get() as { value: string };
+        const versionRow = conn.db.prepare("SELECT value FROM schema_meta WHERE key = 'schema_version'").get() as {
+          value: string;
+        };
         expect(Number.parseInt(versionRow.value, 10)).toBe(10);
       } finally {
         conn.close();
