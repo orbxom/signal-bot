@@ -80,7 +80,7 @@ export class MemoryStore {
             `INSERT INTO memories (groupId, title, description, content, type, createdAt, updatedAt)
             VALUES (?, ?, ?, ?, ?, ?, ?)`,
           )
-          .run(groupId, title, opts?.description ?? null, opts?.content ?? '', normalizedType, now, now);
+          .run(groupId, title, opts?.description ?? null, opts?.content ?? null, normalizedType, now, now);
         memoryId = result.lastInsertRowid as number;
       }
 

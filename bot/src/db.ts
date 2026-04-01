@@ -357,7 +357,7 @@ export class DatabaseConnection {
           groupId TEXT NOT NULL,
           title TEXT NOT NULL,
           description TEXT,
-          content TEXT NOT NULL,
+          content TEXT,
           type TEXT NOT NULL DEFAULT 'text',
           createdAt INTEGER NOT NULL,
           updatedAt INTEGER NOT NULL
@@ -382,7 +382,7 @@ export class DatabaseConnection {
             groupId TEXT NOT NULL,
             title TEXT NOT NULL,
             description TEXT,
-            content TEXT NOT NULL,
+            content TEXT,
             type TEXT NOT NULL DEFAULT 'text',
             createdAt INTEGER NOT NULL,
             updatedAt INTEGER NOT NULL
