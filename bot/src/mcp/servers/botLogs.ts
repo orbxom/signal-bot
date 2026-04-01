@@ -23,20 +23,27 @@ export function getLogFiles(logsDir: string): string[] {
     .reverse();
 }
 
-/** Read recent ERROR and WARN lines from bot log files. Pure function for testing. */
-export function getRecentErrors(logsDir: string, lineLimit: number): string {
-  const logFiles = getLogFiles(logsDir);
-  if (logFiles.length === 0) {
-    return 'No log files found in logs directory.';
-  }
+interface ScanBudget {
+  totalLines: number;
+  totalBytes: number;
+}
 
+/**
+ * Iterate over the most recent log files, calling `processFile` for each.
+ * Accumulates sections with shared line/byte budget enforcement.
+ */
+function scanLogFiles(
+  logsDir: string,
+  lineLimit: number,
+  processFile: (lines: string[], budget: ScanBudget) => string[],
+): { sections: string[]; files: string[] } {
+  const logFiles = getLogFiles(logsDir);
   const filesToRead = logFiles.slice(0, MAX_LOG_FILES);
   const sections: string[] = [];
-  let totalLines = 0;
-  let totalBytes = 0;
+  const budget: ScanBudget = { totalLines: 0, totalBytes: 0 };
 
   for (const file of filesToRead) {
-    if (totalLines >= lineLimit) break;
+    if (budget.totalLines >= lineLimit) break;
 
     const filePath = path.join(logsDir, file);
     let content: string;
@@ -47,28 +54,41 @@ export function getRecentErrors(logsDir: string, lineLimit: number): string {
     }
 
     const lines = content.split('\n');
-    const matchingLines: string[] = [];
+    const outputLines = processFile(lines, budget);
 
+    if (outputLines.length > 0) {
+      sections.push(`--- ${file} ---\n${outputLines.join('\n')}`);
+    }
+  }
+
+  return { sections, files: logFiles };
+}
+
+/** Accumulate a line into the output if within budget. Returns false if budget exceeded. */
+function addLine(line: string, output: string[], budget: ScanBudget, lineLimit: number): boolean {
+  if (budget.totalLines >= lineLimit) return false;
+  const lineBytes = Buffer.byteLength(line, 'utf-8');
+  if (budget.totalBytes + lineBytes > MAX_OUTPUT_BYTES) return false;
+  output.push(line);
+  budget.totalLines++;
+  budget.totalBytes += lineBytes;
+  return true;
+}
+
+/** Read recent ERROR and WARN lines from bot log files. Pure function for testing. */
+export function getRecentErrors(logsDir: string, lineLimit: number): string {
+  const { sections, files } = scanLogFiles(logsDir, lineLimit, (lines, budget) => {
+    const output: string[] = [];
     for (const line of lines) {
-      if (totalLines >= lineLimit) break;
       if (line.includes('[ERROR]') || line.includes('[WARN]')) {
-        const lineBytes = Buffer.byteLength(line, 'utf-8');
-        if (totalBytes + lineBytes > MAX_OUTPUT_BYTES) break;
-        matchingLines.push(line);
-        totalLines++;
-        totalBytes += lineBytes;
+        if (!addLine(line, output, budget, lineLimit)) break;
       }
     }
+    return output;
+  });
 
-    if (matchingLines.length > 0) {
-      sections.push(`--- ${file} ---\n${matchingLines.join('\n')}`);
-    }
-  }
-
-  if (sections.length === 0) {
-    return 'No errors or warnings found in recent log files.';
-  }
-
+  if (files.length === 0) return 'No log files found in logs directory.';
+  if (sections.length === 0) return 'No errors or warnings found in recent log files.';
   return sections.join('\n\n');
 }
 
@@ -81,73 +101,35 @@ export function searchBotLogs(logsDir: string, pattern: string, contextLines: nu
     return `Invalid search pattern: "${pattern}" — must be a valid regular expression.`;
   }
 
-  const logFiles = getLogFiles(logsDir);
-  if (logFiles.length === 0) {
-    return 'No log files found in logs directory.';
-  }
+  const { sections, files } = scanLogFiles(logsDir, lineLimit, (rawLines, budget) => {
+    const lines = rawLines.filter(l => l.length > 0);
 
-  const filesToRead = logFiles.slice(0, MAX_LOG_FILES);
-  const sections: string[] = [];
-  let totalLines = 0;
-  let totalBytes = 0;
-
-  for (const file of filesToRead) {
-    if (totalLines >= lineLimit) break;
-
-    const filePath = path.join(logsDir, file);
-    let content: string;
-    try {
-      content = fs.readFileSync(filePath, 'utf-8');
-    } catch {
-      continue;
-    }
-
-    const lines = content.split('\n').filter(l => l.length > 0);
-
-    // Find matching line indices
     const matchIndices: number[] = [];
     for (let i = 0; i < lines.length; i++) {
-      if (regex.test(lines[i])) {
-        matchIndices.push(i);
-      }
+      if (regex.test(lines[i])) matchIndices.push(i);
     }
+    if (matchIndices.length === 0) return [];
 
-    if (matchIndices.length === 0) continue;
-
-    // Build set of all indices to include (matches + context), deduplicating
     const includeIndices = new Set<number>();
     for (const idx of matchIndices) {
       for (let c = idx - contextLines; c <= idx + contextLines; c++) {
-        if (c >= 0 && c < lines.length) {
-          includeIndices.add(c);
-        }
+        if (c >= 0 && c < lines.length) includeIndices.add(c);
       }
     }
 
     const matchSet = new Set(matchIndices);
     const sortedIndices = Array.from(includeIndices).sort((a, b) => a - b);
-    const outputLines: string[] = [];
+    const output: string[] = [];
 
     for (const idx of sortedIndices) {
-      if (totalLines >= lineLimit) break;
       const prefix = matchSet.has(idx) ? '> ' : '  ';
-      const line = prefix + lines[idx];
-      const lineBytes = Buffer.byteLength(line, 'utf-8');
-      if (totalBytes + lineBytes > MAX_OUTPUT_BYTES) break;
-      outputLines.push(line);
-      totalLines++;
-      totalBytes += lineBytes;
+      if (!addLine(prefix + lines[idx], output, budget, lineLimit)) break;
     }
+    return output;
+  });
 
-    if (outputLines.length > 0) {
-      sections.push(`--- ${file} ---\n${outputLines.join('\n')}`);
-    }
-  }
-
-  if (sections.length === 0) {
-    return `No matches found for pattern "${pattern}" in recent log files.`;
-  }
-
+  if (files.length === 0) return 'No log files found in logs directory.';
+  if (sections.length === 0) return `No matches found for pattern "${pattern}" in recent log files.`;
   return sections.join('\n\n');
 }
 
@@ -247,8 +229,6 @@ export const botLogsServer: McpServerDefinition = {
     }
   },
 };
-
-export default botLogsServer;
 
 if (require.main === module) {
   runServer(botLogsServer);
