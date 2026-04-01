@@ -277,6 +277,15 @@ export class MemoryStore {
     });
   }
 
+  deleteByTitle(groupId: string, title: string): boolean {
+    return this.conn.runOp('delete memory by title', () => {
+      const result = this.conn.db
+        .prepare('DELETE FROM memories WHERE groupId = ? AND title = ?')
+        .run(groupId, title);
+      return result.changes > 0;
+    });
+  }
+
   getByGroup(groupId: string): MemoryWithTags[] {
     return this.search(groupId, {}, 100);
   }

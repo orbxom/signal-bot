@@ -105,21 +105,22 @@ describe('MemoryConsolidator', () => {
     await consolidator.consolidateGroup('g1');
 
     const memories = storage.memories.getByGroup('g1');
-    const daily = memories.find(m => m.topic.startsWith('__daily:'));
+    const daily = memories.find(m => m.title.startsWith('__daily:'));
     expect(daily).toBeTruthy();
     expect(daily?.content).toBe('Alice said hello. Quiet day.');
   });
 
   it('should trim daily summaries older than 14 days', async () => {
-    storage.memories.upsert('g1', '__daily:2026-03-01', 'old summary');
-    storage.memories.upsert('g1', '__daily:2026-03-17', 'recent summary');
+    storage.memories.save('g1', '__daily:2026-03-01', 'text', { content: 'old summary' });
+    storage.memories.save('g1', '__daily:2026-03-25', 'text', { content: 'recent summary' });
 
     consolidator.trimOldDailies('g1', 14);
 
-    const old = storage.memories.get('g1', '__daily:2026-03-01');
-    const recent = storage.memories.get('g1', '__daily:2026-03-17');
-    expect(old).toBeNull();
-    expect(recent).not.toBeNull();
+    const allMemories = storage.memories.getByGroup('g1');
+    const old = allMemories.find(m => m.title === '__daily:2026-03-01');
+    const recent = allMemories.find(m => m.title === '__daily:2026-03-25');
+    expect(old).toBeUndefined();
+    expect(recent).toBeTruthy();
   });
 
   it('should handle JSON wrapped in markdown code fences', async () => {
@@ -200,7 +201,7 @@ describe('MemoryConsolidator', () => {
       fakeChild(
         makeClaudeOutput({
           dossierUpdates: [],
-          memoryUpdates: [{ action: 'upsert', topic: 'movie-night', content: 'Movie night is every Friday' }],
+          memoryUpdates: [{ action: 'upsert', title: 'movie-night', content: 'Movie night is every Friday' }],
           dailySummary: 'Group discussed movie night schedule.',
         }),
       ),
@@ -208,13 +209,14 @@ describe('MemoryConsolidator', () => {
 
     await consolidator.consolidateGroup('g1');
 
-    const memory = storage.getMemory('g1', 'movie-night');
+    const memories = storage.memories.getByGroup('g1');
+    const memory = memories.find(m => m.title === 'movie-night');
     expect(memory).toBeTruthy();
     expect(memory?.content).toBe('Movie night is every Friday');
   });
 
   it('should handle memory delete updates', async () => {
-    storage.upsertMemory('g1', 'old-topic', 'old content');
+    storage.memories.save('g1', 'old-topic', 'text', { content: 'old content' });
 
     storage.addMessage({
       groupId: 'g1',
@@ -228,7 +230,7 @@ describe('MemoryConsolidator', () => {
       fakeChild(
         makeClaudeOutput({
           dossierUpdates: [],
-          memoryUpdates: [{ action: 'delete', topic: 'old-topic' }],
+          memoryUpdates: [{ action: 'delete', title: 'old-topic' }],
           dailySummary: 'Alice asked to forget old-topic.',
         }),
       ),
@@ -236,8 +238,9 @@ describe('MemoryConsolidator', () => {
 
     await consolidator.consolidateGroup('g1');
 
-    const memory = storage.getMemory('g1', 'old-topic');
-    expect(memory).toBeNull();
+    const memories = storage.memories.getByGroup('g1');
+    const memory = memories.find(m => m.title === 'old-topic');
+    expect(memory).toBeUndefined();
   });
 
   it('should skip groups with no messages in last 24h', async () => {
