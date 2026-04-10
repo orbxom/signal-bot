@@ -99,6 +99,21 @@ export class SignalClient {
     throw new Error(`signal-cli not reachable at ${this.baseUrl} after ${maxRetries} attempts`);
   }
 
+  async fetchAttachment(attachmentId: string): Promise<Buffer | null> {
+    try {
+      const response = await fetch(`${this.baseUrl}/v1/attachments/${attachmentId}`, {
+        method: 'GET',
+        signal: AbortSignal.timeout(30000),
+      });
+      if (!response.ok) return null;
+      const json = (await response.json()) as { data?: string };
+      if (!json.data) return null;
+      return Buffer.from(json.data, 'base64');
+    } catch {
+      return null;
+    }
+  }
+
   readAttachmentFile(attachmentsDir: string, attachmentId: string): { data: Buffer } | null {
     const filePath = path.resolve(attachmentsDir, attachmentId);
     if (!filePath.startsWith(path.resolve(attachmentsDir))) return null;

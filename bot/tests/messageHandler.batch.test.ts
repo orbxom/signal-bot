@@ -60,7 +60,11 @@ describe('MessageHandler.handleMessageBatch', () => {
       getDossiersByGroup: vi.fn().mockReturnValue([]),
       getMemoriesByGroup: vi.fn().mockReturnValue([]),
       getActivePersonaForGroup: vi.fn().mockReturnValue(null),
-      groupSettings: { getToolNotifications: vi.fn().mockReturnValue(false), isEnabled: vi.fn().mockReturnValue(true), getTriggers: vi.fn().mockReturnValue(null) },
+      groupSettings: {
+        getToolNotifications: vi.fn().mockReturnValue(false),
+        isEnabled: vi.fn().mockReturnValue(true),
+        getTriggers: vi.fn().mockReturnValue(null),
+      },
     } as any;
 
     mockLLM = {
@@ -76,6 +80,8 @@ describe('MessageHandler.handleMessageBatch', () => {
       sendMessage: vi.fn().mockResolvedValue(undefined),
       sendTyping: vi.fn().mockResolvedValue(undefined),
       stopTyping: vi.fn().mockResolvedValue(undefined),
+      fetchAttachment: vi.fn().mockResolvedValue(null),
+      readAttachmentFile: vi.fn().mockReturnValue(null),
     } as any;
 
     handler = new MessageHandler(['claude:'], {

@@ -136,7 +136,7 @@ export class MessageHandler {
       attachments: attachments.length > 0 ? attachments : undefined,
     });
 
-    this.ingestImageAttachments(groupId, sender, attachments, timestamp);
+    await this.ingestImageAttachments(groupId, sender, attachments, timestamp);
 
     if (!mentioned) {
       return;
@@ -152,10 +152,7 @@ export class MessageHandler {
     );
   }
 
-  async handleMessageBatch(
-    groupId: string,
-    messages: ExtractedMessage[],
-  ): Promise<void> {
+  async handleMessageBatch(groupId: string, messages: ExtractedMessage[]): Promise<void> {
     const validMessages: ExtractedMessage[] = [];
     for (const msg of messages) {
       if (this.appConfig.botPhoneNumber && msg.sender === this.appConfig.botPhoneNumber) {
@@ -209,7 +206,7 @@ export class MessageHandler {
     }
 
     for (const msg of validMessages) {
-      this.ingestImageAttachments(groupId, msg.sender, msg.attachments, msg.timestamp);
+      await this.ingestImageAttachments(groupId, msg.sender, msg.attachments, msg.timestamp);
     }
 
     if (mentionMessages.length === 0) {
@@ -319,19 +316,28 @@ export class MessageHandler {
     };
   }
 
-  private ingestImageAttachments(
+  private async ingestImageAttachments(
     groupId: string,
     sender: string,
     attachments: SignalAttachment[],
     timestamp: number,
-  ): void {
+  ): Promise<void> {
     for (const att of attachments) {
       if (att.contentType.startsWith('image/')) {
-        const file = this.signalClient.readAttachmentFile(this.appConfig.attachmentsDir, att.id);
-        if (!file) {
-          logger.debug(`Attachment file not found on disk: ${att.id}`);
+        // Try HTTP fetch first (works with signal-cli REST API)
+        let data = await this.signalClient.fetchAttachment(att.id);
+
+        // Fallback: try disk read (works when ATTACHMENTS_DIR points to signal-cli's storage)
+        if (!data) {
+          const file = this.signalClient.readAttachmentFile(this.appConfig.attachmentsDir, att.id);
+          data = file?.data ?? null;
+        }
+
+        if (!data) {
+          logger.warn(`Failed to retrieve image attachment ${att.id} via HTTP and disk`);
           continue;
         }
+
         this.storage.saveAttachment({
           id: att.id,
           groupId,
@@ -339,7 +345,7 @@ export class MessageHandler {
           contentType: att.contentType,
           size: att.size,
           filename: att.filename,
-          data: file.data,
+          data,
           timestamp,
         });
       }
