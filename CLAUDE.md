@@ -160,9 +160,8 @@ This is designed for the dark factory's integration test stage (Stage 6), where 
 ## Deployment (NUC Production Server)
 
 ### Architecture
-- **Development (this PC)**: Runs `npm run dev:test` with `--test-channel-only`. Only responds in the Bot Test group; stores messages from all other groups silently.
-- **Production (NUC at 192.168.0.239)**: Runs via systemd services. Uses `EXCLUDE_GROUP_IDS` to ignore the Bot Test group. Responds in all real groups.
-- Both instances share the same Signal phone number via signal-cli. Channel filtering ensures they don't produce duplicate responses — the group sets are disjoint.
+- **Production (NUC at 192.168.0.239)**: Runs via systemd services. Responds to all groups including Bot Test.
+- Only one instance should listen to Signal at a time to avoid duplicate responses.
 
 ### NUC Services
 - `signal-cli.service` — signal-cli native binary, JSON-RPC daemon on port 8080
@@ -177,15 +176,10 @@ ssh zknowles@192.168.0.239 "sudo cp /tmp/*.service /etc/systemd/system/ && sudo 
 
 ### NUC .env Differences
 The NUC has its own `bot/.env` with:
-- `EXCLUDE_GROUP_IDS=kKWs+FQPBZKe7N7CdxMjNAAjE2uWEmtBij55MOfWFU4=` (test group excluded)
 - `SIGNAL_CLI_URL=http://localhost:8080`
 - `ATTACHMENTS_DIR=/home/zknowles/signal-bot/data/signal-attachments`
 - `STARTUP_NOTIFY=true` (sends startup/error notifications to Bot Test channel)
 - No `DARK_FACTORY_ENABLED` (production bot only)
-
-### Channel Filtering
-- `--test-channel-only` / `TEST_CHANNEL_ONLY=true`: Only respond in the test group (dev mode)
-- `EXCLUDE_GROUP_IDS=id1,id2`: Comma-separated group IDs to ignore (production mode). Messages are still stored but LLM processing is skipped.
 
 ### Deploying
 ```bash

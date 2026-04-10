@@ -110,15 +110,6 @@ describe('MessageHandler.handleMessageBatch', () => {
     expect(mockLLM.generateResponse).not.toHaveBeenCalled();
   });
 
-  it('should store messages but not call LLM when storeOnly is true', async () => {
-    const messages = [makeMessage({ content: 'claude: hello' })];
-
-    await handler.handleMessageBatch('g1', messages, { storeOnly: true });
-
-    expect(mockStorage.addMessage).toHaveBeenCalledTimes(1);
-    expect(mockLLM.generateResponse).not.toHaveBeenCalled();
-  });
-
   it('should skip messages from the bot itself', async () => {
     const messages = [
       makeMessage({ content: 'claude: hello', sender: '+1234567890' }),

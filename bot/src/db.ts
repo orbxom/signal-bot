@@ -1,3 +1,5 @@
+import { mkdirSync } from 'node:fs';
+import path from 'node:path';
 import Database from 'better-sqlite3';
 
 export function wrapSqliteError(error: unknown, operation: string): never {
@@ -20,6 +22,7 @@ export class DatabaseConnection {
 
   constructor(dbPath: string) {
     try {
+      mkdirSync(path.dirname(dbPath), { recursive: true });
       this.db = new Database(dbPath);
       this.db.pragma('journal_mode = WAL');
       this.initTables();
@@ -155,6 +158,11 @@ export class DatabaseConnection {
       if (currentVersion < 8) {
         this.migrateToV8();
         this.setSchemaVersion(8);
+      }
+
+      if (currentVersion < 9) {
+        this.migrateToV9();
+        this.setSchemaVersion(9);
       }
     } catch (error) {
       wrapSqliteError(error, 'run migrations');
@@ -304,6 +312,21 @@ export class DatabaseConnection {
       insert.run(row.groupId, row.enabled, row.updatedAt, row.updatedAt);
     }
     this.db.exec('DROP TABLE IF EXISTS tool_notification_settings');
+  }
+
+  private migrateToV9(): void {
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS web_app_deployments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        groupId TEXT NOT NULL,
+        sender TEXT NOT NULL,
+        siteCount INTEGER NOT NULL,
+        deployedAt INTEGER NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_web_app_deployments_time
+      ON web_app_deployments(deployedAt DESC);
+    `);
   }
 
   checkpoint(): void {

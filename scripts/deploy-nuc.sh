@@ -60,7 +60,17 @@ rsync -avz --delete \
   --exclude='node_modules/' \
   "$REPO_DIR/" "${NUC}:~/${NUC_PATH}/"
 
+# Ensure data directory exists (belt-and-suspenders: rsync --exclude should protect it,
+# but mkdir -p is cheap insurance against the directory being deleted)
+ssh "$NUC" "mkdir -p ~/${NUC_PATH}/bot/data"
+
 echo "==> Files synced"
+
+# Build dashboard client locally and sync built files
+echo "==> Building dashboard client..."
+(cd "$REPO_DIR/dashboard/client" && npm install --silent && npm run build --silent)
+rsync -avz "$REPO_DIR/dashboard/client/dist/" "${NUC}:~/${NUC_PATH}/dashboard/client/dist/"
+echo "==> Dashboard client built and synced"
 
 # Install dependencies for both bot and dashboard
 echo "==> Installing dependencies..."
@@ -71,7 +81,16 @@ ssh "$NUC" "cd ~/${NUC_PATH}/dashboard && npm install"
 echo "==> Installing systemd service files..."
 ssh "$NUC" "sudo cp ~/${NUC_PATH}/scripts/systemd/*.service /etc/systemd/system/ && sudo systemctl daemon-reload"
 
-# ── Phase 3: Restart Services ───────────────────────────────────────
+# ── Phase 3: Backup Database ───────────────────────────────────────
+
+echo ""
+echo "==> Backing up NUC database..."
+BACKUP_NAME="bot.db.$(date +%Y%m%d-%H%M%S).bak"
+ssh "$NUC" "if [ -f ~/${NUC_PATH}/bot/data/bot.db ]; then cp ~/${NUC_PATH}/bot/data/bot.db ~/${NUC_PATH}/bot/data/${BACKUP_NAME} && echo '    backup: ${BACKUP_NAME}'; else echo '    no database to back up'; fi"
+# Keep only the 5 most recent backups
+ssh "$NUC" "ls -t ~/${NUC_PATH}/bot/data/bot.db.*.bak 2>/dev/null | tail -n +6 | xargs -r rm --"
+
+# ── Phase 4: Restart Services ───────────────────────────────────────
 
 echo ""
 echo "==> Ensuring services are enabled on boot..."
@@ -81,7 +100,7 @@ echo "==> Restarting services..."
 ssh "$NUC" "sudo systemctl restart signal-bot && sudo systemctl restart signal-bot-dashboard"
 RESTART_TIME=$(date -u +"%Y-%m-%d %H:%M:%S")
 
-# ── Phase 4: Verify ─────────────────────────────────────────────────
+# ── Phase 5: Verify ─────────────────────────────────────────────────
 
 echo "==> Waiting for startup..."
 sleep 5

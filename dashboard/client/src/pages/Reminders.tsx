@@ -16,7 +16,7 @@ interface Reminder {
 interface RecurringReminder {
   id: number
   groupId: string
-  prompt: string
+  promptText: string
   cronExpression: string
   nextDueAt: number
   consecutiveFailures: number
@@ -66,8 +66,8 @@ export default function Reminders() {
 
   const recurringColumns = [
     { key: 'groupId', header: 'Group', render: (r: RecurringReminder) => r.groupId.slice(0, 8) + '...' },
-    { key: 'prompt', header: 'Prompt', render: (r: RecurringReminder) => (
-      <span title={r.prompt}>{r.prompt.length > 50 ? r.prompt.slice(0, 50) + '...' : r.prompt}</span>
+    { key: 'promptText', header: 'Prompt', render: (r: RecurringReminder) => (
+      <span title={r.promptText}>{r.promptText.length > 50 ? r.promptText.slice(0, 50) + '...' : r.promptText}</span>
     )},
     { key: 'cronExpression', header: 'Schedule' },
     { key: 'nextDueAt', header: 'Next Due', render: (r: RecurringReminder) => formatTimestamp(r.nextDueAt) },

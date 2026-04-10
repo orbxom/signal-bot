@@ -173,27 +173,19 @@ describe('Config', () => {
     expect(config.mentionTriggers).toEqual(['claude:', 'c ']);
   });
 
-  it('should parse EXCLUDE_GROUP_IDS', () => {
+  it('should default startupNotify to false', () => {
     process.env.BOT_PHONE_NUMBER = '+1234567890';
-    process.env.EXCLUDE_GROUP_IDS = 'group1,group2';
 
     const config = Config.load();
-    expect(config.excludeGroupIds).toEqual(['group1', 'group2']);
+    expect(config.startupNotify).toBe(false);
   });
 
-  it('should default to empty array when EXCLUDE_GROUP_IDS not set', () => {
+  it('should set startupNotify to true when STARTUP_NOTIFY is set', () => {
     process.env.BOT_PHONE_NUMBER = '+1234567890';
+    process.env.STARTUP_NOTIFY = 'true';
 
     const config = Config.load();
-    expect(config.excludeGroupIds).toEqual([]);
-  });
-
-  it('should trim whitespace in EXCLUDE_GROUP_IDS', () => {
-    process.env.BOT_PHONE_NUMBER = '+1234567890';
-    process.env.EXCLUDE_GROUP_IDS = ' group1 , group2 ';
-
-    const config = Config.load();
-    expect(config.excludeGroupIds).toEqual(['group1', 'group2']);
+    expect(config.startupNotify).toBe(true);
   });
 
   it('should default startupNotify to false', () => {

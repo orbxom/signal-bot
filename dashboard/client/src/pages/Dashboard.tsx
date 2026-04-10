@@ -31,7 +31,7 @@ interface Group {
 interface RecurringReminder {
   id: number
   groupId: string
-  prompt: string
+  promptText: string
   cronExpression: string
   nextDueAt: number
   consecutiveFailures: number
@@ -101,8 +101,8 @@ const groupColumns = [
 ]
 
 const recurringColumns = [
-  { key: 'prompt', header: 'Prompt', render: (row: RecurringReminder) => (
-    <span title={row.prompt}>{row.prompt.length > 60 ? row.prompt.slice(0, 60) + '...' : row.prompt}</span>
+  { key: 'promptText', header: 'Prompt', render: (row: RecurringReminder) => (
+    <span title={row.promptText}>{row.promptText.length > 60 ? row.promptText.slice(0, 60) + '...' : row.promptText}</span>
   )},
   { key: 'cronExpression', header: 'Schedule' },
   {

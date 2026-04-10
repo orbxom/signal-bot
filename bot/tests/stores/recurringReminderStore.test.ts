@@ -322,6 +322,34 @@ describe('RecurringReminderStore', () => {
     });
   });
 
+  describe('handleFailure', () => {
+    it('should atomically advance nextDueAt, clear lastInFlightAt, and increment failures', () => {
+      setup();
+      const id = store.create('group1', 'Alice', 'Task', '0 9 * * *', 'UTC', NOW - 1000);
+      store.markInFlight(id);
+
+      const failures = store.handleFailure(id, NEXT_DUE);
+      expect(failures).toBe(1);
+
+      const active = store.listActive('group1');
+      expect(active).toHaveLength(1);
+      expect(active[0].nextDueAt).toBe(NEXT_DUE);
+      expect(active[0].lastInFlightAt).toBeNull();
+      expect(active[0].consecutiveFailures).toBe(1);
+    });
+
+    it('should return incrementing failure count on repeated calls', () => {
+      setup();
+      const id = store.create('group1', 'Alice', 'Task', '0 9 * * *', 'UTC', NOW - 1000);
+
+      const count1 = store.handleFailure(id, NEXT_DUE);
+      expect(count1).toBe(1);
+
+      const count2 = store.handleFailure(id, NEXT_DUE + 3600000);
+      expect(count2).toBe(2);
+    });
+  });
+
   describe('incrementFailures', () => {
     it('should increment count and return new value', () => {
       setup();
