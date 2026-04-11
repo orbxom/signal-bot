@@ -1,5 +1,6 @@
 import { DatabaseConnection } from '../db';
 import { MemoryStore } from '../stores/memoryStore';
+import { formatMemory } from './format';
 
 const DB_PATH = process.env.DB_PATH || './data/bot.db';
 
@@ -15,31 +16,6 @@ function parseArgs(argv: string[]): { command: string; flags: Record<string, str
     }
   }
   return { command, flags };
-}
-
-function formatMemory(
-  _index: number,
-  mem: {
-    id: number;
-    title: string;
-    type: string;
-    description?: string | null;
-    content?: string | null;
-    tags?: string[];
-  },
-): string {
-  const lines: string[] = [];
-  lines.push(`#${mem.id} "${mem.title}" [${mem.type}]`);
-  if (mem.description) {
-    lines.push(`  Description: ${mem.description}`);
-  }
-  if (mem.content) {
-    lines.push(`  Content: ${mem.content}`);
-  }
-  if (mem.tags && mem.tags.length > 0) {
-    lines.push(`  Tags: ${mem.tags.join(', ')}`);
-  }
-  return lines.join('\n');
 }
 
 function main(): void {
@@ -76,7 +52,7 @@ function main(): void {
           content: flags.content || undefined,
           tags,
         });
-        console.log(formatMemory(mem.id, mem));
+        console.log(formatMemory(mem));
         break;
       }
 
@@ -96,7 +72,7 @@ function main(): void {
         if (results.length === 0) {
           console.log('No memories found.');
         } else {
-          console.log(results.map((m, i) => formatMemory(i + 1, m)).join('\n\n'));
+          console.log(results.map(m => formatMemory(m)).join('\n\n'));
         }
         break;
       }
@@ -134,11 +110,7 @@ function main(): void {
       }
 
       case 'delete': {
-        const { group, id } = flags;
-        if (!group) {
-          console.error('Error: --group is required');
-          process.exit(1);
-        }
+        const { id } = flags;
         if (!id) {
           console.error('Error: --id is required');
           process.exit(1);

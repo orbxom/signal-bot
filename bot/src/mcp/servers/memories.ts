@@ -1,20 +1,12 @@
 import { DatabaseConnection } from '../../db';
+import { formatMemory } from '../../memory/format';
 import { MemoryStore } from '../../stores/memoryStore';
-import type { MemoryWithTags } from '../../types';
 import { readStorageEnv } from '../env';
 import { withNotification } from '../notify';
 import { estimateTokens, ok } from '../result';
 import { runServer } from '../runServer';
 import type { McpServerDefinition } from '../types';
 import { requireGroupId, requireNumber, requireString } from '../validate';
-
-function formatMemory(m: MemoryWithTags): string {
-  const lines = [`#${m.id} "${m.title}" [${m.type}]`];
-  if (m.description) lines.push(`  Description: ${m.description}`);
-  if (m.content) lines.push(`  Content: ${m.content}`);
-  if (m.tags.length > 0) lines.push(`  Tags: ${m.tags.join(', ')}`);
-  return lines.join('\n');
-}
 
 function tokenReport(description?: string | null, content?: string | null): string {
   const parts: string[] = [];

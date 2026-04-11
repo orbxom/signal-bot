@@ -249,13 +249,13 @@ describe('MemoryStore', () => {
       expect(results).toHaveLength(5);
     });
 
-    it('should cap limit at 100', () => {
+    it('should cap limit at 1000', () => {
       setup();
       for (let i = 0; i < 110; i++) {
         store.save('group1', `item${i}`, 'note');
       }
-      const results = store.search('group1', {}, 200);
-      expect(results).toHaveLength(100);
+      const results = store.search('group1', {}, 2000);
+      expect(results).toHaveLength(110);
     });
 
     it('should default limit to 20', () => {

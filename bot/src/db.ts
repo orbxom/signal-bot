@@ -375,9 +375,8 @@ export class DatabaseConnection {
       `);
     } else {
       // Fresh database created by initTables already has the new schema — ensure columns exist
-      const memCols = this.db.pragma('table_info(memories)') as Array<{ name: string }>;
-      const memColNames = memCols.map(c => c.name);
-      if (!memColNames.includes('title')) {
+      const colNames = cols.map(c => c.name);
+      if (!colNames.includes('title')) {
         this.db.exec(`
           CREATE TABLE memories_new (
             id INTEGER PRIMARY KEY AUTOINCREMENT,

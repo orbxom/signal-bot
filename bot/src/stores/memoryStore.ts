@@ -44,18 +44,16 @@ export class MemoryStore {
     return this.conn.runOp('save memory', () => {
       const now = Date.now();
 
-      // Check if record exists (for upsert logic — we need to preserve createdAt)
+      // Check if record exists (for upsert logic — we need to preserve createdAt and current values)
       const existing = this.conn.db
-        .prepare('SELECT id, createdAt FROM memories WHERE groupId = ? AND title = ?')
-        .get(groupId, title) as { id: number; createdAt: number } | undefined;
+        .prepare('SELECT id, createdAt, description, content FROM memories WHERE groupId = ? AND title = ?')
+        .get(groupId, title) as
+        | { id: number; createdAt: number; description: string | null; content: string | null }
+        | undefined;
 
       let memoryId: number;
 
       if (existing) {
-        // Fetch current values to avoid overwriting with empty string when opts fields are omitted
-        const currentRow = this.conn.db
-          .prepare('SELECT description, content FROM memories WHERE id = ?')
-          .get(existing.id) as { description: string | null; content: string };
         this.conn.db
           .prepare(
             `UPDATE memories SET
@@ -66,8 +64,8 @@ export class MemoryStore {
             WHERE id = ?`,
           )
           .run(
-            opts?.description !== undefined ? (opts.description ?? null) : currentRow.description,
-            opts?.content !== undefined ? opts.content : currentRow.content,
+            opts?.description !== undefined ? (opts.description ?? null) : existing.description,
+            opts?.content !== undefined ? opts.content : existing.content,
             normalizedType,
             now,
             existing.id,
@@ -160,7 +158,7 @@ export class MemoryStore {
 
   search(groupId: string, filters: { keyword?: string; type?: string; tag?: string }, limit = 20): MemoryWithTags[] {
     return this.conn.runOp('search memories', () => {
-      const clampedLimit = Math.min(limit, 100);
+      const clampedLimit = Math.min(limit, 1000);
       const conditions: string[] = ['m.groupId = ?'];
       const params: unknown[] = [groupId];
 
@@ -183,15 +181,22 @@ export class MemoryStore {
       params.push(clampedLimit);
 
       const sql = `
-        SELECT m.*
+        SELECT m.*, GROUP_CONCAT(mt.tag) as tagsCsv
         FROM memories m
+        LEFT JOIN memory_tags mt ON mt.memoryId = m.id
         WHERE ${conditions.join(' AND ')}
+        GROUP BY m.id
         ORDER BY m.updatedAt DESC
         LIMIT ?
       `;
 
-      const rows = this.conn.db.prepare(sql).all(...params) as Array<Omit<MemoryWithTags, 'tags'>>;
-      return rows.map(row => ({ ...row, tags: this.getTagsForMemory(row.id) }));
+      const rows = this.conn.db.prepare(sql).all(...params) as Array<
+        Omit<MemoryWithTags, 'tags'> & { tagsCsv: string | null }
+      >;
+      return rows.map(row => {
+        const { tagsCsv, ...rest } = row;
+        return { ...rest, tags: tagsCsv ? tagsCsv.split(',').sort() : [] };
+      });
     });
   }
 
@@ -271,6 +276,6 @@ export class MemoryStore {
   }
 
   getByGroup(groupId: string): MemoryWithTags[] {
-    return this.search(groupId, {}, 100);
+    return this.search(groupId, {}, 1000);
   }
 }
