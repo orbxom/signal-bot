@@ -118,6 +118,15 @@ export async function spawnPromise(
   }
 }
 
+/** Extract the result text from raw Claude CLI stdout. Returns null if no result found. */
+export function extractResultText(stdout: string): string | null {
+  const entries = parseEntries(stdout);
+  const resultEntry = entries.find(e => e.type === 'result');
+  if (!resultEntry) return null;
+  const text = typeof resultEntry.result === 'string' ? (resultEntry.result as string).trim() : '';
+  return text || null;
+}
+
 /** Parse raw Claude CLI stdout into entries (JSON array or NDJSON). */
 export function parseEntries(stdout: string): Array<Record<string, unknown>> {
   const trimmed = stdout.trim();

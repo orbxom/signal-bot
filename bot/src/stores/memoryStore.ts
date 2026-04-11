@@ -4,9 +4,52 @@ import type { MemoryWithTags } from '../types';
 export class MemoryStore {
   private conn: DatabaseConnection;
 
+  // Cached prepared statements
+  private readonly getTags_: ReturnType<DatabaseConnection['db']['prepare']>;
+  private readonly deleteTags_: ReturnType<DatabaseConnection['db']['prepare']>;
+  private readonly insertTag_: ReturnType<DatabaseConnection['db']['prepare']>;
+  private readonly getById_: ReturnType<DatabaseConnection['db']['prepare']>;
+  private readonly findByGroupTitle_: ReturnType<DatabaseConnection['db']['prepare']>;
+  private readonly insert_: ReturnType<DatabaseConnection['db']['prepare']>;
+  private readonly updateAll_: ReturnType<DatabaseConnection['db']['prepare']>;
+  private readonly checkExists_: ReturnType<DatabaseConnection['db']['prepare']>;
+  private readonly deleteTag_: ReturnType<DatabaseConnection['db']['prepare']>;
+  private readonly updateTimestamp_: ReturnType<DatabaseConnection['db']['prepare']>;
+  private readonly deleteById_: ReturnType<DatabaseConnection['db']['prepare']>;
+  private readonly deleteByTitle_: ReturnType<DatabaseConnection['db']['prepare']>;
+  private readonly listTypes_: ReturnType<DatabaseConnection['db']['prepare']>;
+  private readonly listTags_: ReturnType<DatabaseConnection['db']['prepare']>;
+  private readonly deleteOldDailies_: ReturnType<DatabaseConnection['db']['prepare']>;
+
   constructor(conn: DatabaseConnection) {
     this.conn = conn;
     conn.db.pragma('foreign_keys = ON');
+
+    this.getTags_ = conn.db.prepare('SELECT tag FROM memory_tags WHERE memoryId = ? ORDER BY tag ASC');
+    this.deleteTags_ = conn.db.prepare('DELETE FROM memory_tags WHERE memoryId = ?');
+    this.insertTag_ = conn.db.prepare('INSERT OR IGNORE INTO memory_tags (memoryId, tag) VALUES (?, ?)');
+    this.getById_ = conn.db.prepare('SELECT * FROM memories WHERE id = ?');
+    this.findByGroupTitle_ = conn.db.prepare(
+      'SELECT id, createdAt, description, content FROM memories WHERE groupId = ? AND title = ?',
+    );
+    this.insert_ = conn.db.prepare(
+      'INSERT INTO memories (groupId, title, description, content, type, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    );
+    this.updateAll_ = conn.db.prepare(
+      'UPDATE memories SET title = ?, description = ?, content = ?, type = ?, updatedAt = ? WHERE id = ?',
+    );
+    this.checkExists_ = conn.db.prepare('SELECT id FROM memories WHERE id = ?');
+    this.deleteTag_ = conn.db.prepare('DELETE FROM memory_tags WHERE memoryId = ? AND tag = ?');
+    this.updateTimestamp_ = conn.db.prepare('UPDATE memories SET updatedAt = ? WHERE id = ?');
+    this.deleteById_ = conn.db.prepare('DELETE FROM memories WHERE id = ?');
+    this.deleteByTitle_ = conn.db.prepare('DELETE FROM memories WHERE groupId = ? AND title = ?');
+    this.listTypes_ = conn.db.prepare('SELECT DISTINCT type FROM memories WHERE groupId = ? ORDER BY type ASC');
+    this.listTags_ = conn.db.prepare(
+      'SELECT DISTINCT mt.tag FROM memory_tags mt JOIN memories m ON m.id = mt.memoryId WHERE m.groupId = ? ORDER BY mt.tag ASC',
+    );
+    this.deleteOldDailies_ = conn.db.prepare(
+      "DELETE FROM memories WHERE groupId = ? AND title LIKE '__daily:%' AND title < ?",
+    );
   }
 
   private normalizeTags(tags?: string[]): string[] {
@@ -16,26 +59,23 @@ export class MemoryStore {
   }
 
   private getTagsForMemory(id: number): string[] {
-    const rows = this.conn.db
-      .prepare('SELECT tag FROM memory_tags WHERE memoryId = ? ORDER BY tag ASC')
-      .all(id) as Array<{ tag: string }>;
+    const rows = this.getTags_.all(id) as Array<{ tag: string }>;
     return rows.map(r => r.tag);
   }
 
   private replaceTags(memoryId: number, tags: string[]): void {
-    this.conn.db.prepare('DELETE FROM memory_tags WHERE memoryId = ?').run(memoryId);
-    if (tags.length > 0) {
-      const insertTag = this.conn.db.prepare('INSERT OR IGNORE INTO memory_tags (memoryId, tag) VALUES (?, ?)');
-      for (const tag of tags) {
-        insertTag.run(memoryId, tag);
-      }
+    const existing = this.getTagsForMemory(memoryId);
+    const sorted = [...tags].sort();
+    if (existing.length === sorted.length && existing.every((t, i) => t === sorted[i])) return;
+
+    this.deleteTags_.run(memoryId);
+    for (const tag of tags) {
+      this.insertTag_.run(memoryId, tag);
     }
   }
 
   private hydrateById(id: number): MemoryWithTags | null {
-    const row = this.conn.db.prepare('SELECT * FROM memories WHERE id = ?').get(id) as
-      | Omit<MemoryWithTags, 'tags'>
-      | undefined;
+    const row = this.getById_.get(id) as Omit<MemoryWithTags, 'tags'> | undefined;
     if (!row) return null;
     return { ...row, tags: this.getTagsForMemory(id) };
   }
@@ -63,39 +103,32 @@ export class MemoryStore {
       const now = Date.now();
 
       // Check if record exists (for upsert logic — we need to preserve createdAt and current values)
-      const existing = this.conn.db
-        .prepare('SELECT id, createdAt, description, content FROM memories WHERE groupId = ? AND title = ?')
-        .get(groupId, title) as
+      const existing = this.findByGroupTitle_.get(groupId, title) as
         | { id: number; createdAt: number; description: string | null; content: string | null }
         | undefined;
 
       let memoryId: number;
 
       if (existing) {
-        this.conn.db
-          .prepare(
-            `UPDATE memories SET
-              description = ?,
-              content = ?,
-              type = ?,
-              updatedAt = ?
-            WHERE id = ?`,
-          )
-          .run(
-            opts?.description !== undefined ? (opts.description ?? null) : existing.description,
-            opts?.content !== undefined ? opts.content : existing.content,
-            normalizedType,
-            now,
-            existing.id,
-          );
+        this.updateAll_.run(
+          title,
+          opts?.description !== undefined ? (opts.description ?? null) : existing.description,
+          opts?.content !== undefined ? opts.content : existing.content,
+          normalizedType,
+          now,
+          existing.id,
+        );
         memoryId = existing.id;
       } else {
-        const result = this.conn.db
-          .prepare(
-            `INSERT INTO memories (groupId, title, description, content, type, createdAt, updatedAt)
-            VALUES (?, ?, ?, ?, ?, ?, ?)`,
-          )
-          .run(groupId, title, opts?.description ?? null, opts?.content ?? null, normalizedType, now, now);
+        const result = this.insert_.run(
+          groupId,
+          title,
+          opts?.description ?? null,
+          opts?.content ?? null,
+          normalizedType,
+          now,
+          now,
+        );
         memoryId = result.lastInsertRowid as number;
       }
 
@@ -110,9 +143,7 @@ export class MemoryStore {
     opts: { title?: string; description?: string; content?: string; type?: string; tags?: string[] },
   ): MemoryWithTags | null {
     return this.conn.runOp('update memory', () => {
-      const existing = this.conn.db.prepare('SELECT * FROM memories WHERE id = ?').get(id) as
-        | Omit<MemoryWithTags, 'tags'>
-        | undefined;
+      const existing = this.getById_.get(id) as Omit<MemoryWithTags, 'tags'> | undefined;
 
       if (!existing) return null;
 
@@ -122,17 +153,7 @@ export class MemoryStore {
       const newContent = opts.content !== undefined ? opts.content : existing.content;
       const newType = opts.type !== undefined ? opts.type.toLowerCase().trim() : existing.type;
 
-      this.conn.db
-        .prepare(
-          `UPDATE memories SET
-            title = ?,
-            description = ?,
-            content = ?,
-            type = ?,
-            updatedAt = ?
-          WHERE id = ?`,
-        )
-        .run(newTitle, newDescription, newContent, newType, now, id);
+      this.updateAll_.run(newTitle, newDescription, newContent, newType, now, id);
 
       if (opts.tags !== undefined) {
         this.replaceTags(id, this.normalizeTags(opts.tags));
@@ -153,8 +174,11 @@ export class MemoryStore {
       const params: unknown[] = [groupId];
 
       if (filters.keyword) {
-        conditions.push('(m.title LIKE ? OR m.description LIKE ? OR m.content LIKE ?)');
-        const pattern = `%${filters.keyword}%`;
+        conditions.push(
+          "(m.title LIKE ? ESCAPE '\\' OR m.description LIKE ? ESCAPE '\\' OR m.content LIKE ? ESCAPE '\\')",
+        );
+        const escaped = filters.keyword.replace(/[%_\\]/g, '\\$&');
+        const pattern = `%${escaped}%`;
         params.push(pattern, pattern, pattern);
       }
 
@@ -192,33 +216,21 @@ export class MemoryStore {
 
   listTypes(groupId: string): string[] {
     return this.conn.runOp('list memory types', () => {
-      const rows = this.conn.db
-        .prepare('SELECT DISTINCT type FROM memories WHERE groupId = ? ORDER BY type ASC')
-        .all(groupId) as Array<{ type: string }>;
+      const rows = this.listTypes_.all(groupId) as Array<{ type: string }>;
       return rows.map(r => r.type);
     });
   }
 
   listTags(groupId: string): string[] {
     return this.conn.runOp('list memory tags', () => {
-      const rows = this.conn.db
-        .prepare(
-          `SELECT DISTINCT mt.tag
-          FROM memory_tags mt
-          JOIN memories m ON m.id = mt.memoryId
-          WHERE m.groupId = ?
-          ORDER BY mt.tag ASC`,
-        )
-        .all(groupId) as Array<{ tag: string }>;
+      const rows = this.listTags_.all(groupId) as Array<{ tag: string }>;
       return rows.map(r => r.tag);
     });
   }
 
   manageTags(id: number, add: string[], remove: string[]): MemoryWithTags | null {
     return this.conn.runOp('manage memory tags', () => {
-      const existing = this.conn.db.prepare('SELECT id FROM memories WHERE id = ?').get(id) as
-        | { id: number }
-        | undefined;
+      const existing = this.checkExists_.get(id) as { id: number } | undefined;
 
       if (!existing) return null;
 
@@ -229,21 +241,15 @@ export class MemoryStore {
         return this.hydrateById(id);
       }
 
-      if (normalizedRemove.length > 0) {
-        const delStmt = this.conn.db.prepare('DELETE FROM memory_tags WHERE memoryId = ? AND tag = ?');
-        for (const tag of normalizedRemove) {
-          delStmt.run(id, tag);
-        }
+      for (const tag of normalizedRemove) {
+        this.deleteTag_.run(id, tag);
       }
 
-      if (normalizedAdd.length > 0) {
-        const insertTag = this.conn.db.prepare('INSERT OR IGNORE INTO memory_tags (memoryId, tag) VALUES (?, ?)');
-        for (const tag of normalizedAdd) {
-          insertTag.run(id, tag);
-        }
+      for (const tag of normalizedAdd) {
+        this.insertTag_.run(id, tag);
       }
 
-      this.conn.db.prepare('UPDATE memories SET updatedAt = ? WHERE id = ?').run(Date.now(), id);
+      this.updateTimestamp_.run(Date.now(), id);
 
       return this.hydrateById(id);
     });
@@ -251,14 +257,14 @@ export class MemoryStore {
 
   deleteById(id: number): boolean {
     return this.conn.runOp('delete memory by id', () => {
-      const result = this.conn.db.prepare('DELETE FROM memories WHERE id = ?').run(id);
+      const result = this.deleteById_.run(id);
       return result.changes > 0;
     });
   }
 
   deleteByTitle(groupId: string, title: string): boolean {
     return this.conn.runOp('delete memory by title', () => {
-      const result = this.conn.db.prepare('DELETE FROM memories WHERE groupId = ? AND title = ?').run(groupId, title);
+      const result = this.deleteByTitle_.run(groupId, title);
       return result.changes > 0;
     });
   }
@@ -269,9 +275,7 @@ export class MemoryStore {
 
   deleteOldDailies(groupId: string, cutoffTitle: string): number {
     return this.conn.runOp('delete old dailies', () => {
-      const result = this.conn.db
-        .prepare("DELETE FROM memories WHERE groupId = ? AND title LIKE '__daily:%' AND title < ?")
-        .run(groupId, cutoffTitle);
+      const result = this.deleteOldDailies_.run(groupId, cutoffTitle);
       return result.changes;
     });
   }

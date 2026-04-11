@@ -1,4 +1,4 @@
-import { parseEntries, spawnCollect, stripCodeFences } from './claudeClient';
+import { extractResultText, spawnCollect, stripCodeFences } from './claudeClient';
 import { logger } from './logger';
 import { estimateTokens } from './mcp/result';
 import { SpawnLimiter } from './spawnLimiter';
@@ -193,14 +193,12 @@ export class MemoryConsolidator {
   }
 
   private parseConsolidationOutput(stdout: string): ConsolidationResult {
-    const entries = parseEntries(stdout);
-    const resultEntry = entries.find(e => e.type === 'result');
+    const resultText = extractResultText(stdout);
 
-    if (!resultEntry) {
+    if (!resultText) {
       throw new Error('No result entry in Claude output');
     }
 
-    const resultText = typeof resultEntry.result === 'string' ? resultEntry.result : '';
     const parsed = JSON.parse(stripCodeFences(resultText));
     return {
       dossierUpdates: parsed.dossierUpdates || [],

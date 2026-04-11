@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { parseEntries, spawnCollect } from './claudeClient';
+import { extractResultText, spawnCollect } from './claudeClient';
 import { logger } from './logger';
 import { SpawnLimiter } from './spawnLimiter';
 
@@ -69,11 +69,7 @@ Message: ${message}`;
         trackChild: child => this.limiter.trackChild(child),
       });
 
-      const entries = parseEntries(stdout);
-      const resultEntry = entries.find(e => e.type === 'result');
-      if (!resultEntry) return null;
-
-      const text = typeof resultEntry.result === 'string' ? resultEntry.result.trim() : '';
+      const text = extractResultText(stdout);
       if (!text || text === 'No relevant memories found.') return null;
 
       return text;
@@ -179,9 +175,7 @@ ${conversation}`;
       trackChild: child => this.limiter.trackChild(child),
     });
 
-    const entries = parseEntries(stdout);
-    const resultEntry = entries.find(e => e.type === 'result');
-    const resultText = typeof resultEntry?.result === 'string' ? resultEntry.result.trim() : '';
+    const resultText = extractResultText(stdout);
 
     if (resultText) {
       logger.step(`memory-extractor: saved memories for group ${groupId}: ${resultText.substring(0, 200)}`);

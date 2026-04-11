@@ -4,7 +4,7 @@ import { MemoryExtractor } from '../src/memoryExtractor';
 
 vi.mock('../src/claudeClient', () => ({
   spawnCollect: vi.fn(),
-  parseEntries: vi.fn(() => []),
+  extractResultText: vi.fn(() => null),
 }));
 
 describe('MemoryExtractor', () => {

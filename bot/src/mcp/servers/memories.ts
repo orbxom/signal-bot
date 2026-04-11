@@ -126,6 +126,15 @@ let conn: DatabaseConnection;
 let store: MemoryStore;
 let groupId: string;
 
+/** Fetch a memory by ID, scoped to the current group. Returns the memory or an "not found" error result. */
+function getGroupMemory(id: number) {
+  const memory = store.getById(id);
+  if (!memory || memory.groupId !== groupId) {
+    return { notFound: ok(`Memory #${id} not found.`) as ReturnType<typeof ok> };
+  }
+  return { memory };
+}
+
 export const memoryServer: McpServerDefinition = {
   serverName: 'signal-bot-memories',
   configKey: 'memories',
@@ -162,9 +171,8 @@ export const memoryServer: McpServerDefinition = {
       const groupErr = requireGroupId(groupId);
       if (groupErr) return groupErr;
 
-      const existing = store.getById(id.value);
-      if (!existing) return ok(`Memory #${id.value} not found.`);
-      if (existing.groupId !== groupId) return ok(`Memory #${id.value} not found.`);
+      const lookup = getGroupMemory(id.value);
+      if (lookup.notFound) return lookup.notFound;
 
       const opts: { title?: string; description?: string; content?: string; type?: string; tags?: string[] } = {};
       if (typeof args.title === 'string') opts.title = args.title;
@@ -193,11 +201,9 @@ export const memoryServer: McpServerDefinition = {
       const groupErr = requireGroupId(groupId);
       if (groupErr) return groupErr;
 
-      const memory = store.getById(id.value);
-      if (!memory || memory.groupId !== groupId) {
-        return ok(`Memory #${id.value} not found.`);
-      }
-      return ok(`${formatMemory(memory)}${tokenReport(memory.description, memory.content)}`);
+      const lookup = getGroupMemory(id.value);
+      if (lookup.notFound) return lookup.notFound;
+      return ok(`${formatMemory(lookup.memory)}${tokenReport(lookup.memory.description, lookup.memory.content)}`);
     },
 
     search_memories(args) {
@@ -244,8 +250,8 @@ export const memoryServer: McpServerDefinition = {
       const groupErr = requireGroupId(groupId);
       if (groupErr) return groupErr;
 
-      const existing = store.getById(id.value);
-      if (!existing || existing.groupId !== groupId) return ok(`Memory #${id.value} not found.`);
+      const lookup = getGroupMemory(id.value);
+      if (lookup.notFound) return lookup.notFound;
 
       return withNotification(
         `Memory #${id.value} deleted`,
@@ -267,8 +273,8 @@ export const memoryServer: McpServerDefinition = {
       const groupErr = requireGroupId(groupId);
       if (groupErr) return groupErr;
 
-      const existing = store.getById(id.value);
-      if (!existing || existing.groupId !== groupId) return ok(`Memory #${id.value} not found.`);
+      const lookup = getGroupMemory(id.value);
+      if (lookup.notFound) return lookup.notFound;
 
       const add = Array.isArray(args.add) ? (args.add as string[]) : [];
       const remove = Array.isArray(args.remove) ? (args.remove as string[]) : [];
