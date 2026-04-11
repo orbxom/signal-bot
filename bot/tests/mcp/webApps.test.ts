@@ -468,5 +468,33 @@ describe('webApps MCP server', () => {
       expect(result.isError).toBe(true);
       expect(resultText(result)).toContain('No sites');
     });
+
+    it('should generate a dashboard index.html with site cards', async () => {
+      await webAppsServer.handlers.write_web_app({ site_name: 'alpha', content: '<h1>A</h1>' });
+      await webAppsServer.handlers.write_web_app({
+        site_name: 'beta',
+        filename: 'index.html',
+        content: '<h1>B</h1>',
+      });
+      await webAppsServer.handlers.write_web_app({
+        site_name: 'beta',
+        filename: 'styles.css',
+        content: 'body {}',
+      });
+
+      // Deploy will fail (no real SWA CLI), but the index.html is generated before the CLI call
+      process.env.SWA_DEPLOYMENT_TOKEN = 'fake-token';
+      await webAppsServer.handlers.deploy_web_apps({}).catch(() => {});
+
+      const indexPath = join(testDir, 'sites', 'index.html');
+      expect(existsSync(indexPath)).toBe(true);
+
+      const html = readFileSync(indexPath, 'utf-8');
+      expect(html).toContain('Signal Bot Sites');
+      expect(html).toContain('alpha');
+      expect(html).toContain('beta');
+      // Should have card-like structure with file info
+      expect(html).toContain('index.html');
+    });
   });
 });

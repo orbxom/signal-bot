@@ -93,8 +93,7 @@ const TOOLS = [
         },
         title: {
           type: 'string',
-          description:
-            'Page title. Defaults to humanized site name (e.g. "birthday-card" becomes "Birthday Card").',
+          description: 'Page title. Defaults to humanized site name (e.g. "birthday-card" becomes "Birthday Card").',
         },
       },
       required: ['site_name'],
@@ -329,9 +328,7 @@ export const webAppsServer: McpServerDefinition = {
         writeFileSync(path.join(siteDir, 'styles.css'), `/* Styles for ${title} */\n`, 'utf-8');
         writeFileSync(path.join(siteDir, 'app.js'), `// App logic for ${title}\n`, 'utf-8');
 
-        return ok(
-          `Created site "${name.value}" with files:\n- index.html\n- styles.css\n- app.js`,
-        );
+        return ok(`Created site "${name.value}" with files:\n- index.html\n- styles.css\n- app.js`);
       }, 'Failed to create web app');
     },
 
@@ -455,9 +452,7 @@ export const webAppsServer: McpServerDefinition = {
         const snippetEnd = Math.min(lines.length, editLine + 2);
         const snippet = lines.slice(snippetStart, snippetEnd).join('\n');
 
-        return ok(
-          `Edited ${filename} in site "${name.value}" (${updated.length} bytes).\n\nContext:\n${snippet}`,
-        );
+        return ok(`Edited ${filename} in site "${name.value}" (${updated.length} bytes).\n\nContext:\n${snippet}`);
       }, 'Failed to edit web app');
     },
 
@@ -585,13 +580,43 @@ export const webAppsServer: McpServerDefinition = {
 
           try {
             // SWA requires a root index.html — auto-generate a landing page
-            const siteLinks = entries.map(e => `<li><a href="/${e.name}/">${e.name}</a></li>`).join('\n        ');
+            const siteCards = entries
+              .map(e => {
+                const sd = path.join(sitesDir, e.name);
+                const files = readdirSync(sd);
+                const totalSize = files.reduce((sum, f) => {
+                  const stat = statSync(path.join(sd, f));
+                  return sum + stat.size;
+                }, 0);
+                const sizeKb = (totalSize / 1024).toFixed(1);
+                return `      <a href="/${e.name}/" class="card">
+        <h2>${e.name}</h2>
+        <p class="files">${files.join(', ')}</p>
+        <p class="size">${sizeKb} KB</p>
+      </a>`;
+              })
+              .join('\n');
+
             const rootIndex = `<!DOCTYPE html>
-<html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Signal Bot Sites</title>
-<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:system-ui,sans-serif;background:#1a1a2e;color:#e0e0e0;min-height:100vh;display:flex;justify-content:center;align-items:center}
-.wrap{max-width:400px;text-align:center}h1{margin-bottom:1.5rem;color:#7c3aed}ul{list-style:none}li{margin:.5rem 0}a{color:#60a5fa;text-decoration:none;font-size:1.2rem}a:hover{text-decoration:underline}</style>
-</head><body><div class="wrap"><h1>Signal Bot Sites</h1><ul>${siteLinks}</ul></div></body></html>`;
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:system-ui,sans-serif;background:#1a1a2e;color:#e0e0e0;min-height:100vh;padding:2rem}
+h1{text-align:center;color:#7c3aed;margin-bottom:2rem;font-size:1.8rem}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:1.5rem;max-width:960px;margin:0 auto}
+.card{display:block;background:#16213e;border-radius:12px;padding:1.5rem;text-decoration:none;color:#e0e0e0;transition:transform .15s,box-shadow .15s}
+.card:hover{transform:translateY(-3px);box-shadow:0 6px 20px rgba(124,58,237,.3)}
+.card h2{color:#60a5fa;font-size:1.2rem;margin-bottom:.5rem}
+.card .files{font-size:.85rem;color:#94a3b8;margin-bottom:.25rem}
+.card .size{font-size:.8rem;color:#64748b}
+</style>
+</head><body>
+<h1>Signal Bot Sites</h1>
+<div class="grid">
+${siteCards}
+</div>
+</body></html>`;
             writeFileSync(path.join(sitesDir, 'index.html'), rootIndex, 'utf-8');
 
             const swaBin = resolveSwaCliPath();
