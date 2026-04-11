@@ -22,6 +22,7 @@ describe('webApps MCP server', () => {
   });
 
   afterEach(() => {
+    delete process.env.SWA_CLI_PATH;
     webAppsServer.onClose?.();
     rmSync(testDir, { recursive: true, force: true });
   });
@@ -482,8 +483,10 @@ describe('webApps MCP server', () => {
         content: 'body {}',
       });
 
-      // Deploy will fail (no real SWA CLI), but the index.html is generated before the CLI call
+      // Force a non-existent SWA CLI so execFile fails fast with ENOENT
+      // (the real SWA CLI may be installed globally and would attempt an actual deploy)
       process.env.SWA_DEPLOYMENT_TOKEN = 'fake-token';
+      process.env.SWA_CLI_PATH = '/nonexistent/swa';
       await webAppsServer.handlers.deploy_web_apps({}).catch(() => {});
 
       const indexPath = join(testDir, 'sites', 'index.html');
