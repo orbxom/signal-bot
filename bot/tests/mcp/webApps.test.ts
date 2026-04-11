@@ -297,6 +297,83 @@ describe('webApps MCP server', () => {
     });
   });
 
+  describe('create_web_app', () => {
+    it('should scaffold a site with three files', async () => {
+      const result = await webAppsServer.handlers.create_web_app({
+        site_name: 'new-site',
+      });
+      expect(result.isError).toBeFalsy();
+      const text = resultText(result);
+      expect(text).toContain('new-site');
+      expect(text).toContain('index.html');
+      expect(text).toContain('styles.css');
+      expect(text).toContain('app.js');
+
+      const siteDir = join(testDir, 'sites', 'new-site');
+      expect(existsSync(join(siteDir, 'index.html'))).toBe(true);
+      expect(existsSync(join(siteDir, 'styles.css'))).toBe(true);
+      expect(existsSync(join(siteDir, 'app.js'))).toBe(true);
+    });
+
+    it('should use humanized site name as default title', async () => {
+      await webAppsServer.handlers.create_web_app({
+        site_name: 'birthday-card',
+      });
+
+      const html = readFileSync(join(testDir, 'sites', 'birthday-card', 'index.html'), 'utf-8');
+      expect(html).toContain('<title>Birthday Card</title>');
+      expect(html).toContain('Birthday Card');
+    });
+
+    it('should use custom title when provided', async () => {
+      await webAppsServer.handlers.create_web_app({
+        site_name: 'my-app',
+        title: 'My Awesome App',
+      });
+
+      const html = readFileSync(join(testDir, 'sites', 'my-app', 'index.html'), 'utf-8');
+      expect(html).toContain('<title>My Awesome App</title>');
+
+      const css = readFileSync(join(testDir, 'sites', 'my-app', 'styles.css'), 'utf-8');
+      expect(css).toContain('My Awesome App');
+
+      const js = readFileSync(join(testDir, 'sites', 'my-app', 'app.js'), 'utf-8');
+      expect(js).toContain('My Awesome App');
+    });
+
+    it('should error when site already exists', async () => {
+      await webAppsServer.handlers.write_web_app({
+        site_name: 'taken',
+        content: '<h1>Existing</h1>',
+      });
+
+      const result = await webAppsServer.handlers.create_web_app({
+        site_name: 'taken',
+      });
+      expect(result.isError).toBe(true);
+      const text = resultText(result);
+      expect(text).toContain('already exists');
+    });
+
+    it('should error for invalid site name', async () => {
+      const result = await webAppsServer.handlers.create_web_app({
+        site_name: '../bad',
+      });
+      expect(result.isError).toBe(true);
+      expect(resultText(result)).toContain('Invalid site_name');
+    });
+
+    it('should link styles.css and app.js in index.html', async () => {
+      await webAppsServer.handlers.create_web_app({
+        site_name: 'linked-test',
+      });
+
+      const html = readFileSync(join(testDir, 'sites', 'linked-test', 'index.html'), 'utf-8');
+      expect(html).toContain('styles.css');
+      expect(html).toContain('app.js');
+    });
+  });
+
   describe('list_sites', () => {
     it('should return empty when no sites', async () => {
       const result = await webAppsServer.handlers.list_sites({});
