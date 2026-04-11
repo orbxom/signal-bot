@@ -111,13 +111,21 @@ describe('MemoryConsolidator', () => {
   });
 
   it('should trim daily summaries older than 14 days', async () => {
-    storage.memories.upsert('g1', '__daily:2026-03-01', 'old summary');
-    storage.memories.upsert('g1', '__daily:2026-03-17', 'recent summary');
+    const now = new Date();
+    const oldDate = new Date(now);
+    oldDate.setDate(oldDate.getDate() - 30);
+    const recentDate = new Date(now);
+    recentDate.setDate(recentDate.getDate() - 5);
+    const oldKey = `__daily:${oldDate.toISOString().slice(0, 10)}`;
+    const recentKey = `__daily:${recentDate.toISOString().slice(0, 10)}`;
+
+    storage.memories.upsert('g1', oldKey, 'old summary');
+    storage.memories.upsert('g1', recentKey, 'recent summary');
 
     consolidator.trimOldDailies('g1', 14);
 
-    const old = storage.memories.get('g1', '__daily:2026-03-01');
-    const recent = storage.memories.get('g1', '__daily:2026-03-17');
+    const old = storage.memories.get('g1', oldKey);
+    const recent = storage.memories.get('g1', recentKey);
     expect(old).toBeNull();
     expect(recent).not.toBeNull();
   });
