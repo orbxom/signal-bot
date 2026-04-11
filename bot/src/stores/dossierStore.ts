@@ -85,13 +85,13 @@ export class DossierStore {
       const limit = Math.min(filters?.limit ?? 50, 200);
       const offset = filters?.offset ?? 0;
       if (filters?.groupId) {
-        return this.conn.db.prepare(
-          'SELECT * FROM dossiers WHERE groupId = ? ORDER BY displayName LIMIT ? OFFSET ?'
-        ).all(filters.groupId, limit, offset) as Dossier[];
+        return this.conn.db
+          .prepare('SELECT * FROM dossiers WHERE groupId = ? ORDER BY displayName LIMIT ? OFFSET ?')
+          .all(filters.groupId, limit, offset) as Dossier[];
       }
-      return this.conn.db.prepare(
-        'SELECT * FROM dossiers ORDER BY displayName LIMIT ? OFFSET ?'
-      ).all(limit, offset) as Dossier[];
+      return this.conn.db
+        .prepare('SELECT * FROM dossiers ORDER BY displayName LIMIT ? OFFSET ?')
+        .all(limit, offset) as Dossier[];
     });
   }
 

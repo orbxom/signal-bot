@@ -10,10 +10,7 @@ export interface NotifyConfig {
   timezone: string;
 }
 
-export async function sendStartupNotification(
-  signalClient: NotifySignalClient,
-  config: NotifyConfig,
-): Promise<void> {
+export async function sendStartupNotification(signalClient: NotifySignalClient, config: NotifyConfig): Promise<void> {
   if (!config.startupNotify) return;
 
   try {
@@ -50,9 +47,7 @@ export async function sendErrorNotification(
   if (!config.startupNotify) return;
 
   try {
-    const errorStr = error instanceof Error
-      ? `${error.message}\n${error.stack ?? ''}`
-      : String(error);
+    const errorStr = error instanceof Error ? `${error.message}\n${error.stack ?? ''}` : String(error);
 
     const message = `Bot error — shutting down\n\n${errorStr}`.slice(0, 2000);
     await signalClient.sendMessage(config.testGroupId, message);

@@ -52,7 +52,11 @@ describe('MessageHandler', () => {
         getMemoriesByGroup: vi.fn().mockReturnValue([]),
         getActivePersonaForGroup: vi.fn().mockReturnValue(null),
         saveAttachment: vi.fn(),
-        groupSettings: { getToolNotifications: vi.fn().mockReturnValue(false), isEnabled: vi.fn().mockReturnValue(true), getTriggers: vi.fn().mockReturnValue(null) },
+        groupSettings: {
+          getToolNotifications: vi.fn().mockReturnValue(false),
+          isEnabled: vi.fn().mockReturnValue(true),
+          getTriggers: vi.fn().mockReturnValue(null),
+        },
       } as any;
 
       mockLLM = {
@@ -61,6 +65,7 @@ describe('MessageHandler', () => {
           tokensUsed: 25,
           sentViaMcp: false,
           mcpMessages: [],
+          toolCalls: [],
         }),
       };
 
@@ -472,6 +477,7 @@ describe('MessageHandler', () => {
             tokensUsed: 10,
             sentViaMcp: true,
             mcpMessages: ['Looking into it...', 'Final answer'],
+            toolCalls: [],
           }),
         };
         const handler = new MessageHandler(['@bot'], {
@@ -494,6 +500,7 @@ describe('MessageHandler', () => {
             tokensUsed: 10,
             sentViaMcp: false,
             mcpMessages: [],
+            toolCalls: [],
           }),
         };
         const handler = new MessageHandler(['@bot'], {
@@ -516,6 +523,7 @@ describe('MessageHandler', () => {
             tokensUsed: 10,
             sentViaMcp: true,
             mcpMessages: ['Ack message', 'Final response'],
+            toolCalls: [],
           }),
         };
         const handler = new MessageHandler(['@bot'], {
@@ -684,7 +692,6 @@ describe('MessageHandler', () => {
           }),
         );
       });
-
     });
 
     describe('image attachment handling', () => {
@@ -845,7 +852,14 @@ describe('MessageHandler', () => {
           () =>
             new Promise(resolve => {
               setTimeout(
-                () => resolve({ content: 'Slow response', tokensUsed: 500, sentViaMcp: false, mcpMessages: [] }),
+                () =>
+                  resolve({
+                    content: 'Slow response',
+                    tokensUsed: 500,
+                    sentViaMcp: false,
+                    mcpMessages: [],
+                    toolCalls: [],
+                  }),
                 25_000,
               );
             }),

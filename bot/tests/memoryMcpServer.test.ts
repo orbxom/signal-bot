@@ -52,7 +52,7 @@ describe('Memory MCP Server', () => {
     }
   });
 
-  it('should list 4 tools', async () => {
+  it('should list 8 tools', async () => {
     const proc = spawnMcpServer();
     try {
       await initializeServer(proc);
@@ -63,80 +63,77 @@ describe('Memory MCP Server', () => {
       });
 
       const result = response.result as { tools: Array<{ name: string }> };
-      expect(result.tools).toHaveLength(4);
-      expect(result.tools.map(t => t.name)).toEqual(['save_memory', 'get_memory', 'list_memories', 'delete_memory']);
+      expect(result.tools).toHaveLength(8);
+      expect(result.tools.map(t => t.name)).toEqual([
+        'save_memory',
+        'update_memory',
+        'get_memory',
+        'search_memories',
+        'list_types',
+        'list_tags',
+        'delete_memory',
+        'manage_tags',
+      ]);
     } finally {
       proc.kill();
     }
   });
 
-  it('should save a memory successfully', async () => {
+  it('should save and get a memory with tags', async () => {
     const proc = spawnMcpServer();
     try {
       await initializeServer(proc);
-      const response = await sendAndReceive(proc, {
+
+      // Save a memory
+      const saveResponse = await sendAndReceive(proc, {
         jsonrpc: '2.0',
         id: 3,
         method: 'tools/call',
         params: {
           name: 'save_memory',
           arguments: {
-            topic: 'holiday plans',
+            title: 'holiday plans',
+            type: 'event',
+            description: 'Family holiday planning',
             content: '- Going to Bali in March\n- Budget is $5000',
+            tags: ['holiday', 'travel'],
           },
         },
       });
 
-      const result = response.result as { content: Array<{ text: string }>; isError?: boolean };
-      expect(result.isError).toBeFalsy();
-      expect(result.content[0].text).toContain('Saved memory "holiday plans"');
-      expect(result.content[0].text).toContain('tokens used');
-    } finally {
-      proc.kill();
-    }
-  });
+      const saveResult = saveResponse.result as { content: Array<{ text: string }>; isError?: boolean };
+      expect(saveResult.isError).toBeFalsy();
+      expect(saveResult.content[0].text).toContain('holiday plans');
+      expect(saveResult.content[0].text).toContain('event');
 
-  it('should get a memory after saving one', async () => {
-    const proc = spawnMcpServer();
-    try {
-      await initializeServer(proc);
+      // Get by ID — extract ID from response
+      const text = saveResult.content[0].text;
+      const idMatch = text.match(/#(\d+)/);
+      expect(idMatch).toBeTruthy();
+      const id = Number(idMatch?.[1]);
 
-      // Save a memory first
-      await sendAndReceive(proc, {
-        jsonrpc: '2.0',
-        id: 3,
-        method: 'tools/call',
-        params: {
-          name: 'save_memory',
-          arguments: {
-            topic: 'dietary restrictions',
-            content: '- Alice is vegan\n- Bob has nut allergy',
-          },
-        },
-      });
-
-      // Get the memory
-      const response = await sendAndReceive(proc, {
+      const getResponse = await sendAndReceive(proc, {
         jsonrpc: '2.0',
         id: 4,
         method: 'tools/call',
         params: {
           name: 'get_memory',
-          arguments: { topic: 'dietary restrictions' },
+          arguments: { id },
         },
       });
 
-      const result = response.result as { content: Array<{ text: string }>; isError?: boolean };
-      expect(result.isError).toBeFalsy();
-      expect(result.content[0].text).toContain('dietary restrictions');
-      expect(result.content[0].text).toContain('Alice is vegan');
-      expect(result.content[0].text).toContain('nut allergy');
+      const getResult = getResponse.result as { content: Array<{ text: string }>; isError?: boolean };
+      expect(getResult.isError).toBeFalsy();
+      expect(getResult.content[0].text).toContain('holiday plans');
+      expect(getResult.content[0].text).toContain('event');
+      expect(getResult.content[0].text).toContain('holiday');
+      expect(getResult.content[0].text).toContain('travel');
     } finally {
       proc.kill();
     }
   });
 
-  it('should list multiple memories', async () => {
+  it('should search memories by keyword', async () => {
     const proc = spawnMcpServer();
     try {
       await initializeServer(proc);
@@ -148,7 +145,7 @@ describe('Memory MCP Server', () => {
         method: 'tools/call',
         params: {
           name: 'save_memory',
-          arguments: { topic: 'holiday plans', content: '- Bali in March' },
+          arguments: { title: 'holiday plans', type: 'event', content: 'Bali in March' },
         },
       });
 
@@ -158,62 +155,218 @@ describe('Memory MCP Server', () => {
         method: 'tools/call',
         params: {
           name: 'save_memory',
-          arguments: { topic: 'dietary restrictions', content: '- No peanuts' },
+          arguments: { title: 'dietary restrictions', type: 'preference', content: 'Alice is vegan' },
         },
       });
 
-      // List memories
-      const response = await sendAndReceive(proc, {
+      // Search for "Bali"
+      const searchResponse = await sendAndReceive(proc, {
         jsonrpc: '2.0',
         id: 5,
         method: 'tools/call',
-        params: { name: 'list_memories', arguments: {} },
+        params: {
+          name: 'search_memories',
+          arguments: { keyword: 'Bali' },
+        },
       });
 
-      const result = response.result as { content: Array<{ text: string }>; isError?: boolean };
+      const result = searchResponse.result as { content: Array<{ text: string }>; isError?: boolean };
       expect(result.isError).toBeFalsy();
       expect(result.content[0].text).toContain('holiday plans');
-      expect(result.content[0].text).toContain('dietary restrictions');
+      expect(result.content[0].text).not.toContain('dietary restrictions');
     } finally {
       proc.kill();
     }
   });
 
-  it('should delete a memory successfully', async () => {
+  it('should list types and tags', async () => {
     const proc = spawnMcpServer();
     try {
       await initializeServer(proc);
 
-      // Save then delete
+      // Save memories with different types and tags
       await sendAndReceive(proc, {
         jsonrpc: '2.0',
         id: 3,
         method: 'tools/call',
         params: {
           name: 'save_memory',
-          arguments: { topic: 'old topic', content: 'Old content' },
+          arguments: { title: 'holiday plans', type: 'event', tags: ['travel', 'family'] },
         },
       });
 
-      const response = await sendAndReceive(proc, {
+      await sendAndReceive(proc, {
         jsonrpc: '2.0',
         id: 4,
         method: 'tools/call',
         params: {
-          name: 'delete_memory',
-          arguments: { topic: 'old topic' },
+          name: 'save_memory',
+          arguments: { title: 'dietary restrictions', type: 'preference', tags: ['food'] },
         },
       });
 
-      const result = response.result as { content: Array<{ text: string }>; isError?: boolean };
-      expect(result.isError).toBeFalsy();
-      expect(result.content[0].text).toContain('Deleted memory "old topic"');
+      // List types
+      const typesResponse = await sendAndReceive(proc, {
+        jsonrpc: '2.0',
+        id: 5,
+        method: 'tools/call',
+        params: { name: 'list_types', arguments: {} },
+      });
+
+      const typesResult = typesResponse.result as { content: Array<{ text: string }>; isError?: boolean };
+      expect(typesResult.isError).toBeFalsy();
+      expect(typesResult.content[0].text).toContain('event');
+      expect(typesResult.content[0].text).toContain('preference');
+
+      // List tags
+      const tagsResponse = await sendAndReceive(proc, {
+        jsonrpc: '2.0',
+        id: 6,
+        method: 'tools/call',
+        params: { name: 'list_tags', arguments: {} },
+      });
+
+      const tagsResult = tagsResponse.result as { content: Array<{ text: string }>; isError?: boolean };
+      expect(tagsResult.isError).toBeFalsy();
+      expect(tagsResult.content[0].text).toContain('travel');
+      expect(tagsResult.content[0].text).toContain('family');
+      expect(tagsResult.content[0].text).toContain('food');
     } finally {
       proc.kill();
     }
   });
 
-  it('should return "No memory found" for nonexistent topic', async () => {
+  it('should delete a memory by id', async () => {
+    const proc = spawnMcpServer();
+    try {
+      await initializeServer(proc);
+
+      // Save a memory
+      const saveResponse = await sendAndReceive(proc, {
+        jsonrpc: '2.0',
+        id: 3,
+        method: 'tools/call',
+        params: {
+          name: 'save_memory',
+          arguments: { title: 'old topic', type: 'note', content: 'Old content' },
+        },
+      });
+
+      const saveResult = saveResponse.result as { content: Array<{ text: string }> };
+      const idMatch = saveResult.content[0].text.match(/#(\d+)/);
+      const id = Number(idMatch?.[1]);
+
+      // Delete it
+      const deleteResponse = await sendAndReceive(proc, {
+        jsonrpc: '2.0',
+        id: 4,
+        method: 'tools/call',
+        params: {
+          name: 'delete_memory',
+          arguments: { id },
+        },
+      });
+
+      const deleteResult = deleteResponse.result as { content: Array<{ text: string }>; isError?: boolean };
+      expect(deleteResult.isError).toBeFalsy();
+      expect(deleteResult.content[0].text).toContain('Deleted');
+
+      // Verify it's gone
+      const getResponse = await sendAndReceive(proc, {
+        jsonrpc: '2.0',
+        id: 5,
+        method: 'tools/call',
+        params: { name: 'get_memory', arguments: { id } },
+      });
+
+      const getResult = getResponse.result as { content: Array<{ text: string }> };
+      expect(getResult.content[0].text).toContain('not found');
+    } finally {
+      proc.kill();
+    }
+  });
+
+  it('should update a memory', async () => {
+    const proc = spawnMcpServer();
+    try {
+      await initializeServer(proc);
+
+      // Save a memory
+      const saveResponse = await sendAndReceive(proc, {
+        jsonrpc: '2.0',
+        id: 3,
+        method: 'tools/call',
+        params: {
+          name: 'save_memory',
+          arguments: { title: 'original title', type: 'note', content: 'original content' },
+        },
+      });
+
+      const saveResult = saveResponse.result as { content: Array<{ text: string }> };
+      const idMatch = saveResult.content[0].text.match(/#(\d+)/);
+      const id = Number(idMatch?.[1]);
+
+      // Update it
+      const updateResponse = await sendAndReceive(proc, {
+        jsonrpc: '2.0',
+        id: 4,
+        method: 'tools/call',
+        params: {
+          name: 'update_memory',
+          arguments: { id, title: 'updated title', content: 'updated content' },
+        },
+      });
+
+      const updateResult = updateResponse.result as { content: Array<{ text: string }>; isError?: boolean };
+      expect(updateResult.isError).toBeFalsy();
+      expect(updateResult.content[0].text).toContain('updated title');
+    } finally {
+      proc.kill();
+    }
+  });
+
+  it('should manage tags (add and remove)', async () => {
+    const proc = spawnMcpServer();
+    try {
+      await initializeServer(proc);
+
+      // Save a memory with initial tags
+      const saveResponse = await sendAndReceive(proc, {
+        jsonrpc: '2.0',
+        id: 3,
+        method: 'tools/call',
+        params: {
+          name: 'save_memory',
+          arguments: { title: 'tagged memory', type: 'note', tags: ['alpha', 'beta'] },
+        },
+      });
+
+      const saveResult = saveResponse.result as { content: Array<{ text: string }> };
+      const idMatch = saveResult.content[0].text.match(/#(\d+)/);
+      const id = Number(idMatch?.[1]);
+
+      // Manage tags: add 'gamma', remove 'alpha'
+      const manageResponse = await sendAndReceive(proc, {
+        jsonrpc: '2.0',
+        id: 4,
+        method: 'tools/call',
+        params: {
+          name: 'manage_tags',
+          arguments: { id, add: ['gamma'], remove: ['alpha'] },
+        },
+      });
+
+      const manageResult = manageResponse.result as { content: Array<{ text: string }>; isError?: boolean };
+      expect(manageResult.isError).toBeFalsy();
+      expect(manageResult.content[0].text).toContain('gamma');
+      expect(manageResult.content[0].text).toContain('beta');
+      expect(manageResult.content[0].text).not.toContain('alpha');
+    } finally {
+      proc.kill();
+    }
+  });
+
+  it('should return not found for missing memory id in get_memory', async () => {
     const proc = spawnMcpServer();
     try {
       await initializeServer(proc);
@@ -224,38 +377,18 @@ describe('Memory MCP Server', () => {
         method: 'tools/call',
         params: {
           name: 'get_memory',
-          arguments: { topic: 'nonexistent' },
+          arguments: { id: 99999 },
         },
       });
 
       const result = response.result as { content: Array<{ text: string }> };
-      expect(result.content[0].text).toContain('No memory found');
-      expect(result.content[0].text).toContain('nonexistent');
+      expect(result.content[0].text).toContain('not found');
     } finally {
       proc.kill();
     }
   });
 
-  it('should return "No memories found" for empty group', async () => {
-    const proc = spawnMcpServer();
-    try {
-      await initializeServer(proc);
-
-      const response = await sendAndReceive(proc, {
-        jsonrpc: '2.0',
-        id: 3,
-        method: 'tools/call',
-        params: { name: 'list_memories', arguments: {} },
-      });
-
-      const result = response.result as { content: Array<{ text: string }> };
-      expect(result.content[0].text).toContain('No memories found');
-    } finally {
-      proc.kill();
-    }
-  });
-
-  it('should return error when topic is missing for save_memory', async () => {
+  it('should return error when required args are missing for save_memory', async () => {
     const proc = spawnMcpServer();
     try {
       await initializeServer(proc);
@@ -266,36 +399,13 @@ describe('Memory MCP Server', () => {
         method: 'tools/call',
         params: {
           name: 'save_memory',
-          arguments: { content: 'some content' },
+          arguments: { title: 'no type here' },
         },
       });
 
       const result = response.result as { content: Array<{ text: string }>; isError?: boolean };
       expect(result.isError).toBe(true);
-      expect(result.content[0].text).toContain('topic');
-    } finally {
-      proc.kill();
-    }
-  });
-
-  it('should return error when content is missing for save_memory', async () => {
-    const proc = spawnMcpServer();
-    try {
-      await initializeServer(proc);
-
-      const response = await sendAndReceive(proc, {
-        jsonrpc: '2.0',
-        id: 3,
-        method: 'tools/call',
-        params: {
-          name: 'save_memory',
-          arguments: { topic: 'a topic' },
-        },
-      });
-
-      const result = response.result as { content: Array<{ text: string }>; isError?: boolean };
-      expect(result.isError).toBe(true);
-      expect(result.content[0].text).toContain('content');
+      expect(result.content[0].text).toContain('type');
     } finally {
       proc.kill();
     }

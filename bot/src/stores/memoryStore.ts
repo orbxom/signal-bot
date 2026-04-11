@@ -1,117 +1,282 @@
-import type Database from 'better-sqlite3';
 import type { DatabaseConnection } from '../db';
-import { wrapSqliteError } from '../db';
-import { estimateTokens } from '../mcp/result';
-import type { Memory } from '../types';
-
-export const MEMORY_TOKEN_LIMIT = 500;
+import type { MemoryWithTags } from '../types';
 
 export class MemoryStore {
   private conn: DatabaseConnection;
-  private stmts: {
-    upsert: Database.Statement;
-    get: Database.Statement;
-    getByGroup: Database.Statement;
-    delete: Database.Statement;
-  };
+
+  // Cached prepared statements
+  private readonly getTags_: ReturnType<DatabaseConnection['db']['prepare']>;
+  private readonly deleteTags_: ReturnType<DatabaseConnection['db']['prepare']>;
+  private readonly insertTag_: ReturnType<DatabaseConnection['db']['prepare']>;
+  private readonly getById_: ReturnType<DatabaseConnection['db']['prepare']>;
+  private readonly findByGroupTitle_: ReturnType<DatabaseConnection['db']['prepare']>;
+  private readonly insert_: ReturnType<DatabaseConnection['db']['prepare']>;
+  private readonly updateAll_: ReturnType<DatabaseConnection['db']['prepare']>;
+  private readonly checkExists_: ReturnType<DatabaseConnection['db']['prepare']>;
+  private readonly deleteTag_: ReturnType<DatabaseConnection['db']['prepare']>;
+  private readonly updateTimestamp_: ReturnType<DatabaseConnection['db']['prepare']>;
+  private readonly deleteById_: ReturnType<DatabaseConnection['db']['prepare']>;
+  private readonly deleteByTitle_: ReturnType<DatabaseConnection['db']['prepare']>;
+  private readonly listTypes_: ReturnType<DatabaseConnection['db']['prepare']>;
+  private readonly listTags_: ReturnType<DatabaseConnection['db']['prepare']>;
+  private readonly deleteOldDailies_: ReturnType<DatabaseConnection['db']['prepare']>;
 
   constructor(conn: DatabaseConnection) {
     this.conn = conn;
-    this.stmts = {
-      upsert: conn.db.prepare(`
-        INSERT INTO memories (groupId, topic, content, createdAt, updatedAt)
-        VALUES (?, ?, ?, ?, ?)
-        ON CONFLICT(groupId, topic) DO UPDATE SET
-          content = excluded.content,
-          updatedAt = excluded.updatedAt
-        RETURNING *
-      `),
-      get: conn.db.prepare(`
-        SELECT * FROM memories WHERE groupId = ? AND topic = ?
-      `),
-      getByGroup: conn.db.prepare(`
-        SELECT * FROM memories WHERE groupId = ? ORDER BY topic ASC
-      `),
-      delete: conn.db.prepare(`
-        DELETE FROM memories WHERE groupId = ? AND topic = ?
-      `),
-    };
+    conn.db.pragma('foreign_keys = ON');
+
+    this.getTags_ = conn.db.prepare('SELECT tag FROM memory_tags WHERE memoryId = ? ORDER BY tag ASC');
+    this.deleteTags_ = conn.db.prepare('DELETE FROM memory_tags WHERE memoryId = ?');
+    this.insertTag_ = conn.db.prepare('INSERT OR IGNORE INTO memory_tags (memoryId, tag) VALUES (?, ?)');
+    this.getById_ = conn.db.prepare('SELECT * FROM memories WHERE id = ?');
+    this.findByGroupTitle_ = conn.db.prepare(
+      'SELECT id, createdAt, description, content FROM memories WHERE groupId = ? AND title = ?',
+    );
+    this.insert_ = conn.db.prepare(
+      'INSERT INTO memories (groupId, title, description, content, type, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    );
+    this.updateAll_ = conn.db.prepare(
+      'UPDATE memories SET title = ?, description = ?, content = ?, type = ?, updatedAt = ? WHERE id = ?',
+    );
+    this.checkExists_ = conn.db.prepare('SELECT id FROM memories WHERE id = ?');
+    this.deleteTag_ = conn.db.prepare('DELETE FROM memory_tags WHERE memoryId = ? AND tag = ?');
+    this.updateTimestamp_ = conn.db.prepare('UPDATE memories SET updatedAt = ? WHERE id = ?');
+    this.deleteById_ = conn.db.prepare('DELETE FROM memories WHERE id = ?');
+    this.deleteByTitle_ = conn.db.prepare('DELETE FROM memories WHERE groupId = ? AND title = ?');
+    this.listTypes_ = conn.db.prepare('SELECT DISTINCT type FROM memories WHERE groupId = ? ORDER BY type ASC');
+    this.listTags_ = conn.db.prepare(
+      'SELECT DISTINCT mt.tag FROM memory_tags mt JOIN memories m ON m.id = mt.memoryId WHERE m.groupId = ? ORDER BY mt.tag ASC',
+    );
+    this.deleteOldDailies_ = conn.db.prepare(
+      "DELETE FROM memories WHERE groupId = ? AND title LIKE '__daily:%' AND title < ?",
+    );
   }
 
-  upsert(groupId: string, topic: string, content: string): Memory {
-    this.conn.ensureOpen();
+  private normalizeTags(tags?: string[]): string[] {
+    if (!tags || tags.length === 0) return [];
+    const normalized = tags.map(t => t.toLowerCase().trim()).filter(t => t.length > 0);
+    return [...new Set(normalized)].sort();
+  }
+
+  private getTagsForMemory(id: number): string[] {
+    const rows = this.getTags_.all(id) as Array<{ tag: string }>;
+    return rows.map(r => r.tag);
+  }
+
+  private replaceTags(memoryId: number, tags: string[]): void {
+    const existing = this.getTagsForMemory(memoryId);
+    const sorted = [...tags].sort();
+    if (existing.length === sorted.length && existing.every((t, i) => t === sorted[i])) return;
+
+    this.deleteTags_.run(memoryId);
+    for (const tag of tags) {
+      this.insertTag_.run(memoryId, tag);
+    }
+  }
+
+  private hydrateById(id: number): MemoryWithTags | null {
+    const row = this.getById_.get(id) as Omit<MemoryWithTags, 'tags'> | undefined;
+    if (!row) return null;
+    return { ...row, tags: this.getTagsForMemory(id) };
+  }
+
+  save(
+    groupId: string,
+    title: string,
+    type: string,
+    opts?: { description?: string; content?: string; tags?: string[] },
+  ): MemoryWithTags {
     if (!groupId || groupId.trim() === '') {
       throw new Error('Invalid groupId: cannot be empty');
     }
-    if (!topic || topic.trim() === '') {
-      throw new Error('Invalid topic: cannot be empty');
+    if (!title || title.trim() === '') {
+      throw new Error('Invalid title: cannot be empty');
     }
-    if (estimateTokens(content) > MEMORY_TOKEN_LIMIT) {
-      throw new Error(`Content exceeds token limit of ${MEMORY_TOKEN_LIMIT} tokens`);
+    if (!type || type.trim() === '') {
+      throw new Error('Invalid type: cannot be empty');
     }
 
-    try {
+    const normalizedType = type.toLowerCase().trim();
+    const tags = this.normalizeTags(opts?.tags);
+
+    return this.conn.runOp('save memory', () => {
       const now = Date.now();
-      const row = this.stmts.upsert.get(groupId, topic, content, now, now) as Memory;
-      return row;
-    } catch (error) {
-      if (
-        error instanceof Error &&
-        (error.message.startsWith('Invalid ') || error.message.startsWith('Content exceeds'))
-      ) {
-        throw error;
+
+      // Check if record exists (for upsert logic — we need to preserve createdAt and current values)
+      const existing = this.findByGroupTitle_.get(groupId, title) as
+        | { id: number; createdAt: number; description: string | null; content: string | null }
+        | undefined;
+
+      let memoryId: number;
+
+      if (existing) {
+        this.updateAll_.run(
+          title,
+          opts?.description !== undefined ? (opts.description ?? null) : existing.description,
+          opts?.content !== undefined ? opts.content : existing.content,
+          normalizedType,
+          now,
+          existing.id,
+        );
+        memoryId = existing.id;
+      } else {
+        const result = this.insert_.run(
+          groupId,
+          title,
+          opts?.description ?? null,
+          opts?.content ?? null,
+          normalizedType,
+          now,
+          now,
+        );
+        memoryId = result.lastInsertRowid as number;
       }
-      wrapSqliteError(error, 'upsert memory');
-    }
-  }
 
-  get(groupId: string, topic: string): Memory | null {
-    this.conn.ensureOpen();
+      this.replaceTags(memoryId, tags);
 
-    try {
-      const row = this.stmts.get.get(groupId, topic) as Memory | undefined;
-      return row ?? null;
-    } catch (error) {
-      wrapSqliteError(error, 'get memory');
-    }
-  }
-
-  getByGroup(groupId: string): Memory[] {
-    this.conn.ensureOpen();
-    if (!groupId || groupId.trim() === '') {
-      throw new Error('Invalid groupId: cannot be empty');
-    }
-
-    try {
-      return this.stmts.getByGroup.all(groupId) as Memory[];
-    } catch (error) {
-      wrapSqliteError(error, 'get memories by group');
-    }
-  }
-
-  listAll(filters?: { groupId?: string; limit?: number; offset?: number }): Memory[] {
-    return this.conn.runOp('list all memories', () => {
-      const limit = Math.min(filters?.limit ?? 50, 200);
-      const offset = filters?.offset ?? 0;
-      if (filters?.groupId) {
-        return this.conn.db.prepare(
-          'SELECT * FROM memories WHERE groupId = ? ORDER BY topic LIMIT ? OFFSET ?'
-        ).all(filters.groupId, limit, offset) as Memory[];
-      }
-      return this.conn.db.prepare(
-        'SELECT * FROM memories ORDER BY topic LIMIT ? OFFSET ?'
-      ).all(limit, offset) as Memory[];
+      return this.hydrateById(memoryId) as MemoryWithTags;
     });
   }
 
-  delete(groupId: string, topic: string): boolean {
-    this.conn.ensureOpen();
+  update(
+    id: number,
+    opts: { title?: string; description?: string; content?: string; type?: string; tags?: string[] },
+  ): MemoryWithTags | null {
+    return this.conn.runOp('update memory', () => {
+      const existing = this.getById_.get(id) as Omit<MemoryWithTags, 'tags'> | undefined;
 
-    try {
-      const result = this.stmts.delete.run(groupId, topic);
+      if (!existing) return null;
+
+      const now = Date.now();
+      const newTitle = opts.title !== undefined ? opts.title : existing.title;
+      const newDescription = opts.description !== undefined ? opts.description : existing.description;
+      const newContent = opts.content !== undefined ? opts.content : existing.content;
+      const newType = opts.type !== undefined ? opts.type.toLowerCase().trim() : existing.type;
+
+      this.updateAll_.run(newTitle, newDescription, newContent, newType, now, id);
+
+      if (opts.tags !== undefined) {
+        this.replaceTags(id, this.normalizeTags(opts.tags));
+      }
+
+      return this.hydrateById(id);
+    });
+  }
+
+  getById(id: number): MemoryWithTags | null {
+    return this.conn.runOp('get memory by id', () => this.hydrateById(id));
+  }
+
+  search(groupId: string, filters: { keyword?: string; type?: string; tag?: string }, limit = 20): MemoryWithTags[] {
+    return this.conn.runOp('search memories', () => {
+      const clampedLimit = Math.min(limit, 1000);
+      const conditions: string[] = ['m.groupId = ?'];
+      const params: unknown[] = [groupId];
+
+      if (filters.keyword) {
+        conditions.push(
+          "(m.title LIKE ? ESCAPE '\\' OR m.description LIKE ? ESCAPE '\\' OR m.content LIKE ? ESCAPE '\\')",
+        );
+        const escaped = filters.keyword.replace(/[%_\\]/g, '\\$&');
+        const pattern = `%${escaped}%`;
+        params.push(pattern, pattern, pattern);
+      }
+
+      if (filters.type) {
+        conditions.push('m.type = ?');
+        params.push(filters.type);
+      }
+
+      if (filters.tag) {
+        conditions.push('EXISTS (SELECT 1 FROM memory_tags mt WHERE mt.memoryId = m.id AND mt.tag = ?)');
+        params.push(filters.tag);
+      }
+
+      params.push(clampedLimit);
+
+      const sql = `
+        SELECT m.*, GROUP_CONCAT(mt.tag) as tagsCsv
+        FROM memories m
+        LEFT JOIN memory_tags mt ON mt.memoryId = m.id
+        WHERE ${conditions.join(' AND ')}
+        GROUP BY m.id
+        ORDER BY m.updatedAt DESC
+        LIMIT ?
+      `;
+
+      const rows = this.conn.db.prepare(sql).all(...params) as Array<
+        Omit<MemoryWithTags, 'tags'> & { tagsCsv: string | null }
+      >;
+      return rows.map(row => {
+        const { tagsCsv, ...rest } = row;
+        return { ...rest, tags: tagsCsv ? tagsCsv.split(',').sort() : [] };
+      });
+    });
+  }
+
+  listTypes(groupId: string): string[] {
+    return this.conn.runOp('list memory types', () => {
+      const rows = this.listTypes_.all(groupId) as Array<{ type: string }>;
+      return rows.map(r => r.type);
+    });
+  }
+
+  listTags(groupId: string): string[] {
+    return this.conn.runOp('list memory tags', () => {
+      const rows = this.listTags_.all(groupId) as Array<{ tag: string }>;
+      return rows.map(r => r.tag);
+    });
+  }
+
+  manageTags(id: number, add: string[], remove: string[]): MemoryWithTags | null {
+    return this.conn.runOp('manage memory tags', () => {
+      const existing = this.checkExists_.get(id) as { id: number } | undefined;
+
+      if (!existing) return null;
+
+      const normalizedAdd = this.normalizeTags(add);
+      const normalizedRemove = this.normalizeTags(remove);
+
+      if (normalizedAdd.length === 0 && normalizedRemove.length === 0) {
+        return this.hydrateById(id);
+      }
+
+      for (const tag of normalizedRemove) {
+        this.deleteTag_.run(id, tag);
+      }
+
+      for (const tag of normalizedAdd) {
+        this.insertTag_.run(id, tag);
+      }
+
+      this.updateTimestamp_.run(Date.now(), id);
+
+      return this.hydrateById(id);
+    });
+  }
+
+  deleteById(id: number): boolean {
+    return this.conn.runOp('delete memory by id', () => {
+      const result = this.deleteById_.run(id);
       return result.changes > 0;
-    } catch (error) {
-      wrapSqliteError(error, 'delete memory');
-    }
+    });
+  }
+
+  deleteByTitle(groupId: string, title: string): boolean {
+    return this.conn.runOp('delete memory by title', () => {
+      const result = this.deleteByTitle_.run(groupId, title);
+      return result.changes > 0;
+    });
+  }
+
+  getByGroup(groupId: string): MemoryWithTags[] {
+    return this.search(groupId, {}, 1000);
+  }
+
+  deleteOldDailies(groupId: string, cutoffTitle: string): number {
+    return this.conn.runOp('delete old dailies', () => {
+      const result = this.deleteOldDailies_.run(groupId, cutoffTitle);
+      return result.changes;
+    });
   }
 }

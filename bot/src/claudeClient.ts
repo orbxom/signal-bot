@@ -3,7 +3,7 @@ import { logger } from './logger';
 import { buildAllowedTools, buildMcpConfig } from './mcp/registry';
 import { getErrorMessage } from './mcp/result';
 import { SpawnLimiter } from './spawnLimiter';
-import type { ChatMessage, LLMClient, LLMResponse, MessageContext } from './types';
+import type { ChatMessage, LLMClient, LLMResponse, MessageContext, ToolCall } from './types';
 
 export const spawnLimiter = new SpawnLimiter(2);
 
@@ -51,8 +51,12 @@ export function spawnCollect(
     const timer = options.timeout
       ? setTimeout(() => {
           const partialStdout = Buffer.concat(stdoutChunks).toString();
-          logger.warn(`${cmd} timed out after ${((options.timeout || 0) / 1000).toFixed(0)}s. stderr (${stderr.length} chars): ${stderr.substring(0, 500) || '(empty)'}`);
-          logger.warn(`${cmd} partial stdout (${partialStdout.length} chars, last 1500): ${partialStdout.substring(partialStdout.length - 1500) || '(empty)'}`);
+          logger.warn(
+            `${cmd} timed out after ${((options.timeout || 0) / 1000).toFixed(0)}s. stderr (${stderr.length} chars): ${stderr.substring(0, 500) || '(empty)'}`,
+          );
+          logger.warn(
+            `${cmd} partial stdout (${partialStdout.length} chars, last 1500): ${partialStdout.substring(partialStdout.length - 1500) || '(empty)'}`,
+          );
 
           child.kill();
           setTimeout(() => {
@@ -114,14 +118,13 @@ export async function spawnPromise(
   }
 }
 
-interface ToolCall {
-  name: string;
-  input?: Record<string, unknown>;
-}
-
-interface ParsedClaudeOutput extends LLMResponse {
-  toolCalls: ToolCall[];
-  inputTokens: number;
+/** Extract the result text from raw Claude CLI stdout. Returns null if no result found. */
+export function extractResultText(stdout: string): string | null {
+  const entries = parseEntries(stdout);
+  const resultEntry = entries.find(e => e.type === 'result');
+  if (!resultEntry) return null;
+  const text = typeof resultEntry.result === 'string' ? (resultEntry.result as string).trim() : '';
+  return text || null;
 }
 
 /** Parse raw Claude CLI stdout into entries (JSON array or NDJSON). */
@@ -142,7 +145,7 @@ export function parseEntries(stdout: string): Array<Record<string, unknown>> {
 }
 
 /** Parse raw Claude CLI stdout into a structured response including tool calls. */
-export function parseClaudeOutput(stdout: string): ParsedClaudeOutput {
+export function parseClaudeOutput(stdout: string): LLMResponse & { inputTokens: number } {
   const entries = parseEntries(stdout);
 
   // Single pass: find result line, last assistant entry, MCP send_message calls, and all tool calls
