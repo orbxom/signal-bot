@@ -22,6 +22,24 @@ export class MemoryStore {
     return rows.map(r => r.tag);
   }
 
+  private replaceTags(memoryId: number, tags: string[]): void {
+    this.conn.db.prepare('DELETE FROM memory_tags WHERE memoryId = ?').run(memoryId);
+    if (tags.length > 0) {
+      const insertTag = this.conn.db.prepare('INSERT OR IGNORE INTO memory_tags (memoryId, tag) VALUES (?, ?)');
+      for (const tag of tags) {
+        insertTag.run(memoryId, tag);
+      }
+    }
+  }
+
+  private hydrateById(id: number): MemoryWithTags | null {
+    const row = this.conn.db.prepare('SELECT * FROM memories WHERE id = ?').get(id) as
+      | Omit<MemoryWithTags, 'tags'>
+      | undefined;
+    if (!row) return null;
+    return { ...row, tags: this.getTagsForMemory(id) };
+  }
+
   save(
     groupId: string,
     title: string,
@@ -81,21 +99,9 @@ export class MemoryStore {
         memoryId = result.lastInsertRowid as number;
       }
 
-      // Replace tags entirely
-      this.conn.db.prepare('DELETE FROM memory_tags WHERE memoryId = ?').run(memoryId);
-      if (tags.length > 0) {
-        const insertTag = this.conn.db.prepare('INSERT OR IGNORE INTO memory_tags (memoryId, tag) VALUES (?, ?)');
-        for (const tag of tags) {
-          insertTag.run(memoryId, tag);
-        }
-      }
+      this.replaceTags(memoryId, tags);
 
-      const row = this.conn.db.prepare('SELECT * FROM memories WHERE id = ?').get(memoryId) as Omit<
-        MemoryWithTags,
-        'tags'
-      >;
-
-      return { ...row, tags: this.getTagsForMemory(memoryId) };
+      return this.hydrateById(memoryId) as MemoryWithTags;
     });
   }
 
@@ -129,31 +135,15 @@ export class MemoryStore {
         .run(newTitle, newDescription, newContent, newType, now, id);
 
       if (opts.tags !== undefined) {
-        const tags = this.normalizeTags(opts.tags);
-        this.conn.db.prepare('DELETE FROM memory_tags WHERE memoryId = ?').run(id);
-        if (tags.length > 0) {
-          const insertTag = this.conn.db.prepare('INSERT OR IGNORE INTO memory_tags (memoryId, tag) VALUES (?, ?)');
-          for (const tag of tags) {
-            insertTag.run(id, tag);
-          }
-        }
+        this.replaceTags(id, this.normalizeTags(opts.tags));
       }
 
-      const row = this.conn.db.prepare('SELECT * FROM memories WHERE id = ?').get(id) as Omit<MemoryWithTags, 'tags'>;
-
-      return { ...row, tags: this.getTagsForMemory(id) };
+      return this.hydrateById(id);
     });
   }
 
   getById(id: number): MemoryWithTags | null {
-    return this.conn.runOp('get memory by id', () => {
-      const row = this.conn.db.prepare('SELECT * FROM memories WHERE id = ?').get(id) as
-        | Omit<MemoryWithTags, 'tags'>
-        | undefined;
-
-      if (!row) return null;
-      return { ...row, tags: this.getTagsForMemory(id) };
-    });
+    return this.conn.runOp('get memory by id', () => this.hydrateById(id));
   }
 
   search(groupId: string, filters: { keyword?: string; type?: string; tag?: string }, limit = 20): MemoryWithTags[] {
@@ -232,32 +222,30 @@ export class MemoryStore {
 
       if (!existing) return null;
 
-      const now = Date.now();
+      const normalizedAdd = this.normalizeTags(add);
+      const normalizedRemove = this.normalizeTags(remove);
 
-      // Remove tags
-      if (remove.length > 0) {
-        const normalized = this.normalizeTags(remove);
+      if (normalizedAdd.length === 0 && normalizedRemove.length === 0) {
+        return this.hydrateById(id);
+      }
+
+      if (normalizedRemove.length > 0) {
         const delStmt = this.conn.db.prepare('DELETE FROM memory_tags WHERE memoryId = ? AND tag = ?');
-        for (const tag of normalized) {
+        for (const tag of normalizedRemove) {
           delStmt.run(id, tag);
         }
       }
 
-      // Add tags (idempotent via INSERT OR IGNORE)
-      if (add.length > 0) {
-        const normalized = this.normalizeTags(add);
+      if (normalizedAdd.length > 0) {
         const insertTag = this.conn.db.prepare('INSERT OR IGNORE INTO memory_tags (memoryId, tag) VALUES (?, ?)');
-        for (const tag of normalized) {
+        for (const tag of normalizedAdd) {
           insertTag.run(id, tag);
         }
       }
 
-      // Update updatedAt
-      this.conn.db.prepare('UPDATE memories SET updatedAt = ? WHERE id = ?').run(now, id);
+      this.conn.db.prepare('UPDATE memories SET updatedAt = ? WHERE id = ?').run(Date.now(), id);
 
-      const row = this.conn.db.prepare('SELECT * FROM memories WHERE id = ?').get(id) as Omit<MemoryWithTags, 'tags'>;
-
-      return { ...row, tags: this.getTagsForMemory(id) };
+      return this.hydrateById(id);
     });
   }
 
@@ -277,5 +265,14 @@ export class MemoryStore {
 
   getByGroup(groupId: string): MemoryWithTags[] {
     return this.search(groupId, {}, 1000);
+  }
+
+  deleteOldDailies(groupId: string, cutoffTitle: string): number {
+    return this.conn.runOp('delete old dailies', () => {
+      const result = this.conn.db
+        .prepare("DELETE FROM memories WHERE groupId = ? AND title LIKE '__daily:%' AND title < ?")
+        .run(groupId, cutoffTitle);
+      return result.changes;
+    });
   }
 }

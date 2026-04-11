@@ -12,13 +12,36 @@ const CLI_PATH = path.resolve(__dirname, 'memory/cli.ts');
 
 // --- Class ---
 
+interface PendingExtraction {
+  message: string;
+  botResponse: string;
+  savedTitles?: string[];
+}
+
 export class MemoryExtractor {
   private dbPath: string;
   private limiter = new SpawnLimiter(1);
   private timers = new Map<string, ReturnType<typeof setTimeout>>();
+  private pendingPairs = new Map<string, PendingExtraction[]>();
 
   constructor(dbPath: string) {
     this.dbPath = dbPath;
+  }
+
+  private buildHaikuArgs(prompt: string, maxTurns: number): string[] {
+    return [
+      '-p',
+      prompt,
+      '--output-format',
+      'json',
+      '--max-turns',
+      String(maxTurns),
+      '--no-session-persistence',
+      '--model',
+      'claude-haiku-4-5-20251001',
+      '--allowedTools',
+      'Bash',
+    ];
   }
 
   /**
@@ -39,22 +62,8 @@ Output a concise summary of relevant memories, or "No relevant memories found." 
 
 Message: ${message}`;
 
-    const args = [
-      '-p',
-      prompt,
-      '--output-format',
-      'json',
-      '--max-turns',
-      '5',
-      '--no-session-persistence',
-      '--model',
-      'claude-haiku-4-5-20251001',
-      '--allowedTools',
-      'Bash',
-    ];
-
     try {
-      const stdout = await spawnCollect('claude', args, {
+      const stdout = await spawnCollect('claude', this.buildHaikuArgs(prompt, 5), {
         timeout: READ_TIMEOUT_MS,
         env: { ...process.env, DB_PATH: this.dbPath, CLAUDECODE: '' },
         trackChild: child => this.limiter.trackChild(child),
@@ -84,9 +93,21 @@ Message: ${message}`;
       clearTimeout(existing);
     }
 
+    const pairs = this.pendingPairs.get(groupId) || [];
+    pairs.push({ message, botResponse, savedTitles });
+    this.pendingPairs.set(groupId, pairs);
+
     const timer = setTimeout(() => {
       this.timers.delete(groupId);
-      this.writeMemories(groupId, message, botResponse, savedTitles).catch(err => {
+      const accumulated = this.pendingPairs.get(groupId) || [];
+      this.pendingPairs.delete(groupId);
+
+      if (accumulated.length === 0) return;
+
+      const combinedMessage = accumulated.map(p => `User: ${p.message}\nBot: ${p.botResponse}`).join('\n\n');
+      const allTitles = accumulated.flatMap(p => p.savedTitles || []);
+
+      this.writeMemories(groupId, combinedMessage, allTitles.length > 0 ? allTitles : undefined).catch(err => {
         logger.error(`memory-extractor: unhandled error for group ${groupId}: ${err}`);
       });
     }, DEBOUNCE_MS);
@@ -98,10 +119,10 @@ Message: ${message}`;
    * Post-response: analyze the conversation and save anything worth remembering.
    * Uses haiku with Bash tool to run CLI commands for listing types/tags, searching, and saving.
    */
-  async writeMemories(groupId: string, message: string, botResponse: string, savedTitles?: string[]): Promise<void> {
+  async writeMemories(groupId: string, conversation: string, savedTitles?: string[]): Promise<void> {
     await this.limiter.acquire();
     try {
-      await this.doWriteMemories(groupId, message, botResponse, savedTitles);
+      await this.doWriteMemories(groupId, conversation, savedTitles);
     } catch (err) {
       logger.error(`memory-extractor: writeMemories failed for group ${groupId}: ${err}`);
     } finally {
@@ -117,6 +138,7 @@ Message: ${message}`;
       clearTimeout(timer);
     }
     this.timers.clear();
+    this.pendingPairs.clear();
   }
 
   /**
@@ -128,12 +150,7 @@ Message: ${message}`;
 
   // --- Private helpers ---
 
-  private async doWriteMemories(
-    groupId: string,
-    message: string,
-    botResponse: string,
-    savedTitles?: string[],
-  ): Promise<void> {
+  private async doWriteMemories(groupId: string, conversation: string, savedTitles?: string[]): Promise<void> {
     let prompt = `You are a memory extraction assistant. Analyze the conversation and decide what's worth remembering.
 
 Use the Bash tool to run memory CLI commands:
@@ -148,30 +165,15 @@ Save anything worth remembering: facts, preferences, URLs, plans, notable events
 Be aggressive but don't duplicate existing memories.
 
 Conversation:
-User: ${message}
-Bot: ${botResponse}`;
+${conversation}`;
 
     if (savedTitles && savedTitles.length > 0) {
       prompt += `\n\nThe bot already saved these memories during its response — do NOT save duplicates:\n${savedTitles.map(t => `- "${t}"`).join('\n')}`;
     }
 
-    const args = [
-      '-p',
-      prompt,
-      '--output-format',
-      'json',
-      '--max-turns',
-      '10',
-      '--no-session-persistence',
-      '--model',
-      'claude-haiku-4-5-20251001',
-      '--allowedTools',
-      'Bash',
-    ];
-
     logger.step(`memory-extractor: spawning writeMemories for group ${groupId}`);
 
-    const stdout = await spawnCollect('claude', args, {
+    const stdout = await spawnCollect('claude', this.buildHaikuArgs(prompt, 10), {
       timeout: WRITE_TIMEOUT_MS,
       env: { ...process.env, DB_PATH: this.dbPath, CLAUDECODE: '' },
       trackChild: child => this.limiter.trackChild(child),

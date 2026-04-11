@@ -188,17 +188,8 @@ export class MemoryConsolidator {
   trimOldDailies(groupId: string, retentionDays: number): void {
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - retentionDays);
-    const cutoffStr = cutoff.toISOString().slice(0, 10); // YYYY-MM-DD
-
-    const memories = this.storage.memories.getByGroup(groupId);
-    for (const memory of memories) {
-      if (memory.title.startsWith('__daily:')) {
-        const dateStr = memory.title.slice('__daily:'.length);
-        if (dateStr < cutoffStr) {
-          this.storage.memories.deleteByTitle(groupId, memory.title);
-        }
-      }
-    }
+    const cutoffTitle = `__daily:${cutoff.toISOString().slice(0, 10)}`;
+    this.storage.memories.deleteOldDailies(groupId, cutoffTitle);
   }
 
   private parseConsolidationOutput(stdout: string): ConsolidationResult {

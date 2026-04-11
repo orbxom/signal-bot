@@ -18,6 +18,15 @@ function parseArgs(argv: string[]): { command: string; flags: Record<string, str
   return { command, flags };
 }
 
+function requireFlag(flags: Record<string, string>, name: string): string {
+  const value = flags[name];
+  if (!value) {
+    console.error(`Error: --${name} is required`);
+    process.exit(1);
+  }
+  return value;
+}
+
 function main(): void {
   const { command, flags } = parseArgs(process.argv);
 
@@ -27,19 +36,9 @@ function main(): void {
   try {
     switch (command) {
       case 'save': {
-        const { group, title, type } = flags;
-        if (!group) {
-          console.error('Error: --group is required');
-          process.exit(1);
-        }
-        if (!title) {
-          console.error('Error: --title is required');
-          process.exit(1);
-        }
-        if (!type) {
-          console.error('Error: --type is required');
-          process.exit(1);
-        }
+        const group = requireFlag(flags, 'group');
+        const title = requireFlag(flags, 'title');
+        const type = requireFlag(flags, 'type');
 
         const tags = flags.tags
           ? flags.tags
@@ -57,11 +56,7 @@ function main(): void {
       }
 
       case 'search': {
-        const { group } = flags;
-        if (!group) {
-          console.error('Error: --group is required');
-          process.exit(1);
-        }
+        const group = requireFlag(flags, 'group');
 
         const results = store.search(group, {
           keyword: flags.keyword || undefined,
@@ -78,11 +73,7 @@ function main(): void {
       }
 
       case 'list-types': {
-        const { group } = flags;
-        if (!group) {
-          console.error('Error: --group is required');
-          process.exit(1);
-        }
+        const group = requireFlag(flags, 'group');
 
         const types = store.listTypes(group);
         if (types.length === 0) {
@@ -94,11 +85,7 @@ function main(): void {
       }
 
       case 'list-tags': {
-        const { group } = flags;
-        if (!group) {
-          console.error('Error: --group is required');
-          process.exit(1);
-        }
+        const group = requireFlag(flags, 'group');
 
         const tags = store.listTags(group);
         if (tags.length === 0) {

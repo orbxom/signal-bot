@@ -37,7 +37,7 @@ describe('MemoryExtractor', () => {
   it('should include savedTitles in the write prompt', async () => {
     vi.mocked(spawnCollect).mockResolvedValue(JSON.stringify({ type: 'result', result: '' }));
     extractor = new MemoryExtractor('/tmp/test.db');
-    await extractor.writeMemories('group1', 'hello', 'hi there', ["Dad's birthday", 'Likes pizza']);
+    await extractor.writeMemories('group1', 'User: hello\nBot: hi there', ["Dad's birthday", 'Likes pizza']);
     const prompt = vi.mocked(spawnCollect).mock.calls[0][1][1]; // args[1] is the prompt
     expect(prompt).toContain('The bot already saved these memories');
     expect(prompt).toContain("Dad's birthday");
@@ -47,7 +47,7 @@ describe('MemoryExtractor', () => {
   it('should NOT include savedTitles section when titles are empty', async () => {
     vi.mocked(spawnCollect).mockResolvedValue(JSON.stringify({ type: 'result', result: '' }));
     extractor = new MemoryExtractor('/tmp/test.db');
-    await extractor.writeMemories('group1', 'hello', 'hi there', []);
+    await extractor.writeMemories('group1', 'User: hello\nBot: hi there', []);
     const prompt = vi.mocked(spawnCollect).mock.calls[0][1][1];
     expect(prompt).not.toContain('already saved these memories');
   });

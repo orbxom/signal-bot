@@ -159,6 +159,12 @@ export const memoryServer: McpServerDefinition = {
     update_memory(args) {
       const id = requireNumber(args, 'id');
       if (id.error) return id.error;
+      const groupErr = requireGroupId(groupId);
+      if (groupErr) return groupErr;
+
+      const existing = store.getById(id.value);
+      if (!existing) return ok(`Memory #${id.value} not found.`);
+      if (existing.groupId !== groupId) return ok(`Memory #${id.value} not found.`);
 
       const opts: { title?: string; description?: string; content?: string; type?: string; tags?: string[] } = {};
       if (typeof args.title === 'string') opts.title = args.title;
@@ -184,9 +190,11 @@ export const memoryServer: McpServerDefinition = {
     get_memory(args) {
       const id = requireNumber(args, 'id');
       if (id.error) return id.error;
+      const groupErr = requireGroupId(groupId);
+      if (groupErr) return groupErr;
 
       const memory = store.getById(id.value);
-      if (!memory) {
+      if (!memory || memory.groupId !== groupId) {
         return ok(`Memory #${id.value} not found.`);
       }
       return ok(`${formatMemory(memory)}${tokenReport(memory.description, memory.content)}`);
@@ -233,6 +241,11 @@ export const memoryServer: McpServerDefinition = {
     delete_memory(args) {
       const id = requireNumber(args, 'id');
       if (id.error) return id.error;
+      const groupErr = requireGroupId(groupId);
+      if (groupErr) return groupErr;
+
+      const existing = store.getById(id.value);
+      if (!existing || existing.groupId !== groupId) return ok(`Memory #${id.value} not found.`);
 
       return withNotification(
         `Memory #${id.value} deleted`,
@@ -251,6 +264,11 @@ export const memoryServer: McpServerDefinition = {
     manage_tags(args) {
       const id = requireNumber(args, 'id');
       if (id.error) return id.error;
+      const groupErr = requireGroupId(groupId);
+      if (groupErr) return groupErr;
+
+      const existing = store.getById(id.value);
+      if (!existing || existing.groupId !== groupId) return ok(`Memory #${id.value} not found.`);
 
       const add = Array.isArray(args.add) ? (args.add as string[]) : [];
       const remove = Array.isArray(args.remove) ? (args.remove as string[]) : [];

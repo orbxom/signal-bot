@@ -214,7 +214,6 @@ export class DatabaseConnection {
   }
 
   private migrateToV3(): void {
-    // Create memories table only if it doesn't already exist (initTables may have created new schema)
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS memories (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
