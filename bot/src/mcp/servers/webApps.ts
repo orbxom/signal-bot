@@ -117,6 +117,34 @@ const TOOLS = [
     },
   },
   {
+    name: 'edit_web_app',
+    title: 'Edit Web App File',
+    description:
+      'Find and replace text in a web app file. The old_text must match exactly once in the file. Use this for surgical edits instead of rewriting entire files.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        site_name: {
+          type: 'string',
+          description: 'Site name to edit',
+        },
+        filename: {
+          type: 'string',
+          description: 'Filename to edit. Defaults to "index.html".',
+        },
+        old_text: {
+          type: 'string',
+          description: 'Exact text to find (must appear exactly once in the file)',
+        },
+        new_text: {
+          type: 'string',
+          description: 'Replacement text',
+        },
+      },
+      required: ['site_name', 'old_text', 'new_text'],
+    },
+  },
+  {
     name: 'list_sites',
     title: 'List Web App Sites',
     description: 'List all web app sites with their files and sizes.',
@@ -285,6 +313,79 @@ export const webAppsServer: McpServerDefinition = {
         const content = readFileSync(filePath, 'utf-8');
         return ok(content);
       }, 'Failed to read web app');
+    },
+
+    edit_web_app(args) {
+      return catchErrors(() => {
+        const name = requireString(args, 'site_name');
+        if (name.error) return name.error;
+        const oldText = requireString(args, 'old_text');
+        if (oldText.error) return oldText.error;
+        const newText = requireString(args, 'new_text');
+        if (newText.error) return newText.error;
+
+        const nameError = validateSiteName(name.value);
+        if (nameError) return error(nameError);
+
+        const siteDir = getSiteDir(name.value);
+        if (!existsSync(siteDir)) {
+          return error(`Site "${name.value}" not found.`);
+        }
+
+        const filename = optionalString(args, 'filename', 'index.html');
+        if (filename.includes('..') || filename.includes('/') || filename.includes('\\')) {
+          return error('Invalid filename. Path traversal not allowed.');
+        }
+
+        const filePath = path.join(siteDir, filename);
+        if (!existsSync(filePath)) {
+          return error(`File "${filename}" not found in site "${name.value}".`);
+        }
+
+        const content = readFileSync(filePath, 'utf-8');
+
+        // Count occurrences
+        let count = 0;
+        let searchFrom = 0;
+        while (true) {
+          const idx = content.indexOf(oldText.value, searchFrom);
+          if (idx === -1) break;
+          count++;
+          searchFrom = idx + oldText.value.length;
+        }
+
+        if (count === 0) {
+          return error(`Text not found in ${filename}. Check for exact whitespace/indentation match.`);
+        }
+        if (count > 1) {
+          return error(
+            `Text found ${count} times in ${filename}. Provide more surrounding context to make the match unique.`,
+          );
+        }
+
+        const updated = content.replace(oldText.value, newText.value);
+        writeFileSync(filePath, updated, 'utf-8');
+
+        // Build context snippet: show ~3 lines around the edit
+        const editIdx = updated.indexOf(newText.value);
+        const lines = updated.split('\n');
+        let editLine = 0;
+        let charCount = 0;
+        for (let i = 0; i < lines.length; i++) {
+          charCount += lines[i].length + 1; // +1 for newline
+          if (charCount > editIdx) {
+            editLine = i;
+            break;
+          }
+        }
+        const snippetStart = Math.max(0, editLine - 1);
+        const snippetEnd = Math.min(lines.length, editLine + 2);
+        const snippet = lines.slice(snippetStart, snippetEnd).join('\n');
+
+        return ok(
+          `Edited ${filename} in site "${name.value}" (${updated.length} bytes).\n\nContext:\n${snippet}`,
+        );
+      }, 'Failed to edit web app');
     },
 
     list_sites() {
