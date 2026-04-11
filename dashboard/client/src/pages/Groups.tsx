@@ -51,7 +51,6 @@ export default function Groups() {
       if ('groups' in result) {
         setGroups(result.groups)
       } else {
-        // 202 admin approval — show message
         setJoinSuccess(result.message)
       }
       setUri('')
