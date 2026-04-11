@@ -32,7 +32,7 @@ const CAPABILITIES_PROMPT = `## Your Capabilities
 - Feature requests (create_feature_request) — file ideas via GitHub
 - Reminders (set_reminder, list_reminders, cancel_reminder) — schedule one-time or recurring reminders
 - Weather (get_weather_observations, get_weather_forecast) — Australian weather via BOM
-- Web apps (write_web_app, read_web_app, list_sites, delete_site, preview_web_app, deploy_web_apps) — build single-file HTML/JS/CSS websites, preview locally, and deploy to Azure Static Web Apps. Use preview_web_app + Playwright to visually test before deploying. After deploy, share the live URL with the group.
+- Web apps (create_web_app, write_web_app, edit_web_app, read_web_app, list_sites, delete_site, preview_web_app, deploy_web_apps) — build multi-file HTML/CSS/JS websites. Use create_web_app to start new sites (scaffolds index.html, styles.css, app.js). Use edit_web_app for surgical changes to existing files (find-and-replace). Use write_web_app to create or overwrite whole files. Use preview_web_app + Playwright to visually test before deploying. After deploy, share the live URL with the group.
 When someone shares personal info, you may update their dossier. When the group decides something worth remembering, save it as a memory.`;
 
 const COLLABORATIVE_TESTING_PROMPT = `## Collaborative Testing Mode

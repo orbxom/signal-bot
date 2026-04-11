@@ -27,11 +27,13 @@ describe('webApps MCP server', () => {
   });
 
   describe('tool listing', () => {
-    it('should have 7 tools', () => {
-      expect(webAppsServer.tools).toHaveLength(7);
+    it('should have 9 tools', () => {
+      expect(webAppsServer.tools).toHaveLength(9);
       const names = webAppsServer.tools.map(t => t.name);
       expect(names).toContain('write_web_app');
       expect(names).toContain('read_web_app');
+      expect(names).toContain('edit_web_app');
+      expect(names).toContain('create_web_app');
       expect(names).toContain('list_sites');
       expect(names).toContain('delete_site');
       expect(names).toContain('preview_web_app');
@@ -165,6 +167,213 @@ describe('webApps MCP server', () => {
     });
   });
 
+  describe('edit_web_app', () => {
+    it('should replace text in a file', async () => {
+      await webAppsServer.handlers.write_web_app({
+        site_name: 'edit-test',
+        content: '<h1>Hello World</h1>\n<p>Some content here</p>',
+      });
+
+      const result = await webAppsServer.handlers.edit_web_app({
+        site_name: 'edit-test',
+        old_text: 'Hello World',
+        new_text: 'Updated Title',
+      });
+      expect(result.isError).toBeFalsy();
+      const text = resultText(result);
+      expect(text).toContain('Updated Title');
+
+      const filePath = join(testDir, 'sites', 'edit-test', 'index.html');
+      const content = readFileSync(filePath, 'utf-8');
+      expect(content).toBe('<h1>Updated Title</h1>\n<p>Some content here</p>');
+    });
+
+    it('should edit a specific filename', async () => {
+      await webAppsServer.handlers.write_web_app({
+        site_name: 'edit-test',
+        filename: 'styles.css',
+        content: 'body { color: red; }',
+      });
+
+      const result = await webAppsServer.handlers.edit_web_app({
+        site_name: 'edit-test',
+        filename: 'styles.css',
+        old_text: 'red',
+        new_text: 'blue',
+      });
+      expect(result.isError).toBeFalsy();
+
+      const filePath = join(testDir, 'sites', 'edit-test', 'styles.css');
+      expect(readFileSync(filePath, 'utf-8')).toBe('body { color: blue; }');
+    });
+
+    it('should default filename to index.html', async () => {
+      await webAppsServer.handlers.write_web_app({
+        site_name: 'edit-default',
+        content: '<p>original</p>',
+      });
+
+      const result = await webAppsServer.handlers.edit_web_app({
+        site_name: 'edit-default',
+        old_text: 'original',
+        new_text: 'modified',
+      });
+      expect(result.isError).toBeFalsy();
+
+      const filePath = join(testDir, 'sites', 'edit-default', 'index.html');
+      expect(readFileSync(filePath, 'utf-8')).toBe('<p>modified</p>');
+    });
+
+    it('should error when old_text is not found', async () => {
+      await webAppsServer.handlers.write_web_app({
+        site_name: 'edit-notfound',
+        content: '<h1>Hello</h1>',
+      });
+
+      const result = await webAppsServer.handlers.edit_web_app({
+        site_name: 'edit-notfound',
+        old_text: 'Goodbye',
+        new_text: 'Hi',
+      });
+      expect(result.isError).toBe(true);
+      expect(resultText(result)).toContain('not found');
+    });
+
+    it('should error when old_text matches multiple times', async () => {
+      await webAppsServer.handlers.write_web_app({
+        site_name: 'edit-ambiguous',
+        content: '<p>hello</p>\n<p>hello</p>\n<p>hello</p>',
+      });
+
+      const result = await webAppsServer.handlers.edit_web_app({
+        site_name: 'edit-ambiguous',
+        old_text: 'hello',
+        new_text: 'bye',
+      });
+      expect(result.isError).toBe(true);
+      const text = resultText(result);
+      expect(text).toContain('multiple times');
+    });
+
+    it('should error when site does not exist', async () => {
+      const result = await webAppsServer.handlers.edit_web_app({
+        site_name: 'nonexistent',
+        old_text: 'a',
+        new_text: 'b',
+      });
+      expect(result.isError).toBe(true);
+      expect(resultText(result)).toContain('not found');
+    });
+
+    it('should error when file does not exist', async () => {
+      await webAppsServer.handlers.write_web_app({
+        site_name: 'edit-nofile',
+        content: '<h1>Hi</h1>',
+      });
+
+      const result = await webAppsServer.handlers.edit_web_app({
+        site_name: 'edit-nofile',
+        filename: 'missing.js',
+        old_text: 'a',
+        new_text: 'b',
+      });
+      expect(result.isError).toBe(true);
+      expect(resultText(result)).toContain('not found');
+    });
+
+    it('should reject path traversal in filename', async () => {
+      await webAppsServer.handlers.write_web_app({
+        site_name: 'traversal-test',
+        content: '<h1>Hi</h1>',
+      });
+      const result = await webAppsServer.handlers.edit_web_app({
+        site_name: 'traversal-test',
+        filename: '../etc/passwd',
+        old_text: 'a',
+        new_text: 'b',
+      });
+      expect(result.isError).toBe(true);
+      expect(resultText(result)).toContain('Path traversal');
+    });
+  });
+
+  describe('create_web_app', () => {
+    it('should scaffold a site with three files', async () => {
+      const result = await webAppsServer.handlers.create_web_app({
+        site_name: 'new-site',
+      });
+      expect(result.isError).toBeFalsy();
+      const text = resultText(result);
+      expect(text).toContain('new-site');
+      expect(text).toContain('index.html');
+      expect(text).toContain('styles.css');
+      expect(text).toContain('app.js');
+
+      const siteDir = join(testDir, 'sites', 'new-site');
+      expect(existsSync(join(siteDir, 'index.html'))).toBe(true);
+      expect(existsSync(join(siteDir, 'styles.css'))).toBe(true);
+      expect(existsSync(join(siteDir, 'app.js'))).toBe(true);
+    });
+
+    it('should use humanized site name as default title', async () => {
+      await webAppsServer.handlers.create_web_app({
+        site_name: 'birthday-card',
+      });
+
+      const html = readFileSync(join(testDir, 'sites', 'birthday-card', 'index.html'), 'utf-8');
+      expect(html).toContain('<title>Birthday Card</title>');
+      expect(html).toContain('Birthday Card');
+    });
+
+    it('should use custom title when provided', async () => {
+      await webAppsServer.handlers.create_web_app({
+        site_name: 'my-app',
+        title: 'My Awesome App',
+      });
+
+      const html = readFileSync(join(testDir, 'sites', 'my-app', 'index.html'), 'utf-8');
+      expect(html).toContain('<title>My Awesome App</title>');
+
+      const css = readFileSync(join(testDir, 'sites', 'my-app', 'styles.css'), 'utf-8');
+      expect(css).toContain('My Awesome App');
+
+      const js = readFileSync(join(testDir, 'sites', 'my-app', 'app.js'), 'utf-8');
+      expect(js).toContain('My Awesome App');
+    });
+
+    it('should error when site already exists', async () => {
+      await webAppsServer.handlers.write_web_app({
+        site_name: 'taken',
+        content: '<h1>Existing</h1>',
+      });
+
+      const result = await webAppsServer.handlers.create_web_app({
+        site_name: 'taken',
+      });
+      expect(result.isError).toBe(true);
+      const text = resultText(result);
+      expect(text).toContain('already exists');
+    });
+
+    it('should error for invalid site name', async () => {
+      const result = await webAppsServer.handlers.create_web_app({
+        site_name: '../bad',
+      });
+      expect(result.isError).toBe(true);
+      expect(resultText(result)).toContain('Invalid site_name');
+    });
+
+    it('should link styles.css and app.js in index.html', async () => {
+      await webAppsServer.handlers.create_web_app({
+        site_name: 'linked-test',
+      });
+
+      const html = readFileSync(join(testDir, 'sites', 'linked-test', 'index.html'), 'utf-8');
+      expect(html).toContain('styles.css');
+      expect(html).toContain('app.js');
+    });
+  });
+
   describe('list_sites', () => {
     it('should return empty when no sites', async () => {
       const result = await webAppsServer.handlers.list_sites({});
@@ -258,6 +467,34 @@ describe('webApps MCP server', () => {
       const result = await webAppsServer.handlers.deploy_web_apps({});
       expect(result.isError).toBe(true);
       expect(resultText(result)).toContain('No sites');
+    });
+
+    it('should generate a dashboard index.html with site cards', async () => {
+      await webAppsServer.handlers.write_web_app({ site_name: 'alpha', content: '<h1>A</h1>' });
+      await webAppsServer.handlers.write_web_app({
+        site_name: 'beta',
+        filename: 'index.html',
+        content: '<h1>B</h1>',
+      });
+      await webAppsServer.handlers.write_web_app({
+        site_name: 'beta',
+        filename: 'styles.css',
+        content: 'body {}',
+      });
+
+      // Deploy will fail (no real SWA CLI), but the index.html is generated before the CLI call
+      process.env.SWA_DEPLOYMENT_TOKEN = 'fake-token';
+      await webAppsServer.handlers.deploy_web_apps({}).catch(() => {});
+
+      const indexPath = join(testDir, 'sites', 'index.html');
+      expect(existsSync(indexPath)).toBe(true);
+
+      const html = readFileSync(indexPath, 'utf-8');
+      expect(html).toContain('Signal Bot Sites');
+      expect(html).toContain('alpha');
+      expect(html).toContain('beta');
+      // Should have card-like structure with file info
+      expect(html).toContain('index.html');
     });
   });
 });

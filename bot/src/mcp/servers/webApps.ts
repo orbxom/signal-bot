@@ -60,6 +60,20 @@ function getSiteDir(siteName: string): string {
   return path.join(sitesDir, siteName);
 }
 
+function validateFilename(filename: string): string | null {
+  if (filename.includes('..') || filename.includes('/') || filename.includes('\\')) {
+    return 'Invalid filename. Path traversal not allowed.';
+  }
+  return null;
+}
+
+function humanizeName(siteName: string): string {
+  return siteName
+    .split('-')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
 function stopPreviewServer(): void {
   if (previewTimer) {
     clearTimeout(previewTimer);
@@ -72,6 +86,26 @@ function stopPreviewServer(): void {
 }
 
 const TOOLS = [
+  {
+    name: 'create_web_app',
+    title: 'Create Web App',
+    description:
+      'Create a new web app site with HTML/CSS/JS scaffold. Errors if the site name is already taken. Use this to start new sites, then edit_web_app or write_web_app to add content.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        site_name: {
+          type: 'string',
+          description: 'Site name (lowercase letters, numbers, hyphens). e.g. "timer", "todo-app"',
+        },
+        title: {
+          type: 'string',
+          description: 'Page title. Defaults to humanized site name (e.g. "birthday-card" becomes "Birthday Card").',
+        },
+      },
+      required: ['site_name'],
+    },
+  },
   {
     name: 'write_web_app',
     title: 'Write Web App File',
@@ -114,6 +148,34 @@ const TOOLS = [
         },
       },
       required: ['site_name'],
+    },
+  },
+  {
+    name: 'edit_web_app',
+    title: 'Edit Web App File',
+    description:
+      'Find and replace text in a web app file. The old_text must match exactly once in the file. Use this for surgical edits instead of rewriting entire files.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        site_name: {
+          type: 'string',
+          description: 'Site name to edit',
+        },
+        filename: {
+          type: 'string',
+          description: 'Filename to edit. Defaults to "index.html".',
+        },
+        old_text: {
+          type: 'string',
+          description: 'Exact text to find (must appear exactly once in the file)',
+        },
+        new_text: {
+          type: 'string',
+          description: 'Replacement text',
+        },
+      },
+      required: ['site_name', 'old_text', 'new_text'],
     },
   },
   {
@@ -236,6 +298,47 @@ export const webAppsServer: McpServerDefinition = {
     WEB_APPS_DIR: 'webAppsDir',
   },
   handlers: {
+    create_web_app(args) {
+      return catchErrors(() => {
+        const name = requireString(args, 'site_name');
+        if (name.error) return name.error;
+
+        const nameError = validateSiteName(name.value);
+        if (nameError) return error(nameError);
+
+        const siteDir = getSiteDir(name.value);
+        if (existsSync(siteDir)) {
+          return error(
+            `Site "${name.value}" already exists. Choose a different name or use write_web_app to modify it.`,
+          );
+        }
+
+        const title = optionalString(args, 'title', humanizeName(name.value));
+
+        mkdirSync(siteDir, { recursive: true });
+
+        const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${title}</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <h1>${title}</h1>
+  <script src="app.js"></script>
+</body>
+</html>`;
+
+        writeFileSync(path.join(siteDir, 'index.html'), html, 'utf-8');
+        writeFileSync(path.join(siteDir, 'styles.css'), `/* Styles for ${title} */\n`, 'utf-8');
+        writeFileSync(path.join(siteDir, 'app.js'), `// App logic for ${title}\n`, 'utf-8');
+
+        return ok(`Created site "${name.value}" with files:\n- index.html\n- styles.css\n- app.js`);
+      }, 'Failed to create web app');
+    },
+
     write_web_app(args) {
       return catchErrors(() => {
         const name = requireString(args, 'site_name');
@@ -251,9 +354,8 @@ export const webAppsServer: McpServerDefinition = {
         }
 
         const filename = optionalString(args, 'filename', 'index.html');
-        if (filename.includes('..') || filename.includes('/') || filename.includes('\\')) {
-          return error('Invalid filename. Path traversal not allowed.');
-        }
+        const filenameError = validateFilename(filename);
+        if (filenameError) return error(filenameError);
 
         const siteDir = getSiteDir(name.value);
         mkdirSync(siteDir, { recursive: true });
@@ -277,6 +379,9 @@ export const webAppsServer: McpServerDefinition = {
         }
 
         const filename = optionalString(args, 'filename', 'index.html');
+        const filenameError = validateFilename(filename);
+        if (filenameError) return error(filenameError);
+
         const filePath = path.join(siteDir, filename);
         if (!existsSync(filePath)) {
           return error(`File "${filename}" not found in site "${name.value}".`);
@@ -285,6 +390,58 @@ export const webAppsServer: McpServerDefinition = {
         const content = readFileSync(filePath, 'utf-8');
         return ok(content);
       }, 'Failed to read web app');
+    },
+
+    edit_web_app(args) {
+      return catchErrors(() => {
+        const name = requireString(args, 'site_name');
+        if (name.error) return name.error;
+        const oldText = requireString(args, 'old_text');
+        if (oldText.error) return oldText.error;
+        const newText = requireString(args, 'new_text');
+        if (newText.error) return newText.error;
+
+        const nameError = validateSiteName(name.value);
+        if (nameError) return error(nameError);
+
+        const siteDir = getSiteDir(name.value);
+        if (!existsSync(siteDir)) {
+          return error(`Site "${name.value}" not found.`);
+        }
+
+        const filename = optionalString(args, 'filename', 'index.html');
+        const filenameError = validateFilename(filename);
+        if (filenameError) return error(filenameError);
+
+        const filePath = path.join(siteDir, filename);
+        if (!existsSync(filePath)) {
+          return error(`File "${filename}" not found in site "${name.value}".`);
+        }
+
+        const content = readFileSync(filePath, 'utf-8');
+
+        const parts = content.split(oldText.value);
+        if (parts.length === 1) {
+          return error(`Text not found in ${filename}. Check for exact whitespace/indentation match.`);
+        }
+        if (parts.length > 2) {
+          return error(
+            `Text found multiple times in ${filename}. Provide more surrounding context to make the match unique.`,
+          );
+        }
+
+        const matchIdx = parts[0].length;
+        const updated = parts[0] + newText.value + parts[1];
+        writeFileSync(filePath, updated, 'utf-8');
+
+        const editLine = parts[0].split('\n').length - 1;
+        const lines = updated.split('\n');
+        const snippetStart = Math.max(0, editLine - 1);
+        const snippetEnd = Math.min(lines.length, editLine + 2);
+        const snippet = lines.slice(snippetStart, snippetEnd).join('\n');
+
+        return ok(`Edited ${filename} in site "${name.value}" (${updated.length} bytes).\n\nContext:\n${snippet}`);
+      }, 'Failed to edit web app');
     },
 
     list_sites() {
@@ -411,13 +568,43 @@ export const webAppsServer: McpServerDefinition = {
 
           try {
             // SWA requires a root index.html — auto-generate a landing page
-            const siteLinks = entries.map(e => `<li><a href="/${e.name}/">${e.name}</a></li>`).join('\n        ');
+            const siteCards = entries
+              .map(e => {
+                const sd = path.join(sitesDir, e.name);
+                const files = readdirSync(sd);
+                const totalSize = files.reduce((sum, f) => {
+                  const stat = statSync(path.join(sd, f));
+                  return sum + stat.size;
+                }, 0);
+                const sizeKb = (totalSize / 1024).toFixed(1);
+                return `      <a href="/${e.name}/" class="card">
+        <h2>${e.name}</h2>
+        <p class="files">${files.join(', ')}</p>
+        <p class="size">${sizeKb} KB</p>
+      </a>`;
+              })
+              .join('\n');
+
             const rootIndex = `<!DOCTYPE html>
-<html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Signal Bot Sites</title>
-<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:system-ui,sans-serif;background:#1a1a2e;color:#e0e0e0;min-height:100vh;display:flex;justify-content:center;align-items:center}
-.wrap{max-width:400px;text-align:center}h1{margin-bottom:1.5rem;color:#7c3aed}ul{list-style:none}li{margin:.5rem 0}a{color:#60a5fa;text-decoration:none;font-size:1.2rem}a:hover{text-decoration:underline}</style>
-</head><body><div class="wrap"><h1>Signal Bot Sites</h1><ul>${siteLinks}</ul></div></body></html>`;
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:system-ui,sans-serif;background:#1a1a2e;color:#e0e0e0;min-height:100vh;padding:2rem}
+h1{text-align:center;color:#7c3aed;margin-bottom:2rem;font-size:1.8rem}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:1.5rem;max-width:960px;margin:0 auto}
+.card{display:block;background:#16213e;border-radius:12px;padding:1.5rem;text-decoration:none;color:#e0e0e0;transition:transform .15s,box-shadow .15s}
+.card:hover{transform:translateY(-3px);box-shadow:0 6px 20px rgba(124,58,237,.3)}
+.card h2{color:#60a5fa;font-size:1.2rem;margin-bottom:.5rem}
+.card .files{font-size:.85rem;color:#94a3b8;margin-bottom:.25rem}
+.card .size{font-size:.8rem;color:#64748b}
+</style>
+</head><body>
+<h1>Signal Bot Sites</h1>
+<div class="grid">
+${siteCards}
+</div>
+</body></html>`;
             writeFileSync(path.join(sitesDir, 'index.html'), rootIndex, 'utf-8');
 
             const swaBin = resolveSwaCliPath();

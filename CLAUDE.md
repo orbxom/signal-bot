@@ -56,6 +56,7 @@ Image attachments sent in Signal messages are stored as BLOBs in the `attachment
 - `signal.ts` — Send messages and images via Signal (2 tools)
 - `images.ts` — View image attachments stored in DB (1 tool)
 - `personas.ts` — Bot persona CRUD + switching (6 tools)
+- `webApps.ts` — create/write/edit/read web app sites, preview locally, deploy to Azure Static Web Apps (9 tools)
 
 ### Adding a New MCP Server
 1. Create `bot/src/mcp/servers/newThing.ts` using shared `ok()`, `error()`, `requireString()`, etc.
