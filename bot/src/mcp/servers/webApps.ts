@@ -420,35 +420,21 @@ export const webAppsServer: McpServerDefinition = {
 
         const content = readFileSync(filePath, 'utf-8');
 
-        let count = 0;
-        let matchIdx = -1;
-        let searchFrom = 0;
-        while (true) {
-          const idx = content.indexOf(oldText.value, searchFrom);
-          if (idx === -1) break;
-          if (count === 0) matchIdx = idx;
-          count++;
-          if (count > 1) break;
-          searchFrom = idx + oldText.value.length;
-        }
-
-        if (count === 0) {
+        const parts = content.split(oldText.value);
+        if (parts.length === 1) {
           return error(`Text not found in ${filename}. Check for exact whitespace/indentation match.`);
         }
-        if (count > 1) {
+        if (parts.length > 2) {
           return error(
             `Text found multiple times in ${filename}. Provide more surrounding context to make the match unique.`,
           );
         }
 
-        const updated = content.replace(oldText.value, newText.value);
+        const matchIdx = parts[0].length;
+        const updated = parts[0] + newText.value + parts[1];
         writeFileSync(filePath, updated, 'utf-8');
 
-        // Find the edit line in the original content (stable offset)
-        let editLine = 0;
-        for (let i = 0; i < matchIdx; i++) {
-          if (content[i] === '\n') editLine++;
-        }
+        const editLine = parts[0].split('\n').length - 1;
         const lines = updated.split('\n');
         const snippetStart = Math.max(0, editLine - 1);
         const snippetEnd = Math.min(lines.length, editLine + 2);
