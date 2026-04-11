@@ -68,6 +68,7 @@ describe('MessageHandler', () => {
         sendMessage: vi.fn().mockResolvedValue(undefined),
         sendTyping: vi.fn().mockResolvedValue(undefined),
         stopTyping: vi.fn().mockResolvedValue(undefined),
+        fetchAttachment: vi.fn().mockResolvedValue(null),
         readAttachmentFile: vi.fn().mockReturnValue(null),
       } as any;
     });
@@ -919,8 +920,35 @@ describe('MessageHandler', () => {
     });
 
     describe('image attachment ingestion', () => {
-      it('should save image attachment data to storage on receive', async () => {
+      it('should save image attachment via HTTP fetch', async () => {
         const fakeBuffer = Buffer.from('fake image');
+        mockSignal.fetchAttachment = vi.fn().mockResolvedValue(fakeBuffer);
+
+        const handler = new MessageHandler(['@bot'], {
+          storage: mockStorage,
+          llmClient: mockLLM,
+          signalClient: mockSignal,
+          appConfig: makeAppConfig({ attachmentsDir: '/data/attachments' }),
+        });
+
+        await handler.handleMessage('g1', 'Alice', '@bot check this', 1000, [
+          { id: 'img-abc', contentType: 'image/jpeg', size: 50000, filename: 'photo.jpg' },
+        ]);
+
+        expect(mockSignal.fetchAttachment).toHaveBeenCalledWith('img-abc');
+        expect(mockStorage.saveAttachment).toHaveBeenCalledWith(
+          expect.objectContaining({
+            id: 'img-abc',
+            groupId: 'g1',
+            contentType: 'image/jpeg',
+            data: fakeBuffer,
+          }),
+        );
+      });
+
+      it('should fall back to disk read when HTTP fetch returns null', async () => {
+        const fakeBuffer = Buffer.from('disk image');
+        mockSignal.fetchAttachment = vi.fn().mockResolvedValue(null);
         mockSignal.readAttachmentFile = vi.fn().mockReturnValue({ data: fakeBuffer });
 
         const handler = new MessageHandler(['@bot'], {
@@ -934,18 +962,18 @@ describe('MessageHandler', () => {
           { id: 'img-abc', contentType: 'image/jpeg', size: 50000, filename: 'photo.jpg' },
         ]);
 
+        expect(mockSignal.fetchAttachment).toHaveBeenCalledWith('img-abc');
         expect(mockSignal.readAttachmentFile).toHaveBeenCalledWith('/data/attachments', 'img-abc');
         expect(mockStorage.saveAttachment).toHaveBeenCalledWith(
           expect.objectContaining({
             id: 'img-abc',
-            groupId: 'g1',
-            contentType: 'image/jpeg',
             data: fakeBuffer,
           }),
         );
       });
 
-      it('should not crash when attachment file is missing', async () => {
+      it('should not crash when both HTTP and disk fail', async () => {
+        mockSignal.fetchAttachment = vi.fn().mockResolvedValue(null);
         mockSignal.readAttachmentFile = vi.fn().mockReturnValue(null);
 
         const handler = new MessageHandler(['@bot'], {
@@ -962,7 +990,7 @@ describe('MessageHandler', () => {
       });
 
       it('should skip non-image attachments during ingestion', async () => {
-        mockSignal.readAttachmentFile = vi.fn();
+        mockSignal.fetchAttachment = vi.fn();
 
         const handler = new MessageHandler(['@bot'], {
           storage: mockStorage,
@@ -974,8 +1002,26 @@ describe('MessageHandler', () => {
           { id: 'voice-abc', contentType: 'audio/aac', size: 5000, filename: null },
         ]);
 
-        expect(mockSignal.readAttachmentFile).not.toHaveBeenCalled();
+        expect(mockSignal.fetchAttachment).not.toHaveBeenCalled();
         expect(mockStorage.saveAttachment).not.toHaveBeenCalled();
+      });
+
+      it('should not wait for disk fallback when HTTP succeeds', async () => {
+        const fakeBuffer = Buffer.from('http image');
+        mockSignal.fetchAttachment = vi.fn().mockResolvedValue(fakeBuffer);
+        mockSignal.readAttachmentFile = vi.fn();
+
+        const handler = new MessageHandler(['@bot'], {
+          storage: mockStorage,
+          llmClient: mockLLM,
+          signalClient: mockSignal,
+        });
+
+        await handler.handleMessage('g1', 'Alice', '@bot check this', 1000, [
+          { id: 'img-abc', contentType: 'image/jpeg', size: 50000, filename: 'photo.jpg' },
+        ]);
+
+        expect(mockSignal.readAttachmentFile).not.toHaveBeenCalled();
       });
     });
 
