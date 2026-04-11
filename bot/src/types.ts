@@ -13,11 +13,17 @@ export interface ChatMessage {
   content: string;
 }
 
+export interface ToolCall {
+  name: string;
+  input?: Record<string, unknown>;
+}
+
 export interface LLMResponse {
   content: string;
   tokensUsed: number;
   sentViaMcp: boolean;
   mcpMessages: string[];
+  toolCalls: ToolCall[];
 }
 
 export type ReminderStatus = 'pending' | 'sent' | 'cancelled' | 'failed';

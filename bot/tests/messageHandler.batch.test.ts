@@ -73,6 +73,7 @@ describe('MessageHandler.handleMessageBatch', () => {
         tokensUsed: 25,
         sentViaMcp: false,
         mcpMessages: [],
+        toolCalls: [],
       }),
     };
 
