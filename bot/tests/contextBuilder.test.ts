@@ -185,8 +185,8 @@ describe('ContextBuilder', () => {
         nameMap,
       });
 
-      expect(chatMessages[1].content).toBe('[1970-01-01 10:00] Alice: Hello');
-      expect(chatMessages[2].content).toBe('[1970-01-01 10:00] Bob: Hi there');
+      expect(chatMessages[1].content).toBe('[1970-01-01 10:00] Alice (uuid-alice): Hello');
+      expect(chatMessages[2].content).toBe('[1970-01-01 10:00] Bob (uuid-bob): Hi there');
     });
 
     it('should fall back to raw sender ID when nameMap has no entry', () => {
@@ -341,7 +341,7 @@ describe('ContextBuilder', () => {
         nameMap,
       });
 
-      expect(chatMessages[1].content).toContain('Alice: Hello');
+      expect(chatMessages[1].content).toContain('Alice (uuid-alice): Hello');
       expect(chatMessages[1].content).not.toBe('[CACHED] uuid-alice: Hello');
     });
 
@@ -457,7 +457,7 @@ describe('ContextBuilder', () => {
       const nameMap = new Map([['uuid-alice', 'Alice']]);
 
       const result = builder.formatMessageForContext(msg, nameMap);
-      expect(result).toBe('[1970-01-01 10:00] Alice: Hello');
+      expect(result).toBe('[1970-01-01 10:00] Alice (uuid-alice): Hello');
     });
 
     it('should include voice attachment lines', () => {

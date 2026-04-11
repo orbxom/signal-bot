@@ -128,8 +128,9 @@ export class ContextBuilder {
     if (msg.isBot) {
       content = `[${ts}] ${msg.content}`;
     } else {
-      const displayName = nameMap?.get(msg.sender) ?? msg.sender;
-      content = `[${ts}] ${displayName}: ${msg.content}`;
+      const displayName = nameMap?.get(msg.sender);
+      const senderLabel = displayName ? `${displayName} (${msg.sender})` : msg.sender;
+      content = `[${ts}] ${senderLabel}: ${msg.content}`;
     }
     const voiceLines = msg.attachments ? this.formatVoiceAttachmentLines(msg.attachments) : [];
     const imageLines = msg.attachments ? this.formatImageAttachmentLines(msg.attachments) : [];

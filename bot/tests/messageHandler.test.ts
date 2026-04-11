@@ -364,10 +364,8 @@ describe('MessageHandler', () => {
       const messages = callArgs[0];
       const aliceMsg = messages.find((m: { role: string; content: string }) => m.content.includes('Previous message'));
       const bobMsg = messages.find((m: { role: string; content: string }) => m.content.includes('Another message'));
-      expect(aliceMsg.content).toContain('Alice: Previous message');
-      expect(aliceMsg.content).not.toContain('+61400000001');
-      expect(bobMsg.content).toContain('Bob: Another message');
-      expect(bobMsg.content).not.toContain('+61400000002');
+      expect(aliceMsg.content).toContain('Alice (+61400000001): Previous message');
+      expect(bobMsg.content).toContain('Bob (+61400000002): Another message');
     });
 
     it('should resolve Current requester to display name using dossier data', async () => {
