@@ -3,9 +3,13 @@ import { useApi, apiCall } from '../hooks/useApi'
 import DataTable from '../components/DataTable'
 
 interface Memory {
+  id: number
   groupId: string
-  topic: string
-  content: string
+  title: string
+  description: string | null
+  content: string | null
+  type: string
+  tags: string[]
   createdAt: number
   updatedAt: number
 }
@@ -13,21 +17,30 @@ interface Memory {
 export default function Memories() {
   const [groupFilter, setGroupFilter] = useState('')
   const [editing, setEditing] = useState<Memory | null>(null)
+  const [editTitle, setEditTitle] = useState('')
+  const [editDescription, setEditDescription] = useState('')
   const [editContent, setEditContent] = useState('')
+  const [editType, setEditType] = useState('')
 
   const { data: memories, loading, refetch } =
     useApi<Memory[]>(`/api/memories${groupFilter ? `?groupId=${encodeURIComponent(groupFilter)}` : ''}`, [groupFilter])
 
   const startEdit = (m: Memory) => {
     setEditing(m)
-    setEditContent(m.content)
+    setEditTitle(m.title)
+    setEditDescription(m.description ?? '')
+    setEditContent(m.content ?? '')
+    setEditType(m.type)
   }
 
   const saveEdit = async () => {
     if (!editing) return
     try {
-      await apiCall('PUT', `/api/memories/${encodeURIComponent(editing.groupId)}/${encodeURIComponent(editing.topic)}`, {
-        content: editContent,
+      await apiCall('PUT', `/api/memories/${editing.id}`, {
+        title: editTitle,
+        description: editDescription || undefined,
+        content: editContent || undefined,
+        type: editType,
       })
       setEditing(null)
       refetch()
@@ -39,7 +52,7 @@ export default function Memories() {
   const deleteMemory = async (m: Memory) => {
     if (!confirm('Delete this memory?')) return
     try {
-      await apiCall('DELETE', `/api/memories/${encodeURIComponent(m.groupId)}/${encodeURIComponent(m.topic)}`)
+      await apiCall('DELETE', `/api/memories/${m.id}`)
       refetch()
     } catch (err) {
       alert(`Failed to delete memory: ${(err as Error).message}`)
@@ -48,10 +61,13 @@ export default function Memories() {
 
   const columns = [
     { key: 'groupId', header: 'Group', render: (m: Memory) => m.groupId.slice(0, 8) + '...' },
-    { key: 'topic', header: 'Topic' },
-    { key: 'content', header: 'Content', render: (m: Memory) => (
-      <span title={m.content}>{m.content.length > 60 ? m.content.slice(0, 60) + '...' : m.content}</span>
-    )},
+    { key: 'title', header: 'Title' },
+    { key: 'type', header: 'Type' },
+    { key: 'tags', header: 'Tags', render: (m: Memory) => m.tags.length > 0 ? m.tags.join(', ') : '' },
+    { key: 'content', header: 'Content', render: (m: Memory) => {
+      const text = m.content ?? ''
+      return <span title={text}>{text.length > 60 ? text.slice(0, 60) + '...' : text}</span>
+    }},
     { key: 'actions', header: '', render: (m: Memory) => (
       <div style={{ display: 'flex', gap: '0.5rem' }}>
         <button onClick={() => startEdit(m)} className="btn">Edit</button>
@@ -77,7 +93,32 @@ export default function Memories() {
 
       {editing && (
         <div className="edit-panel">
-          <h3>Editing: {editing.topic}</h3>
+          <h3>Editing: {editing.title}</h3>
+          <div className="form-group">
+            <label>Title</label>
+            <input
+              className="form-input"
+              value={editTitle}
+              onChange={e => setEditTitle(e.target.value)}
+            />
+          </div>
+          <div className="form-group">
+            <label>Type</label>
+            <input
+              className="form-input"
+              value={editType}
+              onChange={e => setEditType(e.target.value)}
+            />
+          </div>
+          <div className="form-group">
+            <label>Description</label>
+            <textarea
+              className="form-input"
+              value={editDescription}
+              onChange={e => setEditDescription(e.target.value)}
+              rows={2}
+            />
+          </div>
           <div className="form-group">
             <label>Content</label>
             <textarea

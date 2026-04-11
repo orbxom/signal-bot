@@ -14,18 +14,17 @@ export function createMemoryRoutes(storage: Storage): Router {
     res.json(memories);
   });
 
-  router.put('/memories/:groupId/:topic', (req, res) => {
-    const { content } = req.body;
-    try {
-      const memory = storage.memories.upsert(req.params.groupId, req.params.topic, content);
-      res.json(memory);
-    } catch (err) {
-      res.status(400).json({ error: (err as Error).message });
-    }
+  router.put('/memories/:id', (req, res) => {
+    const id = Number(req.params.id);
+    const { title, description, content, type } = req.body;
+    const memory = storage.memories.update(id, { title, description, content, type });
+    if (!memory) return res.status(404).json({ error: 'Memory not found' });
+    res.json(memory);
   });
 
-  router.delete('/memories/:groupId/:topic', (req, res) => {
-    const success = storage.memories.delete(req.params.groupId, req.params.topic);
+  router.delete('/memories/:id', (req, res) => {
+    const id = Number(req.params.id);
+    const success = storage.memories.deleteById(id);
     if (!success) return res.status(404).json({ success: false });
     res.json({ success: true });
   });

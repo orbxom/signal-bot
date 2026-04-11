@@ -273,6 +273,34 @@ export class MemoryStore {
     return this.search(groupId, {}, 1000);
   }
 
+  listAll(opts?: { groupId?: string; limit?: number; offset?: number }): MemoryWithTags[] {
+    if (opts?.groupId) {
+      return this.search(opts.groupId, {}, opts?.limit ?? 100);
+    }
+
+    return this.conn.runOp('list all memories', () => {
+      const limit = Math.min(opts?.limit ?? 100, 1000);
+      const offset = opts?.offset ?? 0;
+
+      const sql = `
+        SELECT m.*, GROUP_CONCAT(mt.tag) as tagsCsv
+        FROM memories m
+        LEFT JOIN memory_tags mt ON mt.memoryId = m.id
+        GROUP BY m.id
+        ORDER BY m.updatedAt DESC
+        LIMIT ? OFFSET ?
+      `;
+
+      const rows = this.conn.db.prepare(sql).all(limit, offset) as Array<
+        Omit<MemoryWithTags, 'tags'> & { tagsCsv: string | null }
+      >;
+      return rows.map(row => {
+        const { tagsCsv, ...rest } = row;
+        return { ...rest, tags: tagsCsv ? tagsCsv.split(',').sort() : [] };
+      });
+    });
+  }
+
   deleteOldDailies(groupId: string, cutoffTitle: string): number {
     return this.conn.runOp('delete old dailies', () => {
       const result = this.deleteOldDailies_.run(groupId, cutoffTitle);
