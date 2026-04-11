@@ -252,7 +252,7 @@ describe('webApps MCP server', () => {
       });
       expect(result.isError).toBe(true);
       const text = resultText(result);
-      expect(text).toContain('3 times');
+      expect(text).toContain('multiple times');
     });
 
     it('should error when site does not exist', async () => {

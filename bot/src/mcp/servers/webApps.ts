@@ -60,6 +60,13 @@ function getSiteDir(siteName: string): string {
   return path.join(sitesDir, siteName);
 }
 
+function validateFilename(filename: string): string | null {
+  if (filename.includes('..') || filename.includes('/') || filename.includes('\\')) {
+    return 'Invalid filename. Path traversal not allowed.';
+  }
+  return null;
+}
+
 function humanizeName(siteName: string): string {
   return siteName
     .split('-')
@@ -347,9 +354,8 @@ export const webAppsServer: McpServerDefinition = {
         }
 
         const filename = optionalString(args, 'filename', 'index.html');
-        if (filename.includes('..') || filename.includes('/') || filename.includes('\\')) {
-          return error('Invalid filename. Path traversal not allowed.');
-        }
+        const filenameError = validateFilename(filename);
+        if (filenameError) return error(filenameError);
 
         const siteDir = getSiteDir(name.value);
         mkdirSync(siteDir, { recursive: true });
@@ -373,6 +379,9 @@ export const webAppsServer: McpServerDefinition = {
         }
 
         const filename = optionalString(args, 'filename', 'index.html');
+        const filenameError = validateFilename(filename);
+        if (filenameError) return error(filenameError);
+
         const filePath = path.join(siteDir, filename);
         if (!existsSync(filePath)) {
           return error(`File "${filename}" not found in site "${name.value}".`);
@@ -401,9 +410,8 @@ export const webAppsServer: McpServerDefinition = {
         }
 
         const filename = optionalString(args, 'filename', 'index.html');
-        if (filename.includes('..') || filename.includes('/') || filename.includes('\\')) {
-          return error('Invalid filename. Path traversal not allowed.');
-        }
+        const filenameError = validateFilename(filename);
+        if (filenameError) return error(filenameError);
 
         const filePath = path.join(siteDir, filename);
         if (!existsSync(filePath)) {
@@ -412,7 +420,6 @@ export const webAppsServer: McpServerDefinition = {
 
         const content = readFileSync(filePath, 'utf-8');
 
-        // Count occurrences and track match position
         let count = 0;
         let matchIdx = -1;
         let searchFrom = 0;
@@ -421,6 +428,7 @@ export const webAppsServer: McpServerDefinition = {
           if (idx === -1) break;
           if (count === 0) matchIdx = idx;
           count++;
+          if (count > 1) break;
           searchFrom = idx + oldText.value.length;
         }
 
@@ -429,25 +437,19 @@ export const webAppsServer: McpServerDefinition = {
         }
         if (count > 1) {
           return error(
-            `Text found ${count} times in ${filename}. Provide more surrounding context to make the match unique.`,
+            `Text found multiple times in ${filename}. Provide more surrounding context to make the match unique.`,
           );
         }
 
         const updated = content.replace(oldText.value, newText.value);
         writeFileSync(filePath, updated, 'utf-8');
 
-        // Build context snippet: show ~3 lines around the edit
-        const editIdx = matchIdx;
-        const lines = updated.split('\n');
+        // Find the edit line in the original content (stable offset)
         let editLine = 0;
-        let charCount = 0;
-        for (let i = 0; i < lines.length; i++) {
-          charCount += lines[i].length + 1; // +1 for newline
-          if (charCount > editIdx) {
-            editLine = i;
-            break;
-          }
+        for (let i = 0; i < matchIdx; i++) {
+          if (content[i] === '\n') editLine++;
         }
+        const lines = updated.split('\n');
         const snippetStart = Math.max(0, editLine - 1);
         const snippetEnd = Math.min(lines.length, editLine + 2);
         const snippet = lines.slice(snippetStart, snippetEnd).join('\n');
