@@ -92,7 +92,7 @@ async function main() {
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);
 
-  process.on('unhandledRejection', reason => {
+  process.on('unhandledRejection', (reason) => {
     logger.error('Unhandled rejection:', reason);
     sendErrorNotification(signalClient, config, reason).finally(() => {
       process.exit(1);
