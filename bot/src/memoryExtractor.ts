@@ -6,7 +6,7 @@ import { SpawnLimiter } from './spawnLimiter';
 // --- Constants ---
 
 const DEBOUNCE_MS = 5000;
-const READ_TIMEOUT_MS = 10_000;
+const READ_TIMEOUT_MS = 30_000;
 const WRITE_TIMEOUT_MS = 60_000;
 const CLI_PATH = path.resolve(__dirname, 'memory/cli.ts');
 
