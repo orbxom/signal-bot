@@ -122,7 +122,7 @@ describe('ClaudeCLIClient', () => {
           '-p',
           'Hi',
           '--output-format',
-          'json',
+          'stream-json',
           '--max-turns',
           '1',
           '--no-session-persistence',
@@ -811,6 +811,33 @@ describe('ClaudeCLIClient', () => {
       const result = parseClaudeOutput(output);
       expect(result.sentViaMcp).toBe(true);
       expect(result.mcpMessages).toEqual(['Hi there']);
+    });
+
+    it('should use MCP send_message as content when result is empty (stream-json)', () => {
+      // With stream-json format, assistant entries are included so MCP calls are visible
+      const output = [
+        JSON.stringify({ type: 'system', subtype: 'init', session_id: 'test' }),
+        JSON.stringify({
+          type: 'assistant',
+          message: {
+            content: [
+              { type: 'tool_use', name: 'mcp__images__view_image', input: { attachment_id: 'abc' } },
+            ],
+          },
+        }),
+        JSON.stringify({
+          type: 'assistant',
+          message: {
+            content: [
+              { type: 'tool_use', name: 'mcp__signal__send_message', input: { message: 'I can see the image!' } },
+            ],
+          },
+        }),
+        JSON.stringify({ type: 'result', is_error: false, result: '', usage: { output_tokens: 474 } }),
+      ].join('\n');
+      const result = parseClaudeOutput(output);
+      expect(result.content).toBe('I can see the image!');
+      expect(result.sentViaMcp).toBe(true);
     });
 
     it('should fall back to assistant text when result has is_error', () => {

@@ -256,7 +256,7 @@ export class ClaudeCLIClient implements LLMClient {
       '-p',
       prompt,
       '--output-format',
-      'json',
+      'stream-json',
       '--max-turns',
       String(this.maxTurns),
       '--no-session-persistence',
