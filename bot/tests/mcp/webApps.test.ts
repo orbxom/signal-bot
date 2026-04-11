@@ -280,6 +280,21 @@ describe('webApps MCP server', () => {
       expect(result.isError).toBe(true);
       expect(resultText(result)).toContain('not found');
     });
+
+    it('should reject path traversal in filename', async () => {
+      await webAppsServer.handlers.write_web_app({
+        site_name: 'traversal-test',
+        content: '<h1>Hi</h1>',
+      });
+      const result = await webAppsServer.handlers.edit_web_app({
+        site_name: 'traversal-test',
+        filename: '../etc/passwd',
+        old_text: 'a',
+        new_text: 'b',
+      });
+      expect(result.isError).toBe(true);
+      expect(resultText(result)).toContain('Path traversal');
+    });
   });
 
   describe('list_sites', () => {

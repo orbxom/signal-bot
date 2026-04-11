@@ -344,12 +344,14 @@ export const webAppsServer: McpServerDefinition = {
 
         const content = readFileSync(filePath, 'utf-8');
 
-        // Count occurrences
+        // Count occurrences and track match position
         let count = 0;
+        let matchIdx = -1;
         let searchFrom = 0;
         while (true) {
           const idx = content.indexOf(oldText.value, searchFrom);
           if (idx === -1) break;
+          if (count === 0) matchIdx = idx;
           count++;
           searchFrom = idx + oldText.value.length;
         }
@@ -367,7 +369,7 @@ export const webAppsServer: McpServerDefinition = {
         writeFileSync(filePath, updated, 'utf-8');
 
         // Build context snippet: show ~3 lines around the edit
-        const editIdx = updated.indexOf(newText.value);
+        const editIdx = matchIdx;
         const lines = updated.split('\n');
         let editLine = 0;
         let charCount = 0;
