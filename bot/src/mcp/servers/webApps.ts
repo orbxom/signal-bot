@@ -60,6 +60,13 @@ function getSiteDir(siteName: string): string {
   return path.join(sitesDir, siteName);
 }
 
+function humanizeName(siteName: string): string {
+  return siteName
+    .split('-')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
 function stopPreviewServer(): void {
   if (previewTimer) {
     clearTimeout(previewTimer);
@@ -72,6 +79,27 @@ function stopPreviewServer(): void {
 }
 
 const TOOLS = [
+  {
+    name: 'create_web_app',
+    title: 'Create Web App',
+    description:
+      'Create a new web app site with HTML/CSS/JS scaffold. Errors if the site name is already taken. Use this to start new sites, then edit_web_app or write_web_app to add content.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        site_name: {
+          type: 'string',
+          description: 'Site name (lowercase letters, numbers, hyphens). e.g. "timer", "todo-app"',
+        },
+        title: {
+          type: 'string',
+          description:
+            'Page title. Defaults to humanized site name (e.g. "birthday-card" becomes "Birthday Card").',
+        },
+      },
+      required: ['site_name'],
+    },
+  },
   {
     name: 'write_web_app',
     title: 'Write Web App File',
@@ -264,6 +292,49 @@ export const webAppsServer: McpServerDefinition = {
     WEB_APPS_DIR: 'webAppsDir',
   },
   handlers: {
+    create_web_app(args) {
+      return catchErrors(() => {
+        const name = requireString(args, 'site_name');
+        if (name.error) return name.error;
+
+        const nameError = validateSiteName(name.value);
+        if (nameError) return error(nameError);
+
+        const siteDir = getSiteDir(name.value);
+        if (existsSync(siteDir)) {
+          return error(
+            `Site "${name.value}" already exists. Choose a different name or use write_web_app to modify it.`,
+          );
+        }
+
+        const title = optionalString(args, 'title', humanizeName(name.value));
+
+        mkdirSync(siteDir, { recursive: true });
+
+        const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${title}</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <h1>${title}</h1>
+  <script src="app.js"></script>
+</body>
+</html>`;
+
+        writeFileSync(path.join(siteDir, 'index.html'), html, 'utf-8');
+        writeFileSync(path.join(siteDir, 'styles.css'), `/* Styles for ${title} */\n`, 'utf-8');
+        writeFileSync(path.join(siteDir, 'app.js'), `// App logic for ${title}\n`, 'utf-8');
+
+        return ok(
+          `Created site "${name.value}" with files:\n- index.html\n- styles.css\n- app.js`,
+        );
+      }, 'Failed to create web app');
+    },
+
     write_web_app(args) {
       return catchErrors(() => {
         const name = requireString(args, 'site_name');
