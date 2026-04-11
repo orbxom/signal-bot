@@ -7,7 +7,7 @@ import { Storage } from '../src/storage';
 
 // Mock child_process.spawn to simulate Claude CLI
 const mockSpawn = vi.fn();
-vi.mock('node:child_process', async (importOriginal) => {
+vi.mock('node:child_process', async importOriginal => {
   const actual = await importOriginal<typeof import('node:child_process')>();
   return { ...actual, spawn: (...args: unknown[]) => mockSpawn(...args) };
 });
@@ -136,10 +136,13 @@ describe('MemoryExtractor', () => {
     });
 
     it('should handle JSON wrapped in markdown code fences', async () => {
-      const fencedJson = '```json\n' + JSON.stringify({
-        dossierUpdates: [{ action: 'update', personId: 'user-2', displayName: 'Bob', notes: 'Loves hiking' }],
-        memoryUpdates: [],
-      }) + '\n```';
+      const fencedJson =
+        '```json\n' +
+        JSON.stringify({
+          dossierUpdates: [{ action: 'update', personId: 'user-2', displayName: 'Bob', notes: 'Loves hiking' }],
+          memoryUpdates: [],
+        }) +
+        '\n```';
 
       mockSpawn.mockReturnValue(
         fakeChild(JSON.stringify([{ type: 'result', result: fencedJson, is_error: false, usage: {} }])),
@@ -203,6 +206,21 @@ describe('MemoryExtractor', () => {
 
       vi.useRealTimers();
       extractor.clearTimers();
+    });
+  });
+
+  describe('error logging', () => {
+    it('should pass error as second argument to logger.error, not interpolated in string', async () => {
+      const { logger: mockLogger } = await import('../src/logger');
+      mockSpawn.mockReturnValue(fakeChildError(1));
+
+      await extractor.extract('group-1');
+
+      const failCall = (mockLogger.error as ReturnType<typeof vi.fn>).mock.calls.find(
+        (call: unknown[]) => typeof call[0] === 'string' && (call[0] as string).includes('extraction failed'),
+      );
+      expect(failCall).toBeDefined();
+      expect(failCall!.length).toBe(2);
     });
   });
 

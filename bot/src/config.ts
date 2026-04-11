@@ -20,6 +20,9 @@ export interface ConfigType {
   whisperModelPath: string;
   darkFactoryEnabled: string;
   darkFactoryProjectRoot: string;
+  swaDeploymentToken: string;
+  swaHostname: string;
+  webAppsDir: string;
   attachmentRetentionDays: number;
   testGroupId: string;
   collaborativeTestingMode: boolean;

@@ -7,7 +7,7 @@ import { Storage } from '../src/storage';
 
 // Mock child_process.spawn to simulate Claude CLI
 const mockSpawn = vi.fn();
-vi.mock('node:child_process', async (importOriginal) => {
+vi.mock('node:child_process', async importOriginal => {
   const actual = await importOriginal<typeof import('node:child_process')>();
   return { ...actual, spawn: (...args: unknown[]) => mockSpawn(...args) };
 });
@@ -139,11 +139,14 @@ describe('MemoryConsolidator', () => {
       isBot: false,
     });
 
-    const fencedJson = '```json\n' + JSON.stringify({
-      dossierUpdates: [{ personId: 'alice', displayName: 'Alice', notes: 'Likes painting' }],
-      memoryUpdates: [],
-      dailySummary: 'Alice mentioned painting.',
-    }) + '\n```';
+    const fencedJson =
+      '```json\n' +
+      JSON.stringify({
+        dossierUpdates: [{ personId: 'alice', displayName: 'Alice', notes: 'Likes painting' }],
+        memoryUpdates: [],
+        dailySummary: 'Alice mentioned painting.',
+      }) +
+      '\n```';
 
     mockSpawn.mockReturnValue(
       fakeChild(JSON.stringify([{ type: 'result', result: fencedJson, is_error: false, usage: {} }])),

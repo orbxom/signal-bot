@@ -57,13 +57,17 @@ export class AttachmentStore {
       const limit = Math.min(filters?.limit ?? 50, 200);
       const offset = filters?.offset ?? 0;
       if (filters?.groupId) {
-        return this.conn.db.prepare(
-          'SELECT id, groupId, sender, contentType, size, filename, timestamp FROM attachment_data WHERE groupId = ? ORDER BY timestamp DESC LIMIT ? OFFSET ?'
-        ).all(filters.groupId, limit, offset) as Omit<Attachment, 'data'>[];
+        return this.conn.db
+          .prepare(
+            'SELECT id, groupId, sender, contentType, size, filename, timestamp FROM attachment_data WHERE groupId = ? ORDER BY timestamp DESC LIMIT ? OFFSET ?',
+          )
+          .all(filters.groupId, limit, offset) as Omit<Attachment, 'data'>[];
       }
-      return this.conn.db.prepare(
-        'SELECT id, groupId, sender, contentType, size, filename, timestamp FROM attachment_data ORDER BY timestamp DESC LIMIT ? OFFSET ?'
-      ).all(limit, offset) as Omit<Attachment, 'data'>[];
+      return this.conn.db
+        .prepare(
+          'SELECT id, groupId, sender, contentType, size, filename, timestamp FROM attachment_data ORDER BY timestamp DESC LIMIT ? OFFSET ?',
+        )
+        .all(limit, offset) as Omit<Attachment, 'data'>[];
     } catch (error) {
       wrapSqliteError(error, 'list attachment metadata');
     }
@@ -72,9 +76,9 @@ export class AttachmentStore {
   getStats(): { totalSize: number; countByGroup: Array<{ groupId: string; count: number; size: number }> } {
     this.conn.ensureOpen();
     try {
-      const rows = this.conn.db.prepare(
-        'SELECT groupId, COUNT(*) as count, SUM(LENGTH(data)) as size FROM attachment_data GROUP BY groupId'
-      ).all() as Array<{ groupId: string; count: number; size: number }>;
+      const rows = this.conn.db
+        .prepare('SELECT groupId, COUNT(*) as count, SUM(LENGTH(data)) as size FROM attachment_data GROUP BY groupId')
+        .all() as Array<{ groupId: string; count: number; size: number }>;
       const totalSize = rows.reduce((sum, r) => sum + (r.size || 0), 0);
       return { totalSize, countByGroup: rows };
     } catch (error) {

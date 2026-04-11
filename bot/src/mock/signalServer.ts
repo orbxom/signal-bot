@@ -152,7 +152,7 @@ const handlers: Record<string, RpcHandler> = {
   listGroups: () => {
     return [{ id: GROUP_ID, name: 'Bot Test', isMember: true, members: [SENDER] }];
   },
-  getGroup: (params) => {
+  getGroup: params => {
     if (params.groupId === GROUP_ID) {
       return { id: GROUP_ID, name: 'Bot Test', members: [SENDER], admins: [], blocked: false };
     }

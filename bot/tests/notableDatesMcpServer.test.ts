@@ -1,5 +1,6 @@
 import type { ChildProcess } from 'node:child_process';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { getDefaultDateParts } from '../src/mcp/servers/notableDates';
 import { initializeServer, sendAndReceive, spawnMcpServer as spawnServer } from './helpers/mcpTestHelpers';
 
 describe('Notable Dates MCP Server', () => {
@@ -159,5 +160,32 @@ describe('Notable Dates MCP Server', () => {
       },
     });
     expect(result.result.isError).toBe(true);
+  });
+});
+
+describe('getDefaultDateParts', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('should use configured timezone, not system time, for default date', () => {
+    vi.useFakeTimers();
+    // 2026-01-01 23:30 UTC = 2026-01-02 13:30 in UTC+14 (Pacific/Kiritimati)
+    vi.setSystemTime(new Date('2026-01-01T23:30:00Z'));
+
+    const parts = getDefaultDateParts('Pacific/Kiritimati');
+    expect(parts.year).toBe(2026);
+    expect(parts.month).toBe(1);
+    expect(parts.day).toBe(2);
+  });
+
+  it('should return correct date for UTC timezone', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-06-15T12:00:00Z'));
+
+    const parts = getDefaultDateParts('UTC');
+    expect(parts.year).toBe(2026);
+    expect(parts.month).toBe(6);
+    expect(parts.day).toBe(15);
   });
 });

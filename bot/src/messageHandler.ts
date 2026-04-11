@@ -56,6 +56,10 @@ export class MessageHandler {
       whisperModelPath: './models/ggml-base.en.bin',
       darkFactoryEnabled: '',
       darkFactoryProjectRoot: '',
+      swaDeploymentToken: '',
+      swaHostname: '',
+      webAppsDir: '',
+      logsDir: '',
     };
     this.storage = deps.storage;
     this.llmClient = deps.llmClient;
@@ -108,7 +112,7 @@ export class MessageHandler {
     }
 
     // Skip duplicate messages
-    if (this.deduplicator.isDuplicate(groupId, sender, timestamp)) {
+    if (this.deduplicator.isDuplicate(groupId, sender, timestamp, content)) {
       logger.compact('SKIP', `(dedup) [${groupId}] ${sender}`);
       return;
     }
@@ -158,7 +162,7 @@ export class MessageHandler {
       if (this.appConfig.botPhoneNumber && msg.sender === this.appConfig.botPhoneNumber) {
         continue;
       }
-      if (this.deduplicator.isDuplicate(groupId, msg.sender, msg.timestamp)) {
+      if (this.deduplicator.isDuplicate(groupId, msg.sender, msg.timestamp, msg.content)) {
         continue;
       }
       validMessages.push(msg);

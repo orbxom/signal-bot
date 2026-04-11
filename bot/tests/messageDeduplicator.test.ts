@@ -68,4 +68,22 @@ describe('MessageDeduplicator', () => {
     // Entry 1 was evicted, so it's "new" again
     expect(dedup2.isDuplicate('g1', 'a', 1)).toBe(false);
   });
+
+  it('should not deduplicate messages with same group/sender/timestamp but different content', () => {
+    const dedup = new MessageDeduplicator();
+    expect(dedup.isDuplicate('g1', 'Alice', 1000, 'Hello')).toBe(false);
+    expect(dedup.isDuplicate('g1', 'Alice', 1000, 'Goodbye')).toBe(false);
+  });
+
+  it('should deduplicate messages with same group/sender/timestamp and same content', () => {
+    const dedup = new MessageDeduplicator();
+    expect(dedup.isDuplicate('g1', 'Alice', 1000, 'Hello')).toBe(false);
+    expect(dedup.isDuplicate('g1', 'Alice', 1000, 'Hello')).toBe(true);
+  });
+
+  it('should still deduplicate without content parameter (backward compat)', () => {
+    const dedup = new MessageDeduplicator();
+    expect(dedup.isDuplicate('g1', 'Alice', 1000)).toBe(false);
+    expect(dedup.isDuplicate('g1', 'Alice', 1000)).toBe(true);
+  });
 });

@@ -1,6 +1,6 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { ChildProcess, spawn } from 'node:child_process';
+import { type ChildProcess, spawn } from 'node:child_process';
 import http from 'node:http';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 const PORT = 19876; // unlikely to conflict
 const GROUP_ID = 'kKWs+FQPBZKe7N7CdxMjNAAjE2uWEmtBij55MOfWFU4=';
@@ -9,8 +9,14 @@ function rpc(method: string, params: Record<string, unknown> = {}): Promise<any>
   return new Promise((resolve, reject) => {
     const body = JSON.stringify({ jsonrpc: '2.0', method, params, id: '1' });
     const req = http.request(
-      { hostname: 'localhost', port: PORT, path: '/api/v1/rpc', method: 'POST', headers: { 'Content-Type': 'application/json' } },
-      (res) => {
+      {
+        hostname: 'localhost',
+        port: PORT,
+        path: '/api/v1/rpc',
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      },
+      res => {
         const chunks: Buffer[] = [];
         res.on('data', (c: Buffer) => chunks.push(c));
         res.on('end', () => {

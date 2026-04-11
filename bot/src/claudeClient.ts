@@ -51,8 +51,12 @@ export function spawnCollect(
     const timer = options.timeout
       ? setTimeout(() => {
           const partialStdout = Buffer.concat(stdoutChunks).toString();
-          logger.warn(`${cmd} timed out after ${((options.timeout || 0) / 1000).toFixed(0)}s. stderr (${stderr.length} chars): ${stderr.substring(0, 500) || '(empty)'}`);
-          logger.warn(`${cmd} partial stdout (${partialStdout.length} chars, last 1500): ${partialStdout.substring(partialStdout.length - 1500) || '(empty)'}`);
+          logger.warn(
+            `${cmd} timed out after ${((options.timeout || 0) / 1000).toFixed(0)}s. stderr (${stderr.length} chars): ${stderr.substring(0, 500) || '(empty)'}`,
+          );
+          logger.warn(
+            `${cmd} partial stdout (${partialStdout.length} chars, last 1500): ${partialStdout.substring(partialStdout.length - 1500) || '(empty)'}`,
+          );
 
           child.kill();
           setTimeout(() => {

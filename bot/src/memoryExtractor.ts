@@ -74,7 +74,7 @@ export class MemoryExtractor {
     const timer = setTimeout(() => {
       this.timers.delete(groupId);
       this.extract(groupId).catch(err => {
-        logger.error(`memory-extractor: unhandled error for group ${groupId}: ${err}`);
+        logger.error(`memory-extractor: unhandled error for group ${groupId}`, err);
       });
     }, DEBOUNCE_MS);
 
@@ -90,7 +90,7 @@ export class MemoryExtractor {
     try {
       await this.doExtract(groupId);
     } catch (err) {
-      logger.error(`memory-extractor: extraction failed for group ${groupId}: ${err}`);
+      logger.error(`memory-extractor: extraction failed for group ${groupId}`, err);
     } finally {
       this.limiter.release();
     }

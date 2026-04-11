@@ -350,7 +350,6 @@ describe('RecurringReminderStore', () => {
     });
   });
 
-
   describe('incrementFailures', () => {
     it('should increment count and return new value', () => {
       setup();

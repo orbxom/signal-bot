@@ -224,7 +224,6 @@ export class RecurringReminderStore {
     });
   }
 
-
   advanceNextDue(id: number, nextDueAt: number): void {
     this.conn.runOp('advance recurring reminder next due', () => {
       this.stmts.advanceNextDue.run(nextDueAt, Date.now(), id);

@@ -301,9 +301,11 @@ export class DatabaseConnection {
       )
     `);
     // Migrate data from old table
-    const rows = this.db.prepare(
-      'SELECT groupId, enabled, updatedAt FROM tool_notification_settings'
-    ).all() as Array<{ groupId: string; enabled: number; updatedAt: number }>;
+    const rows = this.db.prepare('SELECT groupId, enabled, updatedAt FROM tool_notification_settings').all() as Array<{
+      groupId: string;
+      enabled: number;
+      updatedAt: number;
+    }>;
     const insert = this.db.prepare(`
       INSERT OR IGNORE INTO group_settings (groupId, toolNotifications, enabled, createdAt, updatedAt)
       VALUES (?, ?, 1, ?, ?)

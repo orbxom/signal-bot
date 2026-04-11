@@ -401,9 +401,7 @@ describe('MessageStore', () => {
         { sender: 'Bob', content: 'Two', timestamp: 2000 },
         { sender: 'Charlie', content: 'Three', timestamp: 3000 },
       ]);
-      seedMessages('group2', [
-        { sender: 'Alice', content: 'Other', timestamp: 1000 },
-      ]);
+      seedMessages('group2', [{ sender: 'Alice', content: 'Other', timestamp: 1000 }]);
 
       expect(store.getCount('group1')).toBe(3);
       expect(store.getCount('group2')).toBe(1);
@@ -429,12 +427,8 @@ describe('MessageStore', () => {
 
     it('should only return timestamp for the specified group', () => {
       setup();
-      seedMessages('group1', [
-        { sender: 'Alice', content: 'Old', timestamp: 1000 },
-      ]);
-      seedMessages('group2', [
-        { sender: 'Bob', content: 'New', timestamp: 5000 },
-      ]);
+      seedMessages('group1', [{ sender: 'Alice', content: 'Old', timestamp: 1000 }]);
+      seedMessages('group2', [{ sender: 'Bob', content: 'New', timestamp: 5000 }]);
 
       expect(store.getLastTimestamp('group1')).toBe(1000);
     });

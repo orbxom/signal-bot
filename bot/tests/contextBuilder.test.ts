@@ -307,6 +307,43 @@ describe('ContextBuilder', () => {
       const builder = new ContextBuilder(defaultConfig);
       expect((builder as any).loadSkillContent).toBeUndefined();
     });
+
+    it('should use preFormatted cache when nameMap is empty', () => {
+      const builder = new ContextBuilder(defaultConfig);
+      const messages: Message[] = [
+        { id: 1, groupId: 'g1', sender: 'Alice', content: 'Hello', timestamp: 1000, isBot: false },
+      ];
+      const preFormatted = ['[CACHED] Alice: Hello'];
+      const nameMap = new Map<string, string>();
+
+      const chatMessages = builder.buildContext({
+        history: messages,
+        query: 'Query',
+        preFormatted,
+        nameMap,
+      });
+
+      expect(chatMessages[1].content).toBe('[CACHED] Alice: Hello');
+    });
+
+    it('should NOT use preFormatted cache when nameMap has entries', () => {
+      const builder = new ContextBuilder(defaultConfig);
+      const messages: Message[] = [
+        { id: 1, groupId: 'g1', sender: 'uuid-alice', content: 'Hello', timestamp: 1000, isBot: false },
+      ];
+      const preFormatted = ['[CACHED] uuid-alice: Hello'];
+      const nameMap = new Map([['uuid-alice', 'Alice']]);
+
+      const chatMessages = builder.buildContext({
+        history: messages,
+        query: 'Query',
+        preFormatted,
+        nameMap,
+      });
+
+      expect(chatMessages[1].content).toContain('Alice: Hello');
+      expect(chatMessages[1].content).not.toBe('[CACHED] uuid-alice: Hello');
+    });
   });
 
   describe('fitToTokenBudget', () => {

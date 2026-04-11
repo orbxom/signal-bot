@@ -698,7 +698,6 @@ describe('SignalClient', () => {
     });
   });
 
-
   describe('waitForReady', () => {
     let fetchMock: ReturnType<typeof vi.fn>;
 
