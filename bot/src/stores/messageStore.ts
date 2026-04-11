@@ -89,7 +89,7 @@ export class MessageStore {
         WHERE groupId = ?
           AND timestamp >= ?
           AND timestamp <= ?
-        ORDER BY timestamp ASC
+        ORDER BY timestamp DESC
         LIMIT ?
       `),
       getDistinctGroupIds: conn.db.prepare(`
@@ -209,7 +209,7 @@ export class MessageStore {
 
     try {
       const rows = this.stmts.getMessagesByDateRange.all(groupId, startTs, endTs, effectiveLimit) as MessageRow[];
-      return rows.map(mapMessageRow);
+      return rows.reverse().map(mapMessageRow);
     } catch (error) {
       wrapSqliteError(error, 'get messages by date range');
     }

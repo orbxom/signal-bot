@@ -100,9 +100,21 @@ export function createGroupRoutes(storage: Storage, signalClient: SignalClient |
   router.patch('/groups/:id/settings', (req, res) => {
     try {
       const { enabled, customTriggers, contextWindowSize, toolNotifications } = req.body;
+
+      let parsedTriggers = customTriggers;
+      if (typeof customTriggers === 'string') {
+        parsedTriggers = customTriggers.split(',').map((s: string) => s.trim()).filter((s: string) => s.length > 0);
+      }
+
+      if (contextWindowSize !== undefined && contextWindowSize !== null) {
+        if (typeof contextWindowSize !== 'number' || !Number.isInteger(contextWindowSize) || contextWindowSize <= 0) {
+          return res.status(400).json({ error: 'contextWindowSize must be a positive integer' });
+        }
+      }
+
       storage.groupSettings.upsert(req.params.id, {
         enabled,
-        customTriggers,
+        customTriggers: parsedTriggers,
         contextWindowSize,
         toolNotifications,
       });

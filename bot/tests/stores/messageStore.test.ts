@@ -345,7 +345,7 @@ describe('MessageStore', () => {
       expect(results[2].content).toBe('Third');
     });
 
-    it('should enforce limit', () => {
+    it('should enforce limit returning the most recent N messages', () => {
       setup();
       for (let i = 0; i < 10; i++) {
         store.add({
@@ -359,6 +359,32 @@ describe('MessageStore', () => {
 
       const results = store.getByDateRange('group1', 1000, 2000, 5);
       expect(results).toHaveLength(5);
+      // Should return the LAST 5 messages (timestamps 1005-1009), in chronological order
+      expect(results[0].content).toBe('Message 5');
+      expect(results[4].content).toBe('Message 9');
+    });
+
+    it('should return limited results in chronological order (oldest first)', () => {
+      setup();
+      for (let i = 0; i < 10; i++) {
+        store.add({
+          groupId: 'group1',
+          sender: 'Alice',
+          content: `Msg ${i}`,
+          timestamp: 1000 + i * 100,
+          isBot: false,
+        });
+      }
+
+      const results = store.getByDateRange('group1', 1000, 2000, 3);
+      expect(results).toHaveLength(3);
+      // Should be the 3 most recent, but in chronological order
+      expect(results[0].timestamp).toBeLessThan(results[1].timestamp);
+      expect(results[1].timestamp).toBeLessThan(results[2].timestamp);
+      // Specifically: timestamps 1700, 1800, 1900
+      expect(results[0].content).toBe('Msg 7');
+      expect(results[1].content).toBe('Msg 8');
+      expect(results[2].content).toBe('Msg 9');
     });
 
     it('should use default limit of 200', () => {

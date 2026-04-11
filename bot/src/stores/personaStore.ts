@@ -10,6 +10,7 @@ function mapPersonaRow(row: PersonaRow): Persona {
   return { ...row, isDefault: row.isDefault === 1 };
 }
 
+export const PERSONA_NAME_MAX_LENGTH = 100;
 export const PERSONA_DESCRIPTION_TOKEN_LIMIT = 2000;
 
 export const DEFAULT_PERSONA_NAME = 'Default Assistant';
@@ -109,6 +110,9 @@ export class PersonaStore {
     if (!name || name.trim() === '') {
       throw new Error('Invalid name: cannot be empty');
     }
+    if (name.length > PERSONA_NAME_MAX_LENGTH) {
+      throw new Error(`Invalid name: exceeds maximum length of ${PERSONA_NAME_MAX_LENGTH} characters`);
+    }
     if (!description || description.trim() === '') {
       throw new Error('Invalid description: cannot be empty');
     }
@@ -161,6 +165,9 @@ export class PersonaStore {
     this.conn.ensureOpen();
     if (!name || name.trim() === '') {
       throw new Error('Invalid name: cannot be empty');
+    }
+    if (name.length > PERSONA_NAME_MAX_LENGTH) {
+      throw new Error(`Invalid name: exceeds maximum length of ${PERSONA_NAME_MAX_LENGTH} characters`);
     }
     if (!description || description.trim() === '') {
       throw new Error('Invalid description: cannot be empty');

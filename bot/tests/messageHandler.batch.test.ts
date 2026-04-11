@@ -204,7 +204,7 @@ describe('MessageHandler.handleMessageBatch', () => {
   });
 
   describe('real-time mention handling', () => {
-    it('should process each real-time mention individually', async () => {
+    it('should batch multiple real-time mentions into a single LLM call', async () => {
       const now = Date.now();
       const messages = [
         makeMessage({ content: 'claude: hi', sender: '+61400111222', timestamp: now }),
@@ -213,7 +213,41 @@ describe('MessageHandler.handleMessageBatch', () => {
 
       await handler.handleMessageBatch('g1', messages);
 
-      expect(mockLLM.generateResponse).toHaveBeenCalledTimes(2);
+      expect(mockLLM.generateResponse).toHaveBeenCalledTimes(1);
+    });
+
+    it('should include concurrent message framing for batched real-time mentions', async () => {
+      const now = Date.now();
+      const messages = [
+        makeMessage({ content: 'claude: hi', sender: '+61400111222', timestamp: now }),
+        makeMessage({ content: 'claude: hey', sender: '+61400333444', timestamp: now + 100 }),
+      ];
+
+      await handler.handleMessageBatch('g1', messages);
+
+      const callArgs = (mockLLM.generateResponse as ReturnType<typeof vi.fn>).mock.calls[0];
+      const llmMessages = callArgs[0];
+      const lastUserMsg = llmMessages[llmMessages.length - 1];
+      expect(lastUserMsg.content).toContain('Multiple messages just arrived');
+      expect(lastUserMsg.content).toContain('+61400111222');
+      expect(lastUserMsg.content).toContain('+61400333444');
+      expect(lastUserMsg.content).toContain('hi');
+      expect(lastUserMsg.content).toContain('hey');
+      expect(lastUserMsg.content).not.toContain('You were offline');
+    });
+
+    it('should process a single real-time mention individually without batching framing', async () => {
+      const now = Date.now();
+      const messages = [makeMessage({ content: 'claude: hello', timestamp: now })];
+
+      await handler.handleMessageBatch('g1', messages);
+
+      expect(mockLLM.generateResponse).toHaveBeenCalledTimes(1);
+      const callArgs = (mockLLM.generateResponse as ReturnType<typeof vi.fn>).mock.calls[0];
+      const llmMessages = callArgs[0];
+      const lastUserMsg = llmMessages[llmMessages.length - 1];
+      expect(lastUserMsg.content).not.toContain('Multiple messages just arrived');
+      expect(lastUserMsg.content).toContain('hello');
     });
 
     it('should NOT include offline framing for real-time mentions', async () => {
@@ -230,7 +264,7 @@ describe('MessageHandler.handleMessageBatch', () => {
   });
 
   describe('mixed missed and real-time mentions', () => {
-    it('should batch missed mentions and process real-time ones individually', async () => {
+    it('should batch missed mentions and process single real-time one individually', async () => {
       const now = Date.now();
       const messages = [
         makeMessage({ content: 'claude: old question 1', timestamp: now - 60000 }),
@@ -241,6 +275,21 @@ describe('MessageHandler.handleMessageBatch', () => {
       await handler.handleMessageBatch('g1', messages);
 
       // 1 batched call for the 2 missed + 1 individual call for the real-time
+      expect(mockLLM.generateResponse).toHaveBeenCalledTimes(2);
+    });
+
+    it('should batch both missed and real-time mentions when each has multiple messages', async () => {
+      const now = Date.now();
+      const messages = [
+        makeMessage({ content: 'claude: old question 1', timestamp: now - 60000 }),
+        makeMessage({ content: 'claude: old question 2', timestamp: now - 30000 }),
+        makeMessage({ content: 'claude: new question 1', sender: '+61400111222', timestamp: now }),
+        makeMessage({ content: 'claude: new question 2', sender: '+61400333444', timestamp: now + 100 }),
+      ];
+
+      await handler.handleMessageBatch('g1', messages);
+
+      // 1 batched call for 2 missed + 1 batched call for 2 real-time = 2 total
       expect(mockLLM.generateResponse).toHaveBeenCalledTimes(2);
     });
   });

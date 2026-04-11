@@ -217,6 +217,135 @@ describe('groups routes', () => {
     });
   });
 
+  describe('PATCH /api/groups/:id/settings - customTriggers parsing', () => {
+    it('should convert comma-separated string to array', async () => {
+      mockStorage.groupSettings.get.mockReturnValue({ enabled: true });
+
+      const res = await request(app)
+        .patch('/api/groups/g1/settings')
+        .send({ customTriggers: 'hey bot, yo bot, sup' });
+
+      expect(res.status).toBe(200);
+      expect(mockStorage.groupSettings.upsert).toHaveBeenCalledWith('g1', expect.objectContaining({
+        customTriggers: ['hey bot', 'yo bot', 'sup'],
+      }));
+    });
+
+    it('should pass through an array as-is', async () => {
+      mockStorage.groupSettings.get.mockReturnValue({ enabled: true });
+
+      const res = await request(app)
+        .patch('/api/groups/g1/settings')
+        .send({ customTriggers: ['hey bot', 'yo bot'] });
+
+      expect(res.status).toBe(200);
+      expect(mockStorage.groupSettings.upsert).toHaveBeenCalledWith('g1', expect.objectContaining({
+        customTriggers: ['hey bot', 'yo bot'],
+      }));
+    });
+
+    it('should pass through null as-is', async () => {
+      mockStorage.groupSettings.get.mockReturnValue({ enabled: true });
+
+      const res = await request(app)
+        .patch('/api/groups/g1/settings')
+        .send({ customTriggers: null });
+
+      expect(res.status).toBe(200);
+      expect(mockStorage.groupSettings.upsert).toHaveBeenCalledWith('g1', expect.objectContaining({
+        customTriggers: null,
+      }));
+    });
+
+    it('should filter out empty strings after splitting', async () => {
+      mockStorage.groupSettings.get.mockReturnValue({ enabled: true });
+
+      const res = await request(app)
+        .patch('/api/groups/g1/settings')
+        .send({ customTriggers: 'hey bot, , ,yo bot' });
+
+      expect(res.status).toBe(200);
+      expect(mockStorage.groupSettings.upsert).toHaveBeenCalledWith('g1', expect.objectContaining({
+        customTriggers: ['hey bot', 'yo bot'],
+      }));
+    });
+
+    it('should pass through undefined when not provided', async () => {
+      mockStorage.groupSettings.get.mockReturnValue({ enabled: true });
+
+      const res = await request(app)
+        .patch('/api/groups/g1/settings')
+        .send({ enabled: true });
+
+      expect(res.status).toBe(200);
+      expect(mockStorage.groupSettings.upsert).toHaveBeenCalledWith('g1', expect.objectContaining({
+        customTriggers: undefined,
+      }));
+    });
+  });
+
+  describe('PATCH /api/groups/:id/settings - contextWindowSize validation', () => {
+    it('should reject negative contextWindowSize', async () => {
+      const res = await request(app)
+        .patch('/api/groups/g1/settings')
+        .send({ contextWindowSize: -5 });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/contextWindowSize/);
+    });
+
+    it('should reject zero contextWindowSize', async () => {
+      const res = await request(app)
+        .patch('/api/groups/g1/settings')
+        .send({ contextWindowSize: 0 });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/contextWindowSize/);
+    });
+
+    it('should reject non-integer contextWindowSize', async () => {
+      const res = await request(app)
+        .patch('/api/groups/g1/settings')
+        .send({ contextWindowSize: 3.5 });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/contextWindowSize/);
+    });
+
+    it('should accept valid positive integer contextWindowSize', async () => {
+      mockStorage.groupSettings.get.mockReturnValue({ enabled: true, contextWindowSize: 50 });
+
+      const res = await request(app)
+        .patch('/api/groups/g1/settings')
+        .send({ contextWindowSize: 50 });
+
+      expect(res.status).toBe(200);
+      expect(mockStorage.groupSettings.upsert).toHaveBeenCalledWith('g1', expect.objectContaining({
+        contextWindowSize: 50,
+      }));
+    });
+
+    it('should accept null contextWindowSize (reset to default)', async () => {
+      mockStorage.groupSettings.get.mockReturnValue({ enabled: true, contextWindowSize: null });
+
+      const res = await request(app)
+        .patch('/api/groups/g1/settings')
+        .send({ contextWindowSize: null });
+
+      expect(res.status).toBe(200);
+    });
+
+    it('should accept undefined contextWindowSize (not provided)', async () => {
+      mockStorage.groupSettings.get.mockReturnValue({ enabled: true });
+
+      const res = await request(app)
+        .patch('/api/groups/g1/settings')
+        .send({ enabled: true });
+
+      expect(res.status).toBe(200);
+    });
+  });
+
   describe('with null signalClient (BOT_PHONE_NUMBER not set)', () => {
     beforeEach(() => {
       app = express();

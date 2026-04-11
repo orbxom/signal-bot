@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { PERSONA_DESCRIPTION_TOKEN_LIMIT, PersonaStore } from '../../src/stores/personaStore';
+import { PERSONA_DESCRIPTION_TOKEN_LIMIT, PERSONA_NAME_MAX_LENGTH, PersonaStore } from '../../src/stores/personaStore';
 import { createTestDb, type TestDb } from '../helpers/testDb';
 
 describe('PersonaStore', () => {
@@ -55,6 +55,19 @@ describe('PersonaStore', () => {
     it('should reject empty name', () => {
       setup();
       expect(() => store.create('', 'A description', '')).toThrow('Invalid name: cannot be empty');
+    });
+
+    it('should reject name exceeding max length', () => {
+      setup();
+      const longName = 'a'.repeat(PERSONA_NAME_MAX_LENGTH + 1);
+      expect(() => store.create(longName, 'A description', '')).toThrow('exceeds maximum length');
+    });
+
+    it('should allow name at exactly the max length', () => {
+      setup();
+      const exactName = 'a'.repeat(PERSONA_NAME_MAX_LENGTH);
+      const persona = store.create(exactName, 'A description', '');
+      expect(persona.name).toBe(exactName);
     });
 
     it('should reject empty description', () => {
@@ -154,6 +167,21 @@ describe('PersonaStore', () => {
       setup();
       const created = store.create('Pirate', 'Arr!', '');
       expect(() => store.update(created.id, '', 'Arr!', '')).toThrow('Invalid name: cannot be empty');
+    });
+
+    it('should reject name exceeding max length', () => {
+      setup();
+      const created = store.create('Pirate', 'Arr!', '');
+      const longName = 'a'.repeat(PERSONA_NAME_MAX_LENGTH + 1);
+      expect(() => store.update(created.id, longName, 'Arr!', '')).toThrow('exceeds maximum length');
+    });
+
+    it('should allow name at exactly the max length on update', () => {
+      setup();
+      const created = store.create('Pirate', 'Arr!', '');
+      const exactName = 'a'.repeat(PERSONA_NAME_MAX_LENGTH);
+      const result = store.update(created.id, exactName, 'Arr!', '');
+      expect(result).toBe(true);
     });
 
     it('should reject empty description', () => {
