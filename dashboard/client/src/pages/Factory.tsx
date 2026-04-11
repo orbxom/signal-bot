@@ -252,6 +252,7 @@ export default function Factory() {
 
   useEffect(() => {
     if (initialRuns && !runs) setRuns(initialRuns)
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally omit `runs` to only set initial state once
   }, [initialRuns])
 
   const onWsEvent = useCallback((event: { type: string; data: unknown }) => {

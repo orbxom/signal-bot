@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { useApi } from '../hooks/useApi'
 import { useWebSocket } from '../hooks/useWebSocket'
@@ -54,7 +54,7 @@ function formatBytes(bytes: number): string {
 }
 
 function formatRelativeTime(timestamp: number | null): string {
-  if (!timestamp) return 'Never'
+  if (timestamp === null) return 'Never'
   const diff = Date.now() - timestamp
   const mins = Math.floor(diff / 60000)
   if (mins < 1) return 'Just now'
@@ -127,14 +127,27 @@ export default function Dashboard() {
   const { data: groups, refetch: refetchGroups } = useApi<Group[]>('/api/groups')
   const { data: recurring, refetch: refetchRecurring } = useApi<RecurringReminder[]>('/api/recurring-reminders')
 
+  const pendingRef = useRef<{ stats: boolean; groups: boolean; recurring: boolean }>({ stats: false, groups: false, recurring: false })
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>()
+
   const onWsEvent = useCallback((event: { type: string }) => {
     if (event.type === 'message:new') {
-      refetchStats()
-      refetchGroups()
+      pendingRef.current.stats = true
+      pendingRef.current.groups = true
     } else if (event.type === 'reminder:due' || event.type === 'reminder:failed') {
-      refetchStats()
-      refetchRecurring()
+      pendingRef.current.stats = true
+      pendingRef.current.recurring = true
+    } else {
+      return
     }
+    clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => {
+      const p = pendingRef.current
+      if (p.stats) refetchStats()
+      if (p.groups) refetchGroups()
+      if (p.recurring) refetchRecurring()
+      pendingRef.current = { stats: false, groups: false, recurring: false }
+    }, 500)
   }, [refetchStats, refetchGroups, refetchRecurring])
   const { connected } = useWebSocket(onWsEvent)
 
