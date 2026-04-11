@@ -16,7 +16,7 @@ export default function Memories() {
   const [editContent, setEditContent] = useState('')
 
   const { data: memories, loading, refetch } =
-    useApi<Memory[]>(`/api/memories${groupFilter ? `?groupId=${groupFilter}` : ''}`, [groupFilter])
+    useApi<Memory[]>(`/api/memories${groupFilter ? `?groupId=${encodeURIComponent(groupFilter)}` : ''}`, [groupFilter])
 
   const startEdit = (m: Memory) => {
     setEditing(m)
@@ -25,16 +25,25 @@ export default function Memories() {
 
   const saveEdit = async () => {
     if (!editing) return
-    await apiCall('PUT', `/api/memories/${encodeURIComponent(editing.groupId)}/${encodeURIComponent(editing.topic)}`, {
-      content: editContent,
-    })
-    setEditing(null)
-    refetch()
+    try {
+      await apiCall('PUT', `/api/memories/${encodeURIComponent(editing.groupId)}/${encodeURIComponent(editing.topic)}`, {
+        content: editContent,
+      })
+      setEditing(null)
+      refetch()
+    } catch (err) {
+      alert(`Failed to save memory: ${(err as Error).message}`)
+    }
   }
 
   const deleteMemory = async (m: Memory) => {
-    await apiCall('DELETE', `/api/memories/${encodeURIComponent(m.groupId)}/${encodeURIComponent(m.topic)}`)
-    refetch()
+    if (!confirm('Delete this memory?')) return
+    try {
+      await apiCall('DELETE', `/api/memories/${encodeURIComponent(m.groupId)}/${encodeURIComponent(m.topic)}`)
+      refetch()
+    } catch (err) {
+      alert(`Failed to delete memory: ${(err as Error).message}`)
+    }
   }
 
   const columns = [

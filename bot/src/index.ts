@@ -38,6 +38,9 @@ async function main() {
     whisperModelPath: config.whisperModelPath,
     darkFactoryEnabled: config.darkFactoryEnabled,
     darkFactoryProjectRoot: config.darkFactoryProjectRoot,
+    swaDeploymentToken: config.swaDeploymentToken,
+    swaHostname: config.swaHostname,
+    webAppsDir: config.webAppsDir,
     logsDir: path.resolve(__dirname, '..', '..', 'logs'),
   };
 

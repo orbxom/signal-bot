@@ -1,7 +1,20 @@
+import { readTimezone } from '../env';
 import { catchErrors, error, ok } from '../result';
 import { runServer } from '../runServer';
 import type { McpServerDefinition, ToolDefinition } from '../types';
 import { optionalString } from '../validate';
+
+export function getDefaultDateParts(tz: string): { year: number; month: number; day: number } {
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: tz,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+  const parts = formatter.formatToParts(new Date());
+  const get = (type: string) => parts.find(p => p.type === type)?.value || '';
+  return { year: Number(get('year')), month: Number(get('month')), day: Number(get('day')) };
+}
 
 /** Curated list of notable dates, keyed by MM-DD. Includes Australian fixed-date holidays and major international observances. */
 const NOTABLE_DATES: Record<string, Array<{ name: string; description: string }>> = {
@@ -174,10 +187,7 @@ export const notableDatesServer: McpServerDefinition = {
         let day: number;
 
         if (dateArg === '') {
-          const now = new Date();
-          year = now.getFullYear();
-          month = now.getMonth() + 1;
-          day = now.getDate();
+          ({ year, month, day } = getDefaultDateParts(readTimezone()));
         } else {
           // Validate YYYY-MM-DD format
           if (!/^\d{4}-\d{2}-\d{2}$/.test(dateArg)) {

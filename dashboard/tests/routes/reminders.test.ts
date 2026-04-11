@@ -88,6 +88,7 @@ describe('reminder routes', () => {
     expect(res.body[0]).not.toHaveProperty('prompt');
   });
 
+
   it('DELETE /api/recurring-reminders/:id cancels', async () => {
     const res = await request(app).delete('/api/recurring-reminders/3?groupId=g1');
 
@@ -107,5 +108,51 @@ describe('reminder routes', () => {
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
     expect(mockStorage.recurringReminders.resetFailures).toHaveBeenCalledWith(3);
+  });
+
+  it('GET /api/reminders returns reminderText field (not text)', async () => {
+    mockStorage.reminders.listAll.mockReturnValue([{
+      id: 1,
+      groupId: 'g1',
+      requester: '+61400111222',
+      reminderText: 'Buy milk',
+      dueAt: 1710900000000,
+      status: 'pending',
+      retryCount: 0,
+      mode: 'simple',
+    }]);
+
+    const res = await request(app).get('/api/reminders?groupId=g1');
+
+    expect(res.status).toBe(200);
+    expect(res.body[0]).toHaveProperty('reminderText', 'Buy milk');
+    expect(res.body[0]).not.toHaveProperty('text');
+  });
+
+  it('DELETE /api/reminders/:id returns 404 when reminder not found', async () => {
+    mockStorage.reminders.cancel.mockReturnValue(false);
+
+    const res = await request(app).delete('/api/reminders/999?groupId=g1');
+
+    expect(res.status).toBe(404);
+    expect(res.body.success).toBe(false);
+  });
+
+  it('DELETE /api/recurring-reminders/:id returns 404 when not found', async () => {
+    mockStorage.recurringReminders.cancel.mockReturnValue(false);
+
+    const res = await request(app).delete('/api/recurring-reminders/999?groupId=g1');
+
+    expect(res.status).toBe(404);
+    expect(res.body.success).toBe(false);
+  });
+
+  it('POST /api/recurring-reminders/:id/reset-failures returns 404 when not found', async () => {
+    mockStorage.recurringReminders.resetFailures.mockReturnValue(false);
+
+    const res = await request(app).post('/api/recurring-reminders/999/reset-failures');
+
+    expect(res.status).toBe(404);
+    expect(res.body.success).toBe(false);
   });
 });

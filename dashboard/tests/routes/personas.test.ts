@@ -80,4 +80,24 @@ describe('persona routes', () => {
     expect(res.status).toBe(200);
     expect(mockStorage.personas.setActive).toHaveBeenCalledWith('g1', 2);
   });
+
+  it('PUT /api/personas/:id returns 404 when persona not found', async () => {
+    mockStorage.personas.update.mockReturnValue(false);
+
+    const res = await request(app)
+      .put('/api/personas/999')
+      .send({ name: 'Ghost', description: '', tags: '' });
+
+    expect(res.status).toBe(404);
+    expect(res.body.success).toBe(false);
+  });
+
+  it('DELETE /api/personas/:id returns 404 when persona not found', async () => {
+    mockStorage.personas.delete.mockReturnValue(false);
+
+    const res = await request(app).delete('/api/personas/999');
+
+    expect(res.status).toBe(404);
+    expect(res.body.success).toBe(false);
+  });
 });

@@ -28,8 +28,13 @@ export default function Attachments() {
   const totalCount = stats?.countByGroup.reduce((sum, g) => sum + g.count, 0) ?? 0
 
   async function handleDelete(id: string) {
-    await apiCall('DELETE', `/api/attachments/${id}`)
-    refetch()
+    if (!confirm('Delete this attachment?')) return
+    try {
+      await apiCall('DELETE', `/api/attachments/${id}`)
+      refetch()
+    } catch (err) {
+      alert(`Failed to delete attachment: ${(err as Error).message}`)
+    }
   }
 
   const columns = [

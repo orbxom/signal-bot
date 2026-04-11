@@ -48,4 +48,13 @@ describe('memory routes', () => {
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
   });
+
+  it('DELETE /api/memories/:groupId/:topic returns 404 when not found', async () => {
+    mockStorage.memories.delete.mockReturnValue(false);
+
+    const res = await request(app).delete('/api/memories/g1/nonexistent');
+
+    expect(res.status).toBe(404);
+    expect(res.body.success).toBe(false);
+  });
 });

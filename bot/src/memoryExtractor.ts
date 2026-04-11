@@ -92,7 +92,7 @@ Message: ${message}`;
       const allTitles = accumulated.flatMap(p => p.savedTitles || []);
 
       this.writeMemories(groupId, combinedMessage, allTitles.length > 0 ? allTitles : undefined).catch(err => {
-        logger.error(`memory-extractor: unhandled error for group ${groupId}: ${err}`);
+        logger.error(`memory-extractor: unhandled error for group ${groupId}`, err);
       });
     }, DEBOUNCE_MS);
 
@@ -108,7 +108,7 @@ Message: ${message}`;
     try {
       await this.doWriteMemories(groupId, conversation, savedTitles);
     } catch (err) {
-      logger.error(`memory-extractor: writeMemories failed for group ${groupId}: ${err}`);
+      logger.error(`memory-extractor: writeMemories failed for group ${groupId}`, err);
     } finally {
       this.limiter.release();
     }

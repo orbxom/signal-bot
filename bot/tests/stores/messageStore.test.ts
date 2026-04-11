@@ -345,7 +345,7 @@ describe('MessageStore', () => {
       expect(results[2].content).toBe('Third');
     });
 
-    it('should enforce limit', () => {
+    it('should enforce limit returning the most recent N messages', () => {
       setup();
       for (let i = 0; i < 10; i++) {
         store.add({
@@ -359,6 +359,32 @@ describe('MessageStore', () => {
 
       const results = store.getByDateRange('group1', 1000, 2000, 5);
       expect(results).toHaveLength(5);
+      // Should return the LAST 5 messages (timestamps 1005-1009), in chronological order
+      expect(results[0].content).toBe('Message 5');
+      expect(results[4].content).toBe('Message 9');
+    });
+
+    it('should return limited results in chronological order (oldest first)', () => {
+      setup();
+      for (let i = 0; i < 10; i++) {
+        store.add({
+          groupId: 'group1',
+          sender: 'Alice',
+          content: `Msg ${i}`,
+          timestamp: 1000 + i * 100,
+          isBot: false,
+        });
+      }
+
+      const results = store.getByDateRange('group1', 1000, 2000, 3);
+      expect(results).toHaveLength(3);
+      // Should be the 3 most recent, but in chronological order
+      expect(results[0].timestamp).toBeLessThan(results[1].timestamp);
+      expect(results[1].timestamp).toBeLessThan(results[2].timestamp);
+      // Specifically: timestamps 1700, 1800, 1900
+      expect(results[0].content).toBe('Msg 7');
+      expect(results[1].content).toBe('Msg 8');
+      expect(results[2].content).toBe('Msg 9');
     });
 
     it('should use default limit of 200', () => {
@@ -385,6 +411,52 @@ describe('MessageStore', () => {
     it('should reject limit of zero', () => {
       setup();
       expect(() => store.getByDateRange('group1', 1000, 2000, 0)).toThrow('Invalid limit: must be greater than zero');
+    });
+  });
+
+  describe('getCount', () => {
+    it('should return 0 for unknown group', () => {
+      setup();
+      expect(store.getCount('nonexistent')).toBe(0);
+    });
+
+    it('should return count of messages for a group', () => {
+      setup();
+      seedMessages('group1', [
+        { sender: 'Alice', content: 'One', timestamp: 1000 },
+        { sender: 'Bob', content: 'Two', timestamp: 2000 },
+        { sender: 'Charlie', content: 'Three', timestamp: 3000 },
+      ]);
+      seedMessages('group2', [{ sender: 'Alice', content: 'Other', timestamp: 1000 }]);
+
+      expect(store.getCount('group1')).toBe(3);
+      expect(store.getCount('group2')).toBe(1);
+    });
+  });
+
+  describe('getLastTimestamp', () => {
+    it('should return null for unknown group', () => {
+      setup();
+      expect(store.getLastTimestamp('nonexistent')).toBeNull();
+    });
+
+    it('should return the max timestamp for a group', () => {
+      setup();
+      seedMessages('group1', [
+        { sender: 'Alice', content: 'First', timestamp: 1000 },
+        { sender: 'Bob', content: 'Last', timestamp: 3000 },
+        { sender: 'Charlie', content: 'Middle', timestamp: 2000 },
+      ]);
+
+      expect(store.getLastTimestamp('group1')).toBe(3000);
+    });
+
+    it('should only return timestamp for the specified group', () => {
+      setup();
+      seedMessages('group1', [{ sender: 'Alice', content: 'Old', timestamp: 1000 }]);
+      seedMessages('group2', [{ sender: 'Bob', content: 'New', timestamp: 5000 }]);
+
+      expect(store.getLastTimestamp('group1')).toBe(1000);
     });
   });
 

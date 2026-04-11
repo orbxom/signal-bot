@@ -38,6 +38,8 @@ export class MessageStore {
     searchMessagesWithSender: Database.Statement;
     getMessagesByDateRange: Database.Statement;
     getDistinctGroupIds: Database.Statement;
+    countByGroup: Database.Statement;
+    lastTimestampByGroup: Database.Statement;
   };
 
   constructor(conn: DatabaseConnection) {
@@ -87,11 +89,17 @@ export class MessageStore {
         WHERE groupId = ?
           AND timestamp >= ?
           AND timestamp <= ?
-        ORDER BY timestamp ASC
+        ORDER BY timestamp DESC
         LIMIT ?
       `),
       getDistinctGroupIds: conn.db.prepare(`
         SELECT DISTINCT groupId FROM messages
+      `),
+      countByGroup: conn.db.prepare(`
+        SELECT COUNT(*) as count FROM messages WHERE groupId = ?
+      `),
+      lastTimestampByGroup: conn.db.prepare(`
+        SELECT MAX(timestamp) as ts FROM messages WHERE groupId = ?
       `),
     };
   }
@@ -201,10 +209,24 @@ export class MessageStore {
 
     try {
       const rows = this.stmts.getMessagesByDateRange.all(groupId, startTs, endTs, effectiveLimit) as MessageRow[];
-      return rows.map(mapMessageRow);
+      return rows.reverse().map(mapMessageRow);
     } catch (error) {
       wrapSqliteError(error, 'get messages by date range');
     }
+  }
+
+  getCount(groupId: string): number {
+    return this.conn.runOp('get message count', () => {
+      const row = this.stmts.countByGroup.get(groupId) as { count: number };
+      return row.count;
+    });
+  }
+
+  getLastTimestamp(groupId: string): number | null {
+    return this.conn.runOp('get last timestamp', () => {
+      const row = this.stmts.lastTimestampByGroup.get(groupId) as { ts: number | null };
+      return row.ts;
+    });
   }
 
   getDistinctGroupIds(): string[] {

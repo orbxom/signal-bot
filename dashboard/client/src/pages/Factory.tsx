@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { useApi } from '../hooks/useApi'
 import { useWebSocket } from '../hooks/useWebSocket'
 
@@ -250,10 +250,10 @@ export default function Factory() {
   const { data: initialRuns } = useApi<Record<string, Run>>('/api/factory/runs')
   const [runs, setRuns] = useState<Record<string, Run> | null>(null)
 
-  // Merge initial data
-  if (initialRuns && !runs) {
-    setRuns(initialRuns)
-  }
+  useEffect(() => {
+    if (initialRuns && !runs) setRuns(initialRuns)
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally omit `runs` to only set initial state once
+  }, [initialRuns])
 
   const onWsEvent = useCallback((event: { type: string; data: unknown }) => {
     if (event.type === 'factory:update') {

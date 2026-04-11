@@ -25,7 +25,9 @@ const FACTORY_RUNS_DIR = process.env.FACTORY_RUNS_DIR || path.resolve(__dirname,
 
 // Initialize core dependencies
 const storage = new Storage(DB_PATH);
-const signalClient = new SignalClient(SIGNAL_CLI_URL, BOT_PHONE_NUMBER);
+const signalClient = BOT_PHONE_NUMBER
+  ? new SignalClient(SIGNAL_CLI_URL, BOT_PHONE_NUMBER)
+  : null;
 
 const app = express();
 app.use(express.json());
@@ -62,6 +64,7 @@ app.get('*', (_req, res) => {
 // Start services and server
 dbPoller.start();
 factoryService.start();
+factoryService.on('update', (msg) => wsHub.broadcast({ type: 'factory:update', data: msg }));
 
 httpServer.listen(PORT, '0.0.0.0', () => {
   console.log(`Dashboard running at http://0.0.0.0:${PORT}`);

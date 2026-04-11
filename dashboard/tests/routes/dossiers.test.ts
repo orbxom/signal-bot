@@ -70,4 +70,13 @@ describe('dossier routes', () => {
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
   });
+
+  it('DELETE /api/dossiers/:groupId/:personId returns 404 when not found', async () => {
+    mockStorage.dossiers.delete.mockReturnValue(false);
+
+    const res = await request(app).delete('/api/dossiers/g1/nobody');
+
+    expect(res.status).toBe(404);
+    expect(res.body.success).toBe(false);
+  });
 });

@@ -415,9 +415,10 @@ describe('Storage - History Search', () => {
 
       const results = ts.storage.getMessagesByDateRange('group1', 1000, 2000, 3);
       expect(results).toHaveLength(3);
-      expect(results[0].content).toBe('Message 0');
-      expect(results[1].content).toBe('Message 1');
-      expect(results[2].content).toBe('Message 2');
+      // Returns the 3 most recent messages in chronological order
+      expect(results[0].content).toBe('Message 7');
+      expect(results[1].content).toBe('Message 8');
+      expect(results[2].content).toBe('Message 9');
     });
 
     it('should correctly map isBot field', () => {

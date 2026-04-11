@@ -22,13 +22,17 @@ export default function Personas() {
 
   const createPersona = async () => {
     if (!newName.trim()) return
-    await apiCall('POST', '/api/personas', {
-      name: newName, description: newDescription, tags: newTags,
-    })
-    setNewName('')
-    setNewDescription('')
-    setNewTags('')
-    refetch()
+    try {
+      await apiCall('POST', '/api/personas', {
+        name: newName, description: newDescription, tags: newTags,
+      })
+      setNewName('')
+      setNewDescription('')
+      setNewTags('')
+      refetch()
+    } catch (err) {
+      alert(`Failed to create persona: ${(err as Error).message}`)
+    }
   }
 
   const startEdit = (p: Persona) => {
@@ -40,16 +44,25 @@ export default function Personas() {
 
   const saveEdit = async () => {
     if (!editing) return
-    await apiCall('PUT', `/api/personas/${editing.id}`, {
-      name: editName, description: editDescription, tags: editTags,
-    })
-    setEditing(null)
-    refetch()
+    try {
+      await apiCall('PUT', `/api/personas/${editing.id}`, {
+        name: editName, description: editDescription, tags: editTags,
+      })
+      setEditing(null)
+      refetch()
+    } catch (err) {
+      alert(`Failed to save persona: ${(err as Error).message}`)
+    }
   }
 
   const deletePersona = async (id: number) => {
-    await apiCall('DELETE', `/api/personas/${id}`)
-    refetch()
+    if (!confirm('Delete this persona?')) return
+    try {
+      await apiCall('DELETE', `/api/personas/${id}`)
+      refetch()
+    } catch (err) {
+      alert(`Failed to delete persona: ${(err as Error).message}`)
+    }
   }
 
   const columns = [

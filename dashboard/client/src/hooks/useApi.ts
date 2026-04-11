@@ -1,25 +1,34 @@
 import { useState, useEffect, useCallback } from 'react'
 
-export function useApi<T>(url: string, deps: unknown[] = []) {
+export function useApi<T>(url: string | null, deps: unknown[] = []) {
   const [data, setData] = useState<T | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(url !== null)
   const [error, setError] = useState<string | null>(null)
 
-  const refetch = useCallback(async () => {
+  const refetch = useCallback(async (signal?: AbortSignal) => {
+    if (!url) {
+      setData(null)
+      setLoading(false)
+      return
+    }
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch(url)
+      const res = await fetch(url, signal ? { signal } : undefined)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       setData(await res.json())
     } catch (err) {
-      setError((err as Error).message)
+      if ((err as Error).name !== 'AbortError') setError((err as Error).message)
     } finally {
-      setLoading(false)
+      if (!signal?.aborted) setLoading(false)
     }
   }, [url])
 
-  useEffect(() => { refetch() }, [refetch, ...deps])
+  useEffect(() => {
+    const controller = new AbortController()
+    refetch(controller.signal)
+    return () => controller.abort()
+  }, [refetch, ...deps])
 
   return { data, loading, error, refetch, setData }
 }

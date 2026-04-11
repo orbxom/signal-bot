@@ -7,7 +7,7 @@ export class HealthService {
 
   constructor(
     private storage: Storage,
-    private signalClient: SignalClient,
+    private signalClient: SignalClient | null,
     private dbPath: string,
   ) {}
 
@@ -18,11 +18,13 @@ export class HealthService {
     signalCliReachable: boolean;
   }> {
     let signalCliReachable = false;
-    try {
-      await this.signalClient.listGroups();
-      signalCliReachable = true;
-    } catch {
-      // signal-cli unreachable
+    if (this.signalClient) {
+      try {
+        await this.signalClient.listGroups();
+        signalCliReachable = true;
+      } catch {
+        // signal-cli unreachable
+      }
     }
 
     let dbSize = 0;

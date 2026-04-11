@@ -21,12 +21,14 @@ export function createPersonaRoutes(storage: Storage): Router {
   router.put('/personas/:id', (req, res) => {
     const { name, description, tags } = req.body;
     const success = storage.personas.update(Number(req.params.id), name, description, tags);
-    res.json({ success });
+    if (!success) return res.status(404).json({ success: false });
+    res.json({ success: true });
   });
 
   router.delete('/personas/:id', (req, res) => {
     const success = storage.personas.delete(Number(req.params.id));
-    res.json({ success });
+    if (!success) return res.status(404).json({ success: false });
+    res.json({ success: true });
   });
 
   router.post('/groups/:groupId/persona', (req, res) => {

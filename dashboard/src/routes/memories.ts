@@ -26,7 +26,8 @@ export function createMemoryRoutes(storage: Storage): Router {
 
   router.delete('/memories/:groupId/:topic', (req, res) => {
     const success = storage.memories.delete(req.params.groupId, req.params.topic);
-    res.json({ success });
+    if (!success) return res.status(404).json({ success: false });
+    res.json({ success: true });
   });
 
   return router;

@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { useApi } from '../hooks/useApi'
 import { useWebSocket } from '../hooks/useWebSocket'
@@ -13,18 +13,18 @@ interface Health {
 }
 
 interface Stats {
-  messages: number
-  reminders: number
-  attachments: number
-  groups: number
+  groupCount: number
+  reminderCount: number
+  attachmentCount: number
+  attachmentSize: number
 }
 
 interface Group {
   id: string
   name: string
-  members: number
+  members: string[]
   messageCount: number
-  lastActivity: string | null
+  lastActivity: number | null
   enabled: boolean
 }
 
@@ -53,9 +53,9 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
-function formatRelativeTime(dateStr: string | null): string {
-  if (!dateStr) return 'Never'
-  const diff = Date.now() - new Date(dateStr).getTime()
+function formatRelativeTime(timestamp: number | null): string {
+  if (timestamp === null) return 'Never'
+  const diff = Date.now() - timestamp
   const mins = Math.floor(diff / 60000)
   if (mins < 1) return 'Just now'
   if (mins < 60) return `${mins}m ago`
@@ -123,13 +123,32 @@ const recurringColumns = [
 
 export default function Dashboard() {
   const { data: health, error: healthError } = useApi<Health>('/api/health')
-  const { data: stats } = useApi<Stats>('/api/stats')
-  const { data: groups } = useApi<Group[]>('/api/groups')
-  const { data: recurring } = useApi<RecurringReminder[]>('/api/recurring-reminders')
+  const { data: stats, refetch: refetchStats } = useApi<Stats>('/api/stats')
+  const { data: groups, refetch: refetchGroups } = useApi<Group[]>('/api/groups')
+  const { data: recurring, refetch: refetchRecurring } = useApi<RecurringReminder[]>('/api/recurring-reminders')
 
-  const onWsEvent = useCallback(() => {
-    // WebSocket events could trigger refetches in the future
-  }, [])
+  const pendingRef = useRef<{ stats: boolean; groups: boolean; recurring: boolean }>({ stats: false, groups: false, recurring: false })
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>()
+
+  const onWsEvent = useCallback((event: { type: string }) => {
+    if (event.type === 'message:new') {
+      pendingRef.current.stats = true
+      pendingRef.current.groups = true
+    } else if (event.type === 'reminder:due' || event.type === 'reminder:failed') {
+      pendingRef.current.stats = true
+      pendingRef.current.recurring = true
+    } else {
+      return
+    }
+    clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => {
+      const p = pendingRef.current
+      if (p.stats) refetchStats()
+      if (p.groups) refetchGroups()
+      if (p.recurring) refetchRecurring()
+      pendingRef.current = { stats: false, groups: false, recurring: false }
+    }, 500)
+  }, [refetchStats, refetchGroups, refetchRecurring])
   const { connected } = useWebSocket(onWsEvent)
 
   const botStatus = healthError
@@ -157,17 +176,17 @@ export default function Dashboard() {
         />
         <StatusCard
           label="Active Groups"
-          value={stats?.groups ?? '-'}
+          value={stats?.groupCount ?? '-'}
           variant="default"
         />
         <StatusCard
           label="Pending Reminders"
-          value={stats?.reminders ?? '-'}
+          value={stats?.reminderCount ?? '-'}
           variant="default"
         />
         <StatusCard
           label="Attachments"
-          value={stats?.attachments ?? '-'}
+          value={stats?.attachmentCount ?? '-'}
           variant="default"
         />
       </div>

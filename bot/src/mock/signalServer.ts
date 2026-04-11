@@ -150,8 +150,16 @@ const handlers: Record<string, RpcHandler> = {
     return {};
   },
   listGroups: () => {
-    return [{ id: GROUP_ID, name: 'Bot Test', isMember: true }];
+    return [{ id: GROUP_ID, name: 'Bot Test', isMember: true, members: [SENDER] }];
   },
+  getGroup: params => {
+    if (params.groupId === GROUP_ID) {
+      return { id: GROUP_ID, name: 'Bot Test', members: [SENDER], admins: [], blocked: false };
+    }
+    throw new Error(`Unknown group: ${params.groupId}`);
+  },
+  quitGroup: () => ({}),
+  joinGroup: () => ({}),
   // Allows queuing messages via HTTP (useful for headless/background testing)
   // Pass { image: true } to attach a test PNG image (same as /image stdin command)
   queueMessage: params => {
@@ -212,9 +220,14 @@ const server = http.createServer((req, res) => {
       return;
     }
 
-    const result = handler((params as Record<string, unknown>) || {});
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ jsonrpc: '2.0', result, id }));
+    try {
+      const result = handler((params as Record<string, unknown>) || {});
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ jsonrpc: '2.0', result, id }));
+    } catch (err) {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ jsonrpc: '2.0', error: { code: -32000, message: (err as Error).message }, id }));
+    }
   });
 });
 

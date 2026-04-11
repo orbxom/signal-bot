@@ -224,7 +224,7 @@ export class ContextBuilder {
     const contextMessages: ChatMessage[] = [{ role: 'system', content: systemContent }];
 
     // preFormatted was built without nameMap, so skip cache when names are available
-    const useCache = preFormatted && !nameMap;
+    const useCache = preFormatted && (!nameMap || nameMap.size === 0);
     for (let i = 0; i < history.length; i++) {
       const msg = history[i];
       contextMessages.push({

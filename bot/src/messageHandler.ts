@@ -55,6 +55,10 @@ export class MessageHandler {
       whisperModelPath: './models/ggml-base.en.bin',
       darkFactoryEnabled: '',
       darkFactoryProjectRoot: '',
+      swaDeploymentToken: '',
+      swaHostname: '',
+      webAppsDir: '',
+      logsDir: '',
     };
     this.storage = deps.storage;
     this.llmClient = deps.llmClient;
@@ -107,7 +111,7 @@ export class MessageHandler {
     }
 
     // Skip duplicate messages
-    if (this.deduplicator.isDuplicate(groupId, sender, timestamp)) {
+    if (this.deduplicator.isDuplicate(groupId, sender, timestamp, content)) {
       logger.compact('SKIP', `(dedup) [${groupId}] ${sender}`);
       return;
     }
@@ -157,7 +161,7 @@ export class MessageHandler {
       if (this.appConfig.botPhoneNumber && msg.sender === this.appConfig.botPhoneNumber) {
         continue;
       }
-      if (this.deduplicator.isDuplicate(groupId, msg.sender, msg.timestamp)) {
+      if (this.deduplicator.isDuplicate(groupId, msg.sender, msg.timestamp, msg.content)) {
         continue;
       }
       validMessages.push(msg);
@@ -238,8 +242,24 @@ export class MessageHandler {
       );
     }
 
-    // Real-time mentions: process individually with fresh history each time
-    for (const msg of realtime) {
+    // Real-time mentions: batch into a single LLM call if multiple, or process individually
+    if (realtime.length > 1) {
+      const latest = realtime[realtime.length - 1];
+      const freshBatch = this.storage.getRecentMessages(groupId, this.contextWindowSize);
+      const freshFitted = this.contextBuilder.fitToTokenBudget(freshBatch);
+      await this.typingManager.withTyping(groupId, () =>
+        this.processLlmRequest(
+          groupId,
+          latest.sender,
+          latest.content,
+          latest.attachments,
+          freshFitted.messages,
+          freshFitted.formatted,
+          this.buildRealtimeBatchFraming(realtime),
+        ),
+      );
+    } else if (realtime.length === 1) {
+      const msg = realtime[0];
       const freshBatch = this.storage.getRecentMessages(groupId, this.contextWindowSize);
       const freshFitted = this.contextBuilder.fitToTokenBudget(freshBatch);
       await this.typingManager.withTyping(groupId, () =>
@@ -269,6 +289,11 @@ export class MessageHandler {
       return `- [${m.sender}] (${agoStr}): "${m.content}"`;
     });
     return `You were offline and missed the following messages:\n${lines.join('\n')}\n\nRespond to all of these in a single message.`;
+  }
+
+  private buildRealtimeBatchFraming(messages: ExtractedMessage[]): string {
+    const lines = messages.map(m => `- [${m.sender}]: "${m.content}"`);
+    return `Multiple messages just arrived. Respond to all of them in a single message:\n${lines.join('\n')}`;
   }
 
   /** Assemble additional context (dossiers, memories, persona) for the LLM request. */

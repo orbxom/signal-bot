@@ -6,8 +6,9 @@ export class MessageDeduplicator {
     this.maxSize = maxSize;
   }
 
-  isDuplicate(groupId: string, sender: string, timestamp: number): boolean {
-    const key = `${groupId}:${sender}:${timestamp}`;
+  isDuplicate(groupId: string, sender: string, timestamp: number, content?: string): boolean {
+    const contentKey = content ? content.substring(0, 50) : '';
+    const key = `${groupId}:${sender}:${timestamp}:${contentKey}`;
     if (this.seen.has(key)) return true;
     this.seen.set(key, true);
     // Evict oldest one at a time (Map preserves insertion order)
