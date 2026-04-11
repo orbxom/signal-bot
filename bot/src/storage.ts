@@ -7,7 +7,7 @@ import { MessageStore } from './stores/messageStore';
 import { PersonaStore } from './stores/personaStore';
 import { RecurringReminderStore } from './stores/recurringReminderStore';
 import { ReminderStore } from './stores/reminderStore';
-import type { Attachment, Dossier, Memory, MemoryWithTags, Message, Persona, Reminder, ReminderMode } from './types';
+import type { Attachment, Dossier, MemoryWithTags, Message, Persona, Reminder, ReminderMode } from './types';
 
 export class Storage {
   private _conn: DatabaseConnection;

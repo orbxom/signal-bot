@@ -1,5 +1,4 @@
 import type { DatabaseConnection } from '../db';
-import { wrapSqliteError } from '../db';
 import type { MemoryWithTags } from '../types';
 
 export class MemoryStore {

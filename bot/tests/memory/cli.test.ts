@@ -111,7 +111,7 @@ describe('memory cli', () => {
     const searchOut = run(`search --group ${group}`);
     const match = searchOut.match(/#(\d+)/);
     expect(match).not.toBeNull();
-    const id = match![1];
+    const id = match?.[1];
     const deleteOut = run(`delete --group ${group} --id ${id}`);
     expect(deleteOut).toContain('Deleted');
     const afterDelete = run(`search --group ${group}`);

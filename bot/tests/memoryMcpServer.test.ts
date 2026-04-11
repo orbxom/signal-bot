@@ -110,7 +110,7 @@ describe('Memory MCP Server', () => {
       const text = saveResult.content[0].text;
       const idMatch = text.match(/#(\d+)/);
       expect(idMatch).toBeTruthy();
-      const id = Number(idMatch![1]);
+      const id = Number(idMatch?.[1]);
 
       const getResponse = await sendAndReceive(proc, {
         jsonrpc: '2.0',
@@ -254,7 +254,7 @@ describe('Memory MCP Server', () => {
 
       const saveResult = saveResponse.result as { content: Array<{ text: string }> };
       const idMatch = saveResult.content[0].text.match(/#(\d+)/);
-      const id = Number(idMatch![1]);
+      const id = Number(idMatch?.[1]);
 
       // Delete it
       const deleteResponse = await sendAndReceive(proc, {
@@ -304,7 +304,7 @@ describe('Memory MCP Server', () => {
 
       const saveResult = saveResponse.result as { content: Array<{ text: string }> };
       const idMatch = saveResult.content[0].text.match(/#(\d+)/);
-      const id = Number(idMatch![1]);
+      const id = Number(idMatch?.[1]);
 
       // Update it
       const updateResponse = await sendAndReceive(proc, {
@@ -343,7 +343,7 @@ describe('Memory MCP Server', () => {
 
       const saveResult = saveResponse.result as { content: Array<{ text: string }> };
       const idMatch = saveResult.content[0].text.match(/#(\d+)/);
-      const id = Number(idMatch![1]);
+      const id = Number(idMatch?.[1]);
 
       // Manage tags: add 'gamma', remove 'alpha'
       const manageResponse = await sendAndReceive(proc, {

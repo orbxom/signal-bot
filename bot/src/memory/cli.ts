@@ -18,7 +18,7 @@ function parseArgs(argv: string[]): { command: string; flags: Record<string, str
 }
 
 function formatMemory(
-  index: number,
+  _index: number,
   mem: {
     id: number;
     title: string;

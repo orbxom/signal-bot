@@ -6,7 +6,7 @@ import { withNotification } from '../notify';
 import { estimateTokens, ok } from '../result';
 import { runServer } from '../runServer';
 import type { McpServerDefinition } from '../types';
-import { optionalString, requireGroupId, requireNumber, requireString } from '../validate';
+import { requireGroupId, requireNumber, requireString } from '../validate';
 
 function formatMemory(m: MemoryWithTags): string {
   const lines = [`#${m.id} "${m.title}" [${m.type}]`];

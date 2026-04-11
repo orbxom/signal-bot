@@ -28,10 +28,10 @@ describe('GroupSettingsStore', () => {
     store.upsert('group1', { enabled: false, toolNotifications: true });
     const settings = store.get('group1');
     expect(settings).not.toBeNull();
-    expect(settings!.enabled).toBe(false);
-    expect(settings!.toolNotifications).toBe(true);
-    expect(settings!.customTriggers).toBeNull();
-    expect(settings!.contextWindowSize).toBeNull();
+    expect(settings?.enabled).toBe(false);
+    expect(settings?.toolNotifications).toBe(true);
+    expect(settings?.customTriggers).toBeNull();
+    expect(settings?.contextWindowSize).toBeNull();
   });
 
   it('isEnabled returns false for disabled group', () => {
@@ -62,7 +62,7 @@ describe('GroupSettingsStore', () => {
     store.upsert('group1', { enabled: true });
     store.upsert('group1', { enabled: false, contextWindowSize: 100 });
     const settings = store.get('group1');
-    expect(settings!.enabled).toBe(false);
-    expect(settings!.contextWindowSize).toBe(100);
+    expect(settings?.enabled).toBe(false);
+    expect(settings?.contextWindowSize).toBe(100);
   });
 });
