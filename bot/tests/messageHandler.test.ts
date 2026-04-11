@@ -851,7 +851,14 @@ describe('MessageHandler', () => {
           () =>
             new Promise(resolve => {
               setTimeout(
-                () => resolve({ content: 'Slow response', tokensUsed: 500, sentViaMcp: false, mcpMessages: [], toolCalls: [] }),
+                () =>
+                  resolve({
+                    content: 'Slow response',
+                    tokensUsed: 500,
+                    sentViaMcp: false,
+                    mcpMessages: [],
+                    toolCalls: [],
+                  }),
                 25_000,
               );
             }),

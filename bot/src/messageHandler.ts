@@ -428,7 +428,11 @@ export class MessageHandler {
       }
 
       if (this.memoryExtractor) {
-        this.memoryExtractor.scheduleExtraction(groupId, query, response.content);
+        const savedTitles = (response.toolCalls ?? [])
+          .filter(tc => tc.name === 'mcp__memories__save_memory')
+          .map(tc => tc.input?.title as string)
+          .filter(Boolean);
+        this.memoryExtractor.scheduleExtraction(groupId, query, response.content, savedTitles);
       }
 
       logger.groupEnd();

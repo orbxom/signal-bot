@@ -78,7 +78,7 @@ Message: ${message}`;
    * Schedule a debounced writeMemories call for a group.
    * Multiple calls within DEBOUNCE_MS are coalesced into one write.
    */
-  scheduleExtraction(groupId: string, message: string, botResponse: string): void {
+  scheduleExtraction(groupId: string, message: string, botResponse: string, savedTitles?: string[]): void {
     const existing = this.timers.get(groupId);
     if (existing) {
       clearTimeout(existing);
@@ -86,7 +86,7 @@ Message: ${message}`;
 
     const timer = setTimeout(() => {
       this.timers.delete(groupId);
-      this.writeMemories(groupId, message, botResponse).catch(err => {
+      this.writeMemories(groupId, message, botResponse, savedTitles).catch(err => {
         logger.error(`memory-extractor: unhandled error for group ${groupId}: ${err}`);
       });
     }, DEBOUNCE_MS);
@@ -98,10 +98,10 @@ Message: ${message}`;
    * Post-response: analyze the conversation and save anything worth remembering.
    * Uses haiku with Bash tool to run CLI commands for listing types/tags, searching, and saving.
    */
-  async writeMemories(groupId: string, message: string, botResponse: string): Promise<void> {
+  async writeMemories(groupId: string, message: string, botResponse: string, savedTitles?: string[]): Promise<void> {
     await this.limiter.acquire();
     try {
-      await this.doWriteMemories(groupId, message, botResponse);
+      await this.doWriteMemories(groupId, message, botResponse, savedTitles);
     } catch (err) {
       logger.error(`memory-extractor: writeMemories failed for group ${groupId}: ${err}`);
     } finally {
@@ -128,8 +128,13 @@ Message: ${message}`;
 
   // --- Private helpers ---
 
-  private async doWriteMemories(groupId: string, message: string, botResponse: string): Promise<void> {
-    const prompt = `You are a memory extraction assistant. Analyze the conversation and decide what's worth remembering.
+  private async doWriteMemories(
+    groupId: string,
+    message: string,
+    botResponse: string,
+    savedTitles?: string[],
+  ): Promise<void> {
+    let prompt = `You are a memory extraction assistant. Analyze the conversation and decide what's worth remembering.
 
 Use the Bash tool to run memory CLI commands:
 DB_PATH=${this.dbPath} npx tsx ${CLI_PATH} save --group ${groupId} --title "<title>" --type <type> [--description "<desc>"] [--content "<content>"] [--tags <t1,t2>]
@@ -145,6 +150,10 @@ Be aggressive but don't duplicate existing memories.
 Conversation:
 User: ${message}
 Bot: ${botResponse}`;
+
+    if (savedTitles && savedTitles.length > 0) {
+      prompt += `\n\nThe bot already saved these memories during its response — do NOT save duplicates:\n${savedTitles.map(t => `- "${t}"`).join('\n')}`;
+    }
 
     const args = [
       '-p',
