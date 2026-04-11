@@ -97,13 +97,8 @@ function main(): void {
       }
 
       case 'delete': {
-        const { id } = flags;
-        if (!id) {
-          console.error('Error: --id is required');
-          process.exit(1);
-        }
-
-        const memId = Number.parseInt(id, 10);
+        const idStr = requireFlag(flags, 'id');
+        const memId = Number.parseInt(idStr, 10);
         if (Number.isNaN(memId)) {
           console.error('Error: --id must be a number');
           process.exit(1);

@@ -62,21 +62,9 @@ Output a concise summary of relevant memories, or "No relevant memories found." 
 
 Message: ${message}`;
 
-    try {
-      const stdout = await spawnCollect('claude', this.buildHaikuArgs(prompt, 5), {
-        timeout: READ_TIMEOUT_MS,
-        env: { ...process.env, DB_PATH: this.dbPath, CLAUDECODE: '' },
-        trackChild: child => this.limiter.trackChild(child),
-      });
-
-      const text = extractResultText(stdout);
-      if (!text || text === 'No relevant memories found.') return null;
-
-      return text;
-    } catch (err) {
-      logger.warn(`memory-extractor: readMemories failed for group ${groupId}: ${err}`);
-      return null;
-    }
+    const text = await this.spawnHaiku(prompt, 5, READ_TIMEOUT_MS, `readMemories for group ${groupId}`);
+    if (!text || text === 'No relevant memories found.') return null;
+    return text;
   }
 
   /**
@@ -146,6 +134,26 @@ Message: ${message}`;
 
   // --- Private helpers ---
 
+  private async spawnHaiku(
+    prompt: string,
+    maxTurns: number,
+    timeoutMs: number,
+    label: string,
+  ): Promise<string | null> {
+    try {
+      logger.step(`memory-extractor: spawning ${label}`);
+      const stdout = await spawnCollect('claude', this.buildHaikuArgs(prompt, maxTurns), {
+        timeout: timeoutMs,
+        env: { ...process.env, DB_PATH: this.dbPath, CLAUDECODE: '' },
+        trackChild: child => this.limiter.trackChild(child),
+      });
+      return extractResultText(stdout);
+    } catch (err) {
+      logger.warn(`memory-extractor: ${label} failed: ${err}`);
+      return null;
+    }
+  }
+
   private async doWriteMemories(groupId: string, conversation: string, savedTitles?: string[]): Promise<void> {
     let prompt = `You are a memory extraction assistant. Analyze the conversation and decide what's worth remembering.
 
@@ -167,15 +175,7 @@ ${conversation}`;
       prompt += `\n\nThe bot already saved these memories during its response — do NOT save duplicates:\n${savedTitles.map(t => `- "${t}"`).join('\n')}`;
     }
 
-    logger.step(`memory-extractor: spawning writeMemories for group ${groupId}`);
-
-    const stdout = await spawnCollect('claude', this.buildHaikuArgs(prompt, 10), {
-      timeout: WRITE_TIMEOUT_MS,
-      env: { ...process.env, DB_PATH: this.dbPath, CLAUDECODE: '' },
-      trackChild: child => this.limiter.trackChild(child),
-    });
-
-    const resultText = extractResultText(stdout);
+    const resultText = await this.spawnHaiku(prompt, 10, WRITE_TIMEOUT_MS, `writeMemories for group ${groupId}`);
 
     if (resultText) {
       logger.step(`memory-extractor: saved memories for group ${groupId}: ${resultText.substring(0, 200)}`);
