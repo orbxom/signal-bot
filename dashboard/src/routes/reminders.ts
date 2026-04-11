@@ -22,7 +22,8 @@ export function createReminderRoutes(storage: Storage): Router {
       return;
     }
     const success = storage.reminders.cancel(Number(req.params.id), groupId);
-    res.json({ success });
+    if (!success) return res.status(404).json({ success: false });
+    res.json({ success: true });
   });
 
   router.get('/recurring-reminders', (req, res) => {
@@ -42,12 +43,14 @@ export function createReminderRoutes(storage: Storage): Router {
       return;
     }
     const success = storage.recurringReminders.cancel(Number(req.params.id), groupId);
-    res.json({ success });
+    if (!success) return res.status(404).json({ success: false });
+    res.json({ success: true });
   });
 
   router.post('/recurring-reminders/:id/reset-failures', (req, res) => {
     const success = storage.recurringReminders.resetFailures(Number(req.params.id));
-    res.json({ success });
+    if (!success) return res.status(404).json({ success: false });
+    res.json({ success: true });
   });
 
   return router;

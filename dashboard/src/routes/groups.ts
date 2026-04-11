@@ -2,8 +2,10 @@ import { Router } from 'express';
 import type { Storage } from '../../../bot/src/storage';
 import type { SignalClient } from '../../../bot/src/signalClient';
 
-export function createGroupRoutes(storage: Storage, signalClient: SignalClient): Router {
+export function createGroupRoutes(storage: Storage, signalClient: SignalClient | null): Router {
   const router = Router();
+
+  const signalNotConfigured = { error: 'Signal client not configured — set BOT_PHONE_NUMBER' };
 
   function enrichGroups(groups: Array<{ id: string; name: string; members: string[] }>) {
     return groups.map((g) => {
@@ -21,6 +23,7 @@ export function createGroupRoutes(storage: Storage, signalClient: SignalClient):
 
 
   router.get('/groups', async (_req, res) => {
+    if (!signalClient) return res.status(503).json(signalNotConfigured);
     try {
       const signalGroups = (await signalClient.listGroups()) as Array<{
         id: string;
@@ -34,6 +37,7 @@ export function createGroupRoutes(storage: Storage, signalClient: SignalClient):
   });
 
   router.get('/groups/:id', async (req, res) => {
+    if (!signalClient) return res.status(503).json(signalNotConfigured);
     try {
       const group = (await signalClient.getGroup(req.params.id)) as Record<string, unknown>;
       const settings = storage.groupSettings.get(req.params.id);
@@ -45,6 +49,7 @@ export function createGroupRoutes(storage: Storage, signalClient: SignalClient):
   });
 
   router.post('/groups/join', async (req, res) => {
+    if (!signalClient) return res.status(503).json(signalNotConfigured);
     const { uri } = req.body;
     if (!uri || typeof uri !== 'string' || !uri.startsWith('https://signal.group/#')) {
       return res.status(400).json({ error: 'Invalid Signal group invite link format' });
@@ -82,6 +87,7 @@ export function createGroupRoutes(storage: Storage, signalClient: SignalClient):
 
 
   router.post('/groups/:id/leave', async (req, res) => {
+    if (!signalClient) return res.status(503).json(signalNotConfigured);
     try {
       await signalClient.quitGroup(req.params.id);
       storage.groupSettings.upsert(req.params.id, { enabled: false });

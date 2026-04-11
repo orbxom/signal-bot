@@ -73,4 +73,15 @@ describe('mock signal server RPC handlers', () => {
     const res = await rpc('joinGroup', { uri: 'https://signal.group/#test' });
     expect(res.result).toEqual({});
   });
+
+  it('listGroups returns groups with members array', async () => {
+    const res = await rpc('listGroups');
+    expect(res.result).toBeDefined();
+    expect(res.result).toBeInstanceOf(Array);
+    expect(res.result.length).toBeGreaterThan(0);
+    expect(res.result[0]).toHaveProperty('id', GROUP_ID);
+    expect(res.result[0]).toHaveProperty('name', 'Bot Test');
+    expect(res.result[0]).toHaveProperty('members');
+    expect(res.result[0].members).toContain('+61400111222');
+  });
 });

@@ -216,4 +216,64 @@ describe('groups routes', () => {
       expect(res.status).toBe(503);
     });
   });
+
+  describe('with null signalClient (BOT_PHONE_NUMBER not set)', () => {
+    beforeEach(() => {
+      app = express();
+      app.use(express.json());
+
+      mockStorage = {
+        groupSettings: {
+          get: vi.fn().mockReturnValue(null),
+          upsert: vi.fn(),
+        },
+        personas: {
+          getActiveForGroup: vi.fn().mockReturnValue(null),
+        },
+        messages: {
+          getCount: vi.fn().mockReturnValue(0),
+          getLastTimestamp: vi.fn().mockReturnValue(null),
+        },
+      };
+
+      app.use('/api', createGroupRoutes(mockStorage, null as any));
+    });
+
+    it('GET /api/groups returns 503', async () => {
+      const res = await request(app).get('/api/groups');
+
+      expect(res.status).toBe(503);
+      expect(res.body.error).toMatch(/not configured/i);
+    });
+
+    it('GET /api/groups/:id returns 503', async () => {
+      const res = await request(app).get('/api/groups/g1');
+
+      expect(res.status).toBe(503);
+    });
+
+    it('POST /api/groups/join returns 503', async () => {
+      const res = await request(app)
+        .post('/api/groups/join')
+        .send({ uri: 'https://signal.group/#test' });
+
+      expect(res.status).toBe(503);
+    });
+
+    it('POST /api/groups/:id/leave returns 503', async () => {
+      const res = await request(app).post('/api/groups/g1/leave');
+
+      expect(res.status).toBe(503);
+    });
+
+    it('PATCH /api/groups/:id/settings still works without signal client', async () => {
+      mockStorage.groupSettings.get.mockReturnValue({ enabled: true });
+
+      const res = await request(app)
+        .patch('/api/groups/g1/settings')
+        .send({ enabled: false });
+
+      expect(res.status).toBe(200);
+    });
+  });
 });

@@ -25,7 +25,9 @@ const FACTORY_RUNS_DIR = process.env.FACTORY_RUNS_DIR || path.resolve(__dirname,
 
 // Initialize core dependencies
 const storage = new Storage(DB_PATH);
-const signalClient = new SignalClient(SIGNAL_CLI_URL, BOT_PHONE_NUMBER);
+const signalClient = BOT_PHONE_NUMBER
+  ? new SignalClient(SIGNAL_CLI_URL, BOT_PHONE_NUMBER)
+  : null;
 
 const app = express();
 app.use(express.json());

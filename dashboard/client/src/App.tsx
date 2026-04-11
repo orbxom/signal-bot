@@ -1,5 +1,6 @@
 import { Routes, Route } from 'react-router-dom'
 import Sidebar from './components/Sidebar'
+import ErrorBoundary from './components/ErrorBoundary'
 import Dashboard from './pages/Dashboard'
 import Groups from './pages/Groups'
 import GroupDetail from './pages/GroupDetail'
@@ -16,18 +17,20 @@ export default function App() {
     <div className="app">
       <Sidebar />
       <main className="main-content">
-        <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/groups" element={<Groups />} />
-          <Route path="/groups/:id" element={<GroupDetail />} />
-          <Route path="/reminders" element={<Reminders />} />
-          <Route path="/dossiers" element={<Dossiers />} />
-          <Route path="/personas" element={<Personas />} />
-          <Route path="/memories" element={<Memories />} />
-          <Route path="/messages" element={<Messages />} />
-          <Route path="/attachments" element={<Attachments />} />
-          <Route path="/factory" element={<Factory />} />
-        </Routes>
+        <ErrorBoundary>
+          <Routes>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/groups" element={<Groups />} />
+            <Route path="/groups/:id" element={<GroupDetail />} />
+            <Route path="/reminders" element={<Reminders />} />
+            <Route path="/dossiers" element={<Dossiers />} />
+            <Route path="/personas" element={<Personas />} />
+            <Route path="/memories" element={<Memories />} />
+            <Route path="/messages" element={<Messages />} />
+            <Route path="/attachments" element={<Attachments />} />
+            <Route path="/factory" element={<Factory />} />
+          </Routes>
+        </ErrorBoundary>
       </main>
     </div>
   )

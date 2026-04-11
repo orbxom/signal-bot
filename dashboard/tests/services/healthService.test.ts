@@ -66,4 +66,14 @@ describe('HealthService', () => {
 
     expect(h2.uptime).toBeGreaterThanOrEqual(h1.uptime);
   });
+
+  it('reports signalCliReachable as false when signalClient is null', async () => {
+    const nullClientHealth = new HealthService(mockStorage, null as any, dbPath);
+    vi.mocked(fs.statSync).mockReturnValue({ size: 256 } as any);
+
+    const health = await nullClientHealth.getHealth();
+
+    expect(health.signalCliReachable).toBe(false);
+    expect(health.dbSize).toBe(256);
+  });
 });

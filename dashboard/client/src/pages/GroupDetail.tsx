@@ -23,7 +23,7 @@ interface Reminder {
   id: number
   groupId: string
   requester: string
-  text: string
+  reminderText: string
   dueAt: number
   status: string
 }
@@ -48,8 +48,8 @@ type Tab = typeof tabs[number]
 
 const reminderColumns = [
   { key: 'requester', header: 'Requester' },
-  { key: 'text', header: 'Text', render: (r: Reminder) => (
-    <span title={r.text}>{r.text.length > 50 ? r.text.slice(0, 50) + '...' : r.text}</span>
+  { key: 'reminderText', header: 'Text', render: (r: Reminder) => (
+    <span title={r.reminderText}>{r.reminderText.length > 50 ? r.reminderText.slice(0, 50) + '...' : r.reminderText}</span>
   )},
   { key: 'dueAt', header: 'Due', render: (r: Reminder) => new Date(r.dueAt).toLocaleString() },
   { key: 'status', header: 'Status' },
@@ -96,6 +96,7 @@ export default function GroupDetail() {
         ...settings,
         ...settingsForm,
       })
+      setSettingsForm({})
       refetch()
     } catch (err) {
       alert(`Failed to save settings: ${(err as Error).message}`)

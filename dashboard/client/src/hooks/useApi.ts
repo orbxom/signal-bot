@@ -24,7 +24,29 @@ export function useApi<T>(url: string | null, deps: unknown[] = []) {
     }
   }, [url])
 
-  useEffect(() => { refetch() }, [refetch, ...deps])
+  useEffect(() => {
+    if (!url) {
+      setData(null)
+      setLoading(false)
+      return
+    }
+    const controller = new AbortController()
+    setLoading(true)
+    setError(null)
+    fetch(url, { signal: controller.signal })
+      .then(res => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        return res.json()
+      })
+      .then(json => setData(json))
+      .catch(err => {
+        if (err.name !== 'AbortError') setError((err as Error).message)
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false)
+      })
+    return () => controller.abort()
+  }, [url, ...deps])
 
   return { data, loading, error, refetch, setData }
 }

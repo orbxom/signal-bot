@@ -68,4 +68,13 @@ describe('attachment routes', () => {
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
   });
+
+  it('DELETE /api/attachments/:id returns 404 when not found', async () => {
+    mockStorage.attachments.deleteById.mockReturnValue(false);
+
+    const res = await request(app).delete('/api/attachments/missing');
+
+    expect(res.status).toBe(404);
+    expect(res.body.success).toBe(false);
+  });
 });

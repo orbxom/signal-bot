@@ -30,7 +30,8 @@ export function createAttachmentRoutes(storage: Storage): Router {
 
   router.delete('/attachments/:id', (req, res) => {
     const success = storage.attachments.deleteById(req.params.id);
-    res.json({ success });
+    if (!success) return res.status(404).json({ success: false });
+    res.json({ success: true });
   });
 
   return router;

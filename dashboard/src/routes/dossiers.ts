@@ -31,7 +31,8 @@ export function createDossierRoutes(storage: Storage): Router {
 
   router.delete('/dossiers/:groupId/:personId', (req, res) => {
     const success = storage.dossiers.delete(req.params.groupId, req.params.personId);
-    res.json({ success });
+    if (!success) return res.status(404).json({ success: false });
+    res.json({ success: true });
   });
 
   return router;
