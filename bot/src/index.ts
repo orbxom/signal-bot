@@ -54,7 +54,7 @@ async function main() {
   );
   logger.success('Reminder scheduler initialized');
 
-  const memoryExtractor = new MemoryExtractor(storage);
+  const memoryExtractor = new MemoryExtractor(config.dbPath);
   const memoryConsolidator = new MemoryConsolidator(storage, config.timezone);
   logger.success('Memory extractor and consolidator initialized');
 

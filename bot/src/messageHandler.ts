@@ -1,6 +1,5 @@
 import { ContextBuilder } from './contextBuilder';
 import { logger } from './logger';
-import { estimateTokens } from './mcp/result';
 import type { MemoryExtractor } from './memoryExtractor';
 import { MentionDetector } from './mentionDetector';
 import { MessageDeduplicator } from './messageDeduplicator';
@@ -136,7 +135,7 @@ export class MessageHandler {
       attachments: attachments.length > 0 ? attachments : undefined,
     });
 
-    this.ingestImageAttachments(groupId, sender, attachments, timestamp);
+    await this.ingestImageAttachments(groupId, sender, attachments, timestamp);
 
     if (!mentioned) {
       return;
@@ -152,10 +151,7 @@ export class MessageHandler {
     );
   }
 
-  async handleMessageBatch(
-    groupId: string,
-    messages: ExtractedMessage[],
-  ): Promise<void> {
+  async handleMessageBatch(groupId: string, messages: ExtractedMessage[]): Promise<void> {
     const validMessages: ExtractedMessage[] = [];
     for (const msg of messages) {
       if (this.appConfig.botPhoneNumber && msg.sender === this.appConfig.botPhoneNumber) {
@@ -209,7 +205,7 @@ export class MessageHandler {
     }
 
     for (const msg of validMessages) {
-      this.ingestImageAttachments(groupId, msg.sender, msg.attachments, msg.timestamp);
+      await this.ingestImageAttachments(groupId, msg.sender, msg.attachments, msg.timestamp);
     }
 
     if (mentionMessages.length === 0) {
@@ -292,22 +288,6 @@ export class MessageHandler {
       });
       contextParts.push(`## People in this group\n${entries.join('\n')}`);
     }
-    const MEMORY_CONTEXT_BUDGET = 2000;
-    const memories = this.storage.getMemoriesByGroup(groupId);
-    if (memories.length > 0) {
-      let tokenTotal = 0;
-      const memoryLines: string[] = [];
-      for (const m of memories) {
-        const line = `- **${m.topic}**: ${m.content}`;
-        const tokens = estimateTokens(line);
-        if (tokenTotal + tokens > MEMORY_CONTEXT_BUDGET) break;
-        tokenTotal += tokens;
-        memoryLines.push(line);
-      }
-      if (memoryLines.length > 0) {
-        contextParts.push(`## Group Memory\n${memoryLines.join('\n')}`);
-      }
-    }
     // Look up active persona for this group
     const activePersona = this.storage.getActivePersonaForGroup(groupId);
     const personaPrompt = activePersona?.description;
@@ -319,19 +299,28 @@ export class MessageHandler {
     };
   }
 
-  private ingestImageAttachments(
+  private async ingestImageAttachments(
     groupId: string,
     sender: string,
     attachments: SignalAttachment[],
     timestamp: number,
-  ): void {
+  ): Promise<void> {
     for (const att of attachments) {
       if (att.contentType.startsWith('image/')) {
-        const file = this.signalClient.readAttachmentFile(this.appConfig.attachmentsDir, att.id);
-        if (!file) {
-          logger.debug(`Attachment file not found on disk: ${att.id}`);
+        // Try HTTP fetch first (works with signal-cli REST API)
+        let data = await this.signalClient.fetchAttachment(att.id);
+
+        // Fallback: try disk read (works when ATTACHMENTS_DIR points to signal-cli's storage)
+        if (!data) {
+          const file = this.signalClient.readAttachmentFile(this.appConfig.attachmentsDir, att.id);
+          data = file?.data ?? null;
+        }
+
+        if (!data) {
+          logger.warn(`Failed to retrieve image attachment ${att.id} via HTTP and disk`);
           continue;
         }
+
         this.storage.saveAttachment({
           id: att.id,
           groupId,
@@ -339,7 +328,7 @@ export class MessageHandler {
           contentType: att.contentType,
           size: att.size,
           filename: att.filename,
-          data: file.data,
+          data,
           timestamp,
         });
       }
@@ -381,8 +370,17 @@ export class MessageHandler {
         queryWithAttachments = missedFraming + (queryWithAttachments ? `\n\n${queryWithAttachments}` : '');
       }
 
-      // Build additional system context (dossiers + memories + skills + persona)
+      // Build additional system context (dossiers + skills + persona)
       const { additionalContext, nameMap, personaPrompt } = this.assembleAdditionalContext(groupId);
+
+      // Pre-fetch relevant memories via haiku subagent
+      let memorySummary: string | undefined;
+      if (this.memoryExtractor) {
+        memorySummary = (await this.memoryExtractor.readMemories(groupId, content)) ?? undefined;
+        if (memorySummary) {
+          logger.step(`context: memory summary injected (${memorySummary.length} chars)`);
+        }
+      }
 
       // Build context
       const messages = this.contextBuilder.buildContext({
@@ -391,6 +389,7 @@ export class MessageHandler {
         groupId,
         sender,
         dossierContext: additionalContext,
+        memorySummary,
         personaDescription: personaPrompt,
         nameMap,
         preFormatted: historyFormatted,
@@ -438,7 +437,11 @@ export class MessageHandler {
       }
 
       if (this.memoryExtractor) {
-        this.memoryExtractor.scheduleExtraction(groupId);
+        const savedTitles = (response.toolCalls ?? [])
+          .filter(tc => tc.name === 'mcp__memories__save_memory')
+          .map(tc => tc.input?.title as string)
+          .filter(Boolean);
+        this.memoryExtractor.scheduleExtraction(groupId, query, response.content, savedTitles);
       }
 
       logger.groupEnd();

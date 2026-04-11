@@ -76,12 +76,24 @@ describe('AttachmentStore', () => {
     it('lists attachment metadata without data', () => {
       const now = Date.now();
       store.save({
-        id: 'a1', groupId: 'g1', sender: 's1', contentType: 'image/jpeg',
-        size: 100, filename: 'a.jpg', data: Buffer.from('data1'), timestamp: now,
+        id: 'a1',
+        groupId: 'g1',
+        sender: 's1',
+        contentType: 'image/jpeg',
+        size: 100,
+        filename: 'a.jpg',
+        data: Buffer.from('data1'),
+        timestamp: now,
       });
       store.save({
-        id: 'a2', groupId: 'g2', sender: 's2', contentType: 'image/png',
-        size: 200, filename: 'b.png', data: Buffer.from('data2'), timestamp: now + 1000,
+        id: 'a2',
+        groupId: 'g2',
+        sender: 's2',
+        contentType: 'image/png',
+        size: 200,
+        filename: 'b.png',
+        data: Buffer.from('data2'),
+        timestamp: now + 1000,
       });
       const list = store.listMetadata();
       expect(list).toHaveLength(2);
@@ -92,12 +104,24 @@ describe('AttachmentStore', () => {
     it('filters by groupId', () => {
       const now = Date.now();
       store.save({
-        id: 'a1', groupId: 'g1', sender: 's1', contentType: 'image/jpeg',
-        size: 100, filename: null, data: Buffer.from('data1'), timestamp: now,
+        id: 'a1',
+        groupId: 'g1',
+        sender: 's1',
+        contentType: 'image/jpeg',
+        size: 100,
+        filename: null,
+        data: Buffer.from('data1'),
+        timestamp: now,
       });
       store.save({
-        id: 'a2', groupId: 'g2', sender: 's2', contentType: 'image/png',
-        size: 200, filename: null, data: Buffer.from('data2'), timestamp: now,
+        id: 'a2',
+        groupId: 'g2',
+        sender: 's2',
+        contentType: 'image/png',
+        size: 200,
+        filename: null,
+        data: Buffer.from('data2'),
+        timestamp: now,
       });
       const filtered = store.listMetadata({ groupId: 'g1' });
       expect(filtered).toHaveLength(1);
@@ -108,8 +132,14 @@ describe('AttachmentStore', () => {
       const now = Date.now();
       for (let i = 0; i < 5; i++) {
         store.save({
-          id: `a${i}`, groupId: 'g1', sender: 's1', contentType: 'image/jpeg',
-          size: 100, filename: null, data: Buffer.from(`data${i}`), timestamp: now + i,
+          id: `a${i}`,
+          groupId: 'g1',
+          sender: 's1',
+          contentType: 'image/jpeg',
+          size: 100,
+          filename: null,
+          data: Buffer.from(`data${i}`),
+          timestamp: now + i,
         });
       }
       const page = store.listMetadata({ limit: 2, offset: 2 });
@@ -121,16 +151,34 @@ describe('AttachmentStore', () => {
     it('returns stats grouped by groupId', () => {
       const now = Date.now();
       store.save({
-        id: 'a1', groupId: 'g1', sender: 's1', contentType: 'image/jpeg',
-        size: 100, filename: null, data: Buffer.from('data1'), timestamp: now,
+        id: 'a1',
+        groupId: 'g1',
+        sender: 's1',
+        contentType: 'image/jpeg',
+        size: 100,
+        filename: null,
+        data: Buffer.from('data1'),
+        timestamp: now,
       });
       store.save({
-        id: 'a2', groupId: 'g1', sender: 's1', contentType: 'image/png',
-        size: 200, filename: null, data: Buffer.from('data22'), timestamp: now,
+        id: 'a2',
+        groupId: 'g1',
+        sender: 's1',
+        contentType: 'image/png',
+        size: 200,
+        filename: null,
+        data: Buffer.from('data22'),
+        timestamp: now,
       });
       store.save({
-        id: 'a3', groupId: 'g2', sender: 's2', contentType: 'image/jpeg',
-        size: 50, filename: null, data: Buffer.from('data3'), timestamp: now,
+        id: 'a3',
+        groupId: 'g2',
+        sender: 's2',
+        contentType: 'image/jpeg',
+        size: 50,
+        filename: null,
+        data: Buffer.from('data3'),
+        timestamp: now,
       });
       const stats = store.getStats();
       expect(stats.countByGroup).toHaveLength(2);
@@ -147,8 +195,14 @@ describe('AttachmentStore', () => {
   describe('deleteById', () => {
     it('deletes an attachment by id', () => {
       store.save({
-        id: 'a1', groupId: 'g1', sender: 's1', contentType: 'image/jpeg',
-        size: 100, filename: null, data: Buffer.from('data'), timestamp: Date.now(),
+        id: 'a1',
+        groupId: 'g1',
+        sender: 's1',
+        contentType: 'image/jpeg',
+        size: 100,
+        filename: null,
+        data: Buffer.from('data'),
+        timestamp: Date.now(),
       });
       const result = store.deleteById('a1');
       expect(result).toBe(true);

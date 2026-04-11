@@ -164,6 +164,11 @@ export class DatabaseConnection {
         this.migrateToV9();
         this.setSchemaVersion(9);
       }
+
+      if (currentVersion < 10) {
+        this.migrateToV10();
+        this.setSchemaVersion(10);
+      }
     } catch (error) {
       wrapSqliteError(error, 'run migrations');
     }
@@ -218,13 +223,20 @@ export class DatabaseConnection {
         createdAt INTEGER NOT NULL,
         updatedAt INTEGER NOT NULL
       );
-
-      CREATE UNIQUE INDEX IF NOT EXISTS idx_memories_group_topic
-      ON memories(groupId, topic);
-
-      CREATE INDEX IF NOT EXISTS idx_memories_group
-      ON memories(groupId);
     `);
+
+    // Only create topic-based index if the table actually has the old topic column
+    // (fresh databases created by initTables will have the new title column instead)
+    const cols = this.db.pragma('table_info(memories)') as Array<{ name: string }>;
+    if (cols.some(c => c.name === 'topic')) {
+      this.db.exec(`
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_memories_group_topic
+        ON memories(groupId, topic);
+
+        CREATE INDEX IF NOT EXISTS idx_memories_group
+        ON memories(groupId);
+      `);
+    }
   }
 
   private migrateToV4(): void {
@@ -301,9 +313,11 @@ export class DatabaseConnection {
       )
     `);
     // Migrate data from old table
-    const rows = this.db.prepare(
-      'SELECT groupId, enabled, updatedAt FROM tool_notification_settings'
-    ).all() as Array<{ groupId: string; enabled: number; updatedAt: number }>;
+    const rows = this.db.prepare('SELECT groupId, enabled, updatedAt FROM tool_notification_settings').all() as Array<{
+      groupId: string;
+      enabled: number;
+      updatedAt: number;
+    }>;
     const insert = this.db.prepare(`
       INSERT OR IGNORE INTO group_settings (groupId, toolNotifications, enabled, createdAt, updatedAt)
       VALUES (?, ?, 1, ?, ?)
@@ -326,6 +340,79 @@ export class DatabaseConnection {
 
       CREATE INDEX IF NOT EXISTS idx_web_app_deployments_time
       ON web_app_deployments(deployedAt DESC);
+    `);
+  }
+
+  private migrateToV10(): void {
+    this.db.pragma('foreign_keys = ON');
+
+    // Check if the old schema exists (has 'topic' column)
+    const cols = this.db.pragma('table_info(memories)') as Array<{ name: string }>;
+    const hasTopicColumn = cols.some(c => c.name === 'topic');
+
+    if (hasTopicColumn) {
+      // Migrate: create new table, copy data with topic→title, drop old, rename
+      this.db.exec(`
+        CREATE TABLE memories_new (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          groupId TEXT NOT NULL,
+          title TEXT NOT NULL,
+          description TEXT,
+          content TEXT,
+          type TEXT NOT NULL DEFAULT 'text',
+          createdAt INTEGER NOT NULL,
+          updatedAt INTEGER NOT NULL
+        );
+
+        INSERT INTO memories_new (id, groupId, title, description, content, type, createdAt, updatedAt)
+        SELECT id, groupId, topic, NULL, content, 'text', createdAt, updatedAt
+        FROM memories;
+
+        DROP TABLE memories;
+
+        ALTER TABLE memories_new RENAME TO memories;
+      `);
+    } else {
+      // Fresh database created by initTables already has the new schema — ensure columns exist
+      const colNames = cols.map(c => c.name);
+      if (!colNames.includes('title')) {
+        this.db.exec(`
+          CREATE TABLE memories_new (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            groupId TEXT NOT NULL,
+            title TEXT NOT NULL,
+            description TEXT,
+            content TEXT,
+            type TEXT NOT NULL DEFAULT 'text',
+            createdAt INTEGER NOT NULL,
+            updatedAt INTEGER NOT NULL
+          );
+          DROP TABLE memories;
+          ALTER TABLE memories_new RENAME TO memories;
+        `);
+      }
+    }
+
+    // Create indexes for the new memories schema
+    this.db.exec(`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_memories_group_title
+      ON memories(groupId, title);
+
+      CREATE INDEX IF NOT EXISTS idx_memories_group
+      ON memories(groupId);
+
+      CREATE INDEX IF NOT EXISTS idx_memories_group_type
+      ON memories(groupId, type);
+
+      CREATE TABLE IF NOT EXISTS memory_tags (
+        memoryId INTEGER NOT NULL,
+        tag TEXT NOT NULL,
+        UNIQUE(memoryId, tag),
+        FOREIGN KEY (memoryId) REFERENCES memories(id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_memory_tags_tag
+      ON memory_tags(tag);
     `);
   }
 

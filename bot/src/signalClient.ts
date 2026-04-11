@@ -79,6 +79,10 @@ export class SignalClient {
     await this.rpc<void>('quitGroup', { groupId });
   }
 
+  async joinGroup(uri: string): Promise<void> {
+    await this.rpc<void>('joinGroup', { uri });
+  }
+
   async waitForReady(maxRetries: number = 10, baseDelay: number = 2000): Promise<void> {
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
@@ -97,6 +101,21 @@ export class SignalClient {
     }
 
     throw new Error(`signal-cli not reachable at ${this.baseUrl} after ${maxRetries} attempts`);
+  }
+
+  async fetchAttachment(attachmentId: string): Promise<Buffer | null> {
+    try {
+      const response = await fetch(`${this.baseUrl}/v1/attachments/${attachmentId}`, {
+        method: 'GET',
+        signal: AbortSignal.timeout(30000),
+      });
+      if (!response.ok) return null;
+      const json = (await response.json()) as { data?: string };
+      if (!json.data) return null;
+      return Buffer.from(json.data, 'base64');
+    } catch {
+      return null;
+    }
   }
 
   readAttachmentFile(attachmentsDir: string, attachmentId: string): { data: Buffer } | null {

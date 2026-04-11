@@ -81,6 +81,7 @@ interface Envelope {
 }
 
 const messageQueue: Envelope[] = [];
+const attachmentStore = new Map<string, Buffer>();
 let isTyping = false;
 
 function createEnvelope(
@@ -112,6 +113,7 @@ function clearTypingLine() {
 
 function queueImageMessage(text: string): { attachmentId: string } {
   const attachmentId = `mock-img-${Date.now()}`;
+  attachmentStore.set(attachmentId, TEST_PNG);
   const attachDir = process.env.ATTACHMENTS_DIR || './data/signal-attachments';
   fs.mkdirSync(attachDir, { recursive: true });
   fs.writeFileSync(path.join(attachDir, attachmentId), TEST_PNG);
@@ -168,6 +170,20 @@ const handlers: Record<string, RpcHandler> = {
 };
 
 const server = http.createServer((req, res) => {
+  // REST endpoint: GET /v1/attachments/{id} — returns base64 JSON like signal-cli
+  if (req.method === 'GET' && req.url?.startsWith('/v1/attachments/')) {
+    const id = req.url.slice('/v1/attachments/'.length);
+    const data = attachmentStore.get(id);
+    if (!data) {
+      res.writeHead(404);
+      res.end(JSON.stringify({ error: 'Attachment not found' }));
+      return;
+    }
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ data: data.toString('base64') }));
+    return;
+  }
+
   if (req.method !== 'POST' || req.url !== '/api/v1/rpc') {
     res.writeHead(404);
     res.end();

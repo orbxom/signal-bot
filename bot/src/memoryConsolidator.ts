@@ -1,4 +1,4 @@
-import { parseEntries, spawnCollect, stripCodeFences } from './claudeClient';
+import { extractResultText, spawnCollect, stripCodeFences } from './claudeClient';
 import { logger } from './logger';
 import { estimateTokens } from './mcp/result';
 import { SpawnLimiter } from './spawnLimiter';
@@ -15,7 +15,7 @@ export interface ConsolidationResult {
   }>;
   memoryUpdates: Array<{
     action: 'upsert' | 'delete';
-    topic: string;
+    title: string;
     content?: string;
   }>;
   dailySummary: string;
@@ -36,8 +36,8 @@ Produce a JSON response with exactly this structure:
     { "personId": "<sender name>", "displayName": "<display name>", "notes": "<updated notes about this person>" }
   ],
   "memoryUpdates": [
-    { "action": "upsert", "topic": "<topic-slug>", "content": "<memory content>" },
-    { "action": "delete", "topic": "<topic-slug>" }
+    { "action": "upsert", "title": "<title-slug>", "content": "<memory content>" },
+    { "action": "delete", "title": "<title-slug>" }
   ],
   "dailySummary": "<1-3 sentence summary of what happened today>"
 }
@@ -45,7 +45,7 @@ Produce a JSON response with exactly this structure:
 Guidelines:
 - Only include dossierUpdates for people who revealed new information about themselves
 - Merge new info with existing dossier notes — don't replace, augment
-- Memory topics should be kebab-case slugs (e.g., "movie-night-schedule", "vacation-plans")
+- Memory titles should be kebab-case slugs (e.g., "movie-night-schedule", "vacation-plans")
 - Delete memories that are no longer relevant or were contradicted
 - The daily summary should capture the key events/topics, not every message
 - Keep each memory content under 500 tokens
@@ -138,7 +138,7 @@ export class MemoryConsolidator {
     }
 
     if (memories.length > 0) {
-      contextParts.push('\n## Existing Memories', ...memories.map(m => `- ${m.topic}: ${m.content}`));
+      contextParts.push('\n## Existing Memories', ...memories.map(m => `- ${m.title}: ${m.content}`));
     }
 
     const prompt = contextParts.join('\n');
@@ -188,28 +188,17 @@ export class MemoryConsolidator {
   trimOldDailies(groupId: string, retentionDays: number): void {
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - retentionDays);
-    const cutoffStr = cutoff.toISOString().slice(0, 10); // YYYY-MM-DD
-
-    const memories = this.storage.memories.getByGroup(groupId);
-    for (const memory of memories) {
-      if (memory.topic.startsWith('__daily:')) {
-        const dateStr = memory.topic.slice('__daily:'.length);
-        if (dateStr < cutoffStr) {
-          this.storage.deleteMemory(groupId, memory.topic);
-        }
-      }
-    }
+    const cutoffTitle = `__daily:${cutoff.toISOString().slice(0, 10)}`;
+    this.storage.memories.deleteOldDailies(groupId, cutoffTitle);
   }
 
   private parseConsolidationOutput(stdout: string): ConsolidationResult {
-    const entries = parseEntries(stdout);
-    const resultEntry = entries.find(e => e.type === 'result');
+    const resultText = extractResultText(stdout);
 
-    if (!resultEntry) {
+    if (!resultText) {
       throw new Error('No result entry in Claude output');
     }
 
-    const resultText = typeof resultEntry.result === 'string' ? resultEntry.result : '';
     const parsed = JSON.parse(stripCodeFences(resultText));
     return {
       dossierUpdates: parsed.dossierUpdates || [],
@@ -228,16 +217,16 @@ export class MemoryConsolidator {
       // Apply memory updates
       for (const update of result.memoryUpdates) {
         if (update.action === 'upsert' && update.content) {
-          this.storage.upsertMemory(groupId, update.topic, update.content);
+          this.storage.memories.save(groupId, update.title, 'text', { content: update.content });
         } else if (update.action === 'delete') {
-          this.storage.deleteMemory(groupId, update.topic);
+          this.storage.memories.deleteByTitle(groupId, update.title);
         }
       }
 
       // Store daily summary
       if (result.dailySummary) {
         const today = new Date().toLocaleDateString('en-CA', { timeZone: this.timezone }); // YYYY-MM-DD format
-        this.storage.upsertMemory(groupId, `__daily:${today}`, result.dailySummary);
+        this.storage.memories.save(groupId, `__daily:${today}`, 'text', { content: result.dailySummary });
       }
     });
   }
