@@ -121,6 +121,7 @@ describe('ClaudeCLIClient', () => {
         expect.arrayContaining([
           '-p',
           'Hi',
+          '--verbose',
           '--output-format',
           'stream-json',
           '--max-turns',

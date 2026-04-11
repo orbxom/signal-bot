@@ -255,6 +255,7 @@ export class ClaudeCLIClient implements LLMClient {
     const args = [
       '-p',
       prompt,
+      '--verbose',
       '--output-format',
       'stream-json',
       '--max-turns',
