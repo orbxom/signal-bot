@@ -344,6 +344,38 @@ describe('ContextBuilder', () => {
       expect(chatMessages[1].content).toContain('Alice: Hello');
       expect(chatMessages[1].content).not.toBe('[CACHED] uuid-alice: Hello');
     });
+
+    it('should inject memorySummary into system prompt when provided', () => {
+      const builder = new ContextBuilder({ ...defaultConfig, systemPrompt: 'You are a helpful bot.' });
+      const chatMessages = builder.buildContext({
+        history: [],
+        query: 'Hello',
+        groupId: 'g1',
+        sender: '+61400000001',
+        memorySummary: 'Dad prefers pepperoni pizza',
+      });
+
+      const systemContent = chatMessages[0].content;
+      expect(systemContent).toContain('## Relevant Memories');
+      expect(systemContent).toContain('Dad prefers pepperoni pizza');
+      // Memory section should appear before persona safety prompt
+      const memoryIdx = systemContent.indexOf('## Relevant Memories');
+      const safetyIdx = systemContent.indexOf('Persona Guidelines');
+      expect(memoryIdx).toBeLessThan(safetyIdx);
+    });
+
+    it('should not inject memory section when memorySummary is undefined', () => {
+      const builder = new ContextBuilder({ ...defaultConfig, systemPrompt: 'You are a helpful bot.' });
+      const chatMessages = builder.buildContext({
+        history: [],
+        query: 'Hello',
+        groupId: 'g1',
+        sender: '+61400000001',
+      });
+
+      const systemContent = chatMessages[0].content;
+      expect(systemContent).not.toContain('## Relevant Memories');
+    });
   });
 
   describe('fitToTokenBudget', () => {

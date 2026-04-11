@@ -1,6 +1,5 @@
 import { ContextBuilder } from './contextBuilder';
 import { logger } from './logger';
-import { estimateTokens } from './mcp/result';
 import type { MemoryExtractor } from './memoryExtractor';
 import { MentionDetector } from './mentionDetector';
 import { MessageDeduplicator } from './messageDeduplicator';
@@ -314,22 +313,6 @@ export class MessageHandler {
       });
       contextParts.push(`## People in this group\n${entries.join('\n')}`);
     }
-    const MEMORY_CONTEXT_BUDGET = 2000;
-    const memories = this.storage.getMemoriesByGroup(groupId);
-    if (memories.length > 0) {
-      let tokenTotal = 0;
-      const memoryLines: string[] = [];
-      for (const m of memories) {
-        const line = `- **${m.topic}**: ${m.content}`;
-        const tokens = estimateTokens(line);
-        if (tokenTotal + tokens > MEMORY_CONTEXT_BUDGET) break;
-        tokenTotal += tokens;
-        memoryLines.push(line);
-      }
-      if (memoryLines.length > 0) {
-        contextParts.push(`## Group Memory\n${memoryLines.join('\n')}`);
-      }
-    }
     // Look up active persona for this group
     const activePersona = this.storage.getActivePersonaForGroup(groupId);
     const personaPrompt = activePersona?.description;
@@ -412,8 +395,17 @@ export class MessageHandler {
         queryWithAttachments = missedFraming + (queryWithAttachments ? `\n\n${queryWithAttachments}` : '');
       }
 
-      // Build additional system context (dossiers + memories + skills + persona)
+      // Build additional system context (dossiers + skills + persona)
       const { additionalContext, nameMap, personaPrompt } = this.assembleAdditionalContext(groupId);
+
+      // Pre-fetch relevant memories via haiku subagent
+      let memorySummary: string | undefined;
+      if (this.memoryExtractor) {
+        memorySummary = (await this.memoryExtractor.readMemories(groupId, content)) ?? undefined;
+        if (memorySummary) {
+          logger.step(`context: memory summary injected (${memorySummary.length} chars)`);
+        }
+      }
 
       // Build context
       const messages = this.contextBuilder.buildContext({
@@ -422,6 +414,7 @@ export class MessageHandler {
         groupId,
         sender,
         dossierContext: additionalContext,
+        memorySummary,
         personaDescription: personaPrompt,
         nameMap,
         preFormatted: historyFormatted,
@@ -469,7 +462,11 @@ export class MessageHandler {
       }
 
       if (this.memoryExtractor) {
-        this.memoryExtractor.scheduleExtraction(groupId);
+        const savedTitles = (response.toolCalls ?? [])
+          .filter(tc => tc.name === 'mcp__memories__save_memory')
+          .map(tc => tc.input?.title as string)
+          .filter(Boolean);
+        this.memoryExtractor.scheduleExtraction(groupId, query, response.content, savedTitles);
       }
 
       logger.groupEnd();

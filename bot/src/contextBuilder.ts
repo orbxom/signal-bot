@@ -17,7 +17,7 @@ const SOURCE_CODE_INSTRUCTIONS =
   'You have access to your own source code via the sourcecode tools (list_files, read_file, search_code). When asked how you work, what you can do, or technical questions about your implementation, use these tools to read the actual code before answering.';
 
 const MEMORY_INSTRUCTIONS =
-  'You have group memory tools: save_memory (save/update a topic), get_memory (retrieve by topic), list_memories (list all), delete_memory (remove). Use these to remember things the group wants you to keep track of (e.g. birthdays, plans, preferences). To load them, use ToolSearch with select:mcp__memories__save_memory etc.';
+  'You have memory tools: save_memory, update_memory, get_memory, search_memories, list_types, list_tags, delete_memory, manage_tags. Memories have a title, type, description, content, and tags. Before saving, call list_types and list_tags to stay consistent with existing categories. Memories are automatically read and written by a background process, but you can also use these tools directly.';
 
 const VOICE_MESSAGE_INSTRUCTIONS =
   'When a voice message is attached (shown as [Voice message attached: <path>] in the conversation), use the transcribe_audio tool to transcribe it, then respond to the transcribed content as if the user had typed it. Voice messages may appear in the current message or in recent conversation history.';
@@ -168,11 +168,22 @@ export class ContextBuilder {
     groupId?: string;
     sender?: string;
     dossierContext?: string;
+    memorySummary?: string;
     personaDescription?: string;
     nameMap?: Map<string, string>;
     preFormatted?: string[];
   }): ChatMessage[] {
-    const { history, query, groupId, sender, dossierContext, personaDescription, nameMap, preFormatted } = params;
+    const {
+      history,
+      query,
+      groupId,
+      sender,
+      dossierContext,
+      memorySummary,
+      personaDescription,
+      nameMap,
+      preFormatted,
+    } = params;
     const effectivePrompt = personaDescription || this.systemPrompt;
     let systemContent: string;
 
@@ -192,10 +203,16 @@ export class ContextBuilder {
       ].join('\n');
 
       if (dossierContext) {
-        systemContent = `${timeContext}\n\n${dossierContext}\n\n${PERSONA_SAFETY_PROMPT}\n\n${effectivePrompt}`;
+        systemContent = `${timeContext}\n\n${dossierContext}`;
       } else {
-        systemContent = `${timeContext}\n\n${PERSONA_SAFETY_PROMPT}\n\n${effectivePrompt}`;
+        systemContent = timeContext;
       }
+
+      if (memorySummary) {
+        systemContent += `\n\n## Relevant Memories\n${memorySummary}`;
+      }
+
+      systemContent += `\n\n${PERSONA_SAFETY_PROMPT}\n\n${effectivePrompt}`;
     } else {
       systemContent = effectivePrompt;
     }

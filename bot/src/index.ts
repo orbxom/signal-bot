@@ -57,7 +57,7 @@ async function main() {
   );
   logger.success('Reminder scheduler initialized');
 
-  const memoryExtractor = new MemoryExtractor(storage);
+  const memoryExtractor = new MemoryExtractor(config.dbPath);
   const memoryConsolidator = new MemoryConsolidator(storage, config.timezone);
   logger.success('Memory extractor and consolidator initialized');
 
@@ -95,7 +95,7 @@ async function main() {
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);
 
-  process.on('unhandledRejection', reason => {
+  process.on('unhandledRejection', (reason) => {
     logger.error('Unhandled rejection:', reason);
     sendErrorNotification(signalClient, config, reason).finally(() => {
       process.exit(1);
