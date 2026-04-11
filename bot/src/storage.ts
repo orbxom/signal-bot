@@ -1,12 +1,12 @@
 import { DatabaseConnection } from './db';
 import { AttachmentStore } from './stores/attachmentStore';
 import { DossierStore } from './stores/dossierStore';
+import { GroupSettingsStore } from './stores/groupSettingsStore';
 import { MemoryStore } from './stores/memoryStore';
 import { MessageStore } from './stores/messageStore';
 import { PersonaStore } from './stores/personaStore';
 import { RecurringReminderStore } from './stores/recurringReminderStore';
 import { ReminderStore } from './stores/reminderStore';
-import { GroupSettingsStore } from './stores/groupSettingsStore';
 import type { Attachment, Dossier, Memory, Message, Persona, Reminder, ReminderMode } from './types';
 
 export class Storage {
@@ -75,20 +75,8 @@ export class Storage {
     return this.reminders.create(groupId, requester, reminderText, dueAt, mode);
   }
 
-  getDueReminders(now?: number, limit = 50): Reminder[] {
-    return this.reminders.getDueReminders(now, limit);
-  }
-
   markReminderSent(id: number): boolean {
     return this.reminders.markSent(id);
-  }
-
-  markReminderFailed(id: number): boolean {
-    return this.reminders.markFailedLegacy(id);
-  }
-
-  incrementReminderRetry(id: number): void {
-    this.reminders.incrementRetry(id);
   }
 
   cancelReminder(id: number, groupId: string): boolean {

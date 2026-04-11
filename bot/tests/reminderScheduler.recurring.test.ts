@@ -63,6 +63,7 @@ function createMockStore() {
     getDueByGroup: vi.fn().mockReturnValue([]),
     recordAttempt: vi.fn(),
     markSent: vi.fn().mockReturnValue(true),
+    completeReminder: vi.fn().mockReturnValue(true),
     markFailed: vi.fn().mockReturnValue(true),
     create: vi.fn(),
     cancel: vi.fn(),
@@ -80,6 +81,7 @@ function createMockRecurringStore() {
     advanceNextDue: vi.fn(),
     cancel: vi.fn().mockReturnValue(true),
     incrementFailures: vi.fn().mockReturnValue(1),
+    handleFailure: vi.fn().mockReturnValue(1),
     listActive: vi.fn().mockReturnValue([]),
     create: vi.fn(),
   };
@@ -135,7 +137,7 @@ describe('ReminderScheduler — recurring reminders', () => {
 
     // One-shot sent + recurring processed
     expect(count).toBe(2);
-    expect(mockStore.markSent).toHaveBeenCalledWith(1);
+    expect(mockStore.completeReminder).toHaveBeenCalledWith(1);
     expect(mockRecurringExecutor.execute).toHaveBeenCalledWith(recurring);
     expect(mockRecurringStore.markFired).toHaveBeenCalledWith(100, 9999999999999);
   });
@@ -153,20 +155,18 @@ describe('ReminderScheduler — recurring reminders', () => {
     expect(mockRecurringStore.markFired).not.toHaveBeenCalled();
   });
 
-  it('clears in-flight and advances nextDueAt on executor failure', async () => {
+  it('calls handleFailure on executor failure', async () => {
     const { computeNextDue } = await import('../src/utils/cron');
     const recurring = makeRecurringReminder({ id: 100 });
     mockRecurringStore.getGroupsWithDue.mockReturnValue(['group1']);
     mockRecurringStore.getDueByGroup.mockReturnValue([recurring]);
     mockRecurringExecutor.execute.mockRejectedValue(new Error('Claude timeout'));
-    mockRecurringStore.incrementFailures.mockReturnValue(1);
 
     const count = await scheduler.processDueReminders();
 
     expect(count).toBe(0);
     expect(computeNextDue).toHaveBeenCalledWith(recurring.cronExpression, recurring.timezone);
-    expect(mockRecurringStore.advanceNextDue).toHaveBeenCalledWith(100, 9999999999999);
-    expect(mockRecurringStore.incrementFailures).toHaveBeenCalledWith(100);
+    expect(mockRecurringStore.handleFailure).toHaveBeenCalledWith(100, 9999999999999);
   });
 
   it('works without recurring dependencies (backward compat)', async () => {
@@ -186,14 +186,14 @@ describe('ReminderScheduler — recurring reminders', () => {
   it('auto-cancels after 5 consecutive failures', async () => {
     const recurring = makeRecurringReminder({
       id: 100,
-      consecutiveFailures: 4, // will become 5 after increment
+      consecutiveFailures: 4, // will become 5 after handleFailure
       promptText: 'Daily weather report',
       requester: '+61400111222',
     });
     mockRecurringStore.getGroupsWithDue.mockReturnValue(['group1']);
     mockRecurringStore.getDueByGroup.mockReturnValue([recurring]);
     mockRecurringExecutor.execute.mockRejectedValue(new Error('fail'));
-    mockRecurringStore.incrementFailures.mockReturnValue(5);
+    mockRecurringStore.handleFailure.mockReturnValue(5);
 
     const count = await scheduler.processDueReminders();
 
@@ -204,5 +204,67 @@ describe('ReminderScheduler — recurring reminders', () => {
       expect.stringContaining('Daily weather report'),
     );
     expect(mockSignalClient.sendMessage).toHaveBeenCalledWith('group1', expect.stringContaining('auto-cancelled'));
+  });
+
+  it('should process multiple due recurring reminders per group', async () => {
+    const reminders = [
+      makeRecurringReminder({ id: 100, promptText: 'Task 1' }),
+      makeRecurringReminder({ id: 101, promptText: 'Task 2' }),
+      makeRecurringReminder({ id: 102, promptText: 'Task 3' }),
+    ];
+    mockRecurringStore.getGroupsWithDue.mockReturnValue(['group1']);
+    mockRecurringStore.getDueByGroup.mockReturnValue(reminders);
+
+    const count = await scheduler.processDueReminders();
+
+    expect(count).toBe(3);
+    expect(mockRecurringExecutor.execute).toHaveBeenCalledTimes(3);
+    expect(mockRecurringStore.markFired).toHaveBeenCalledTimes(3);
+  });
+
+  it('should use minimum delay when computeNextDue returns past timestamp', async () => {
+    const { computeNextDue } = await import('../src/utils/cron');
+    const now = Date.now();
+    (computeNextDue as ReturnType<typeof vi.fn>).mockReturnValue(now - 1000);
+
+    const recurring = makeRecurringReminder({ id: 100 });
+    mockRecurringStore.getGroupsWithDue.mockReturnValue(['group1']);
+    mockRecurringStore.getDueByGroup.mockReturnValue([recurring]);
+
+    await scheduler.processDueReminders();
+
+    // markFired should be called with a future timestamp (now + 60s), not the past value
+    const calledWith = mockRecurringStore.markFired.mock.calls[0][1];
+    expect(calledWith).toBeGreaterThan(now);
+  });
+
+  it('should pass through future timestamps from computeNextDue unchanged', async () => {
+    const { computeNextDue } = await import('../src/utils/cron');
+    const farFuture = Date.now() + 86400000; // +24h
+    (computeNextDue as ReturnType<typeof vi.fn>).mockReturnValue(farFuture);
+
+    const recurring = makeRecurringReminder({ id: 100 });
+    mockRecurringStore.getGroupsWithDue.mockReturnValue(['group1']);
+    mockRecurringStore.getDueByGroup.mockReturnValue([recurring]);
+
+    await scheduler.processDueReminders();
+
+    expect(mockRecurringStore.markFired).toHaveBeenCalledWith(100, farFuture);
+  });
+
+  it('should use minimum delay for past timestamps on failure path too', async () => {
+    const { computeNextDue } = await import('../src/utils/cron');
+    const now = Date.now();
+    (computeNextDue as ReturnType<typeof vi.fn>).mockReturnValue(now - 5000);
+
+    const recurring = makeRecurringReminder({ id: 100 });
+    mockRecurringStore.getGroupsWithDue.mockReturnValue(['group1']);
+    mockRecurringStore.getDueByGroup.mockReturnValue([recurring]);
+    mockRecurringExecutor.execute.mockRejectedValue(new Error('fail'));
+
+    await scheduler.processDueReminders();
+
+    const calledWith = mockRecurringStore.handleFailure.mock.calls[0][1];
+    expect(calledWith).toBeGreaterThan(now);
   });
 });

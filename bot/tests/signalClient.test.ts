@@ -662,6 +662,43 @@ describe('SignalClient', () => {
     });
   });
 
+  describe('joinGroup', () => {
+    let fetchMock: ReturnType<typeof vi.fn>;
+
+    beforeEach(() => {
+      fetchMock = vi.fn();
+      global.fetch = fetchMock;
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it('calls joinGroup RPC method with uri and account params', async () => {
+      fetchMock.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ jsonrpc: '2.0', id: '1', result: {} }),
+      });
+      const client = new SignalClient('http://localhost:8080', '+61400000000');
+      await expect(client.joinGroup('https://signal.group/#abc123')).resolves.not.toThrow();
+      expect(fetchMock).toHaveBeenCalledOnce();
+      const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+      expect(body.method).toBe('joinGroup');
+      expect(body.params.uri).toBe('https://signal.group/#abc123');
+      expect(body.params.account).toBe('+61400000000');
+    });
+
+    it('throws on RPC error', async () => {
+      fetchMock.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ jsonrpc: '2.0', id: '1', error: { message: 'Invalid group link' } }),
+      });
+      const client = new SignalClient('http://localhost:8080', '+61400000000');
+      await expect(client.joinGroup('https://signal.group/#bad')).rejects.toThrow('Invalid group link');
+    });
+  });
+
+
   describe('waitForReady', () => {
     let fetchMock: ReturnType<typeof vi.fn>;
 

@@ -1,0 +1,19 @@
+[Unit]
+Description=Signal Bot Dashboard
+After=network.target signal-bot.service
+
+[Service]
+Type=simple
+User=zknowles
+WorkingDirectory=/home/zknowles/signal-bot/dashboard
+ExecStart=/usr/bin/npx tsx src/server.ts
+Restart=on-failure
+RestartSec=5
+Environment=DASHBOARD_PORT=3333
+Environment=FACTORY_RUNS_DIR=/home/zknowles/signal-bot/factory/runs
+Environment=DB_PATH=/home/zknowles/signal-bot/bot/data/bot.db
+Environment=SIGNAL_CLI_URL=http://localhost:8080
+Environment=BOT_PHONE_NUMBER=+61473513088
+
+[Install]
+WantedBy=multi-user.target

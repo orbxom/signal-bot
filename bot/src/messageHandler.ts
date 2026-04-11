@@ -1,6 +1,7 @@
 import { ContextBuilder } from './contextBuilder';
 import { logger } from './logger';
 import { estimateTokens } from './mcp/result';
+import type { MemoryExtractor } from './memoryExtractor';
 import { MentionDetector } from './mentionDetector';
 import { MessageDeduplicator } from './messageDeduplicator';
 import type { SignalClient } from './signalClient';
@@ -28,6 +29,7 @@ export class MessageHandler {
   private storage: Storage;
   private llmClient: LLMClient;
   private signalClient: SignalClient;
+  private memoryExtractor?: MemoryExtractor;
   private contextWindowSize: number;
   private messageRetentionCount: number;
   private readonly attachmentRetentionDays: number;
@@ -39,6 +41,7 @@ export class MessageHandler {
       llmClient: LLMClient;
       signalClient: SignalClient;
       appConfig?: AppConfig;
+      memoryExtractor?: MemoryExtractor;
     },
     options?: MessageHandlerOptions,
   ) {
@@ -57,6 +60,7 @@ export class MessageHandler {
     this.storage = deps.storage;
     this.llmClient = deps.llmClient;
     this.signalClient = deps.signalClient;
+    this.memoryExtractor = deps.memoryExtractor;
     this.contextWindowSize = options?.contextWindowSize || 200;
     this.messageRetentionCount = options?.messageRetentionCount || 1000;
     this.attachmentRetentionDays = options?.attachmentRetentionDays || 30;
@@ -96,7 +100,6 @@ export class MessageHandler {
     content: string,
     timestamp: number,
     attachments: SignalAttachment[] = [],
-    options?: { storeOnly?: boolean },
   ): Promise<void> {
     // Skip messages from the bot itself
     if (this.appConfig.botPhoneNumber && sender === this.appConfig.botPhoneNumber) {
@@ -133,11 +136,9 @@ export class MessageHandler {
       attachments: attachments.length > 0 ? attachments : undefined,
     });
 
-    if (!options?.storeOnly) {
-      this.ingestImageAttachments(groupId, sender, attachments, timestamp);
-    }
+    await this.ingestImageAttachments(groupId, sender, attachments, timestamp);
 
-    if (options?.storeOnly || !mentioned) {
+    if (!mentioned) {
       return;
     }
 
@@ -151,11 +152,7 @@ export class MessageHandler {
     );
   }
 
-  async handleMessageBatch(
-    groupId: string,
-    messages: ExtractedMessage[],
-    options?: { storeOnly?: boolean },
-  ): Promise<void> {
+  async handleMessageBatch(groupId: string, messages: ExtractedMessage[]): Promise<void> {
     const validMessages: ExtractedMessage[] = [];
     for (const msg of messages) {
       if (this.appConfig.botPhoneNumber && msg.sender === this.appConfig.botPhoneNumber) {
@@ -190,7 +187,7 @@ export class MessageHandler {
 
     let history: Message[] = [];
     let historyFormatted: string[] | undefined;
-    if (mentionMessages.length > 0 && !options?.storeOnly) {
+    if (mentionMessages.length > 0) {
       const batch = this.storage.getRecentMessages(groupId, this.contextWindowSize);
       const fitted = this.contextBuilder.fitToTokenBudget(batch);
       history = fitted.messages;
@@ -208,13 +205,11 @@ export class MessageHandler {
       });
     }
 
-    if (!options?.storeOnly) {
-      for (const msg of validMessages) {
-        this.ingestImageAttachments(groupId, msg.sender, msg.attachments, msg.timestamp);
-      }
+    for (const msg of validMessages) {
+      await this.ingestImageAttachments(groupId, msg.sender, msg.attachments, msg.timestamp);
     }
 
-    if (options?.storeOnly || mentionMessages.length === 0) {
+    if (mentionMessages.length === 0) {
       return;
     }
 
@@ -277,7 +272,7 @@ export class MessageHandler {
     return `You were offline and missed the following messages:\n${lines.join('\n')}\n\nRespond to all of these in a single message.`;
   }
 
-  /** Assemble additional context (dossiers, memories, skills, persona) for the LLM request. */
+  /** Assemble additional context (dossiers, memories, persona) for the LLM request. */
   private assembleAdditionalContext(groupId: string): {
     additionalContext: string | undefined;
     nameMap: Map<string, string>;
@@ -310,11 +305,6 @@ export class MessageHandler {
         contextParts.push(`## Group Memory\n${memoryLines.join('\n')}`);
       }
     }
-    const skillContent = this.contextBuilder.loadSkillContent();
-    if (skillContent) {
-      contextParts.push(skillContent);
-    }
-
     // Look up active persona for this group
     const activePersona = this.storage.getActivePersonaForGroup(groupId);
     const personaPrompt = activePersona?.description;
@@ -326,19 +316,28 @@ export class MessageHandler {
     };
   }
 
-  private ingestImageAttachments(
+  private async ingestImageAttachments(
     groupId: string,
     sender: string,
     attachments: SignalAttachment[],
     timestamp: number,
-  ): void {
+  ): Promise<void> {
     for (const att of attachments) {
       if (att.contentType.startsWith('image/')) {
-        const file = this.signalClient.readAttachmentFile(this.appConfig.attachmentsDir, att.id);
-        if (!file) {
-          logger.debug(`Attachment file not found on disk: ${att.id}`);
+        // Try HTTP fetch first (works with signal-cli REST API)
+        let data = await this.signalClient.fetchAttachment(att.id);
+
+        // Fallback: try disk read (works when ATTACHMENTS_DIR points to signal-cli's storage)
+        if (!data) {
+          const file = this.signalClient.readAttachmentFile(this.appConfig.attachmentsDir, att.id);
+          data = file?.data ?? null;
+        }
+
+        if (!data) {
+          logger.warn(`Failed to retrieve image attachment ${att.id} via HTTP and disk`);
           continue;
         }
+
         this.storage.saveAttachment({
           id: att.id,
           groupId,
@@ -346,7 +345,7 @@ export class MessageHandler {
           contentType: att.contentType,
           size: att.size,
           filename: att.filename,
-          data: file.data,
+          data,
           timestamp,
         });
       }
@@ -442,6 +441,10 @@ export class MessageHandler {
           isBot: true,
         });
         logger.step('delivery: sent via fallback');
+      }
+
+      if (this.memoryExtractor) {
+        this.memoryExtractor.scheduleExtraction(groupId);
       }
 
       logger.groupEnd();

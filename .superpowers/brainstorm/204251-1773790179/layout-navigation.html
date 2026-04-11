@@ -1,0 +1,135 @@
+<h2>Dashboard Layout & Navigation</h2>
+<p class="subtitle">Sidebar navigation with main content area</p>
+
+<div class="mockup">
+  <div class="mockup-header">Signal Bot Management Dashboard</div>
+  <div class="mockup-body" style="display:flex; min-height:500px; padding:0;">
+    <!-- Sidebar -->
+    <div style="width:200px; background:#1a1a2e; padding:16px 0; border-right:1px solid #333; flex-shrink:0;">
+      <div style="padding:8px 16px 16px; color:#7c7cff; font-weight:bold; font-size:14px; border-bottom:1px solid #333; margin-bottom:8px;">Signal Bot</div>
+      <div style="padding:10px 16px; background:#7c7cff22; color:#7c7cff; font-size:13px; border-left:3px solid #7c7cff;">Dashboard</div>
+      <div style="padding:10px 16px; color:#aaa; font-size:13px;">Groups</div>
+      <div style="padding:10px 16px; color:#aaa; font-size:13px;">Reminders</div>
+      <div style="padding:10px 16px; color:#aaa; font-size:13px;">Dossiers</div>
+      <div style="padding:10px 16px; color:#aaa; font-size:13px;">Personas</div>
+      <div style="padding:10px 16px; color:#aaa; font-size:13px;">Memories</div>
+      <div style="padding:10px 16px; color:#aaa; font-size:13px;">Messages</div>
+      <div style="padding:10px 16px; color:#aaa; font-size:13px;">Attachments</div>
+      <div style="padding:10px 16px; color:#aaa; font-size:13px; border-top:1px solid #333; margin-top:8px;">Factory</div>
+    </div>
+    <!-- Main content -->
+    <div style="flex:1; padding:24px;">
+      <!-- Health bar -->
+      <div style="display:flex; gap:16px; margin-bottom:24px;">
+        <div style="flex:1; background:#1a2e1a; border:1px solid #2d5a2d; border-radius:8px; padding:12px;">
+          <div style="color:#6d6; font-size:11px; text-transform:uppercase;">Bot Status</div>
+          <div style="color:#8f8; font-size:20px; font-weight:bold; margin-top:4px;">Healthy</div>
+          <div style="color:#6d6; font-size:11px; margin-top:2px;">Uptime: 3d 14h</div>
+        </div>
+        <div style="flex:1; background:#1a1a2e; border:1px solid #333; border-radius:8px; padding:12px;">
+          <div style="color:#aaa; font-size:11px; text-transform:uppercase;">Active Groups</div>
+          <div style="color:#fff; font-size:20px; font-weight:bold; margin-top:4px;">3</div>
+          <div style="color:#aaa; font-size:11px; margin-top:2px;">Last activity: 2m ago</div>
+        </div>
+        <div style="flex:1; background:#1a1a2e; border:1px solid #333; border-radius:8px; padding:12px;">
+          <div style="color:#aaa; font-size:11px; text-transform:uppercase;">Pending Reminders</div>
+          <div style="color:#fff; font-size:20px; font-weight:bold; margin-top:4px;">7</div>
+          <div style="color:#e74; font-size:11px; margin-top:2px;">1 failed (retrying)</div>
+        </div>
+        <div style="flex:1; background:#1a1a2e; border:1px solid #333; border-radius:8px; padding:12px;">
+          <div style="color:#aaa; font-size:11px; text-transform:uppercase;">Attachments</div>
+          <div style="color:#fff; font-size:20px; font-weight:bold; margin-top:4px;">142 MB</div>
+          <div style="color:#aaa; font-size:11px; margin-top:2px;">234 images</div>
+        </div>
+      </div>
+
+      <!-- Groups list -->
+      <h3 style="color:#fff; font-size:14px; margin-bottom:12px;">Groups</h3>
+      <div style="background:#1a1a2e; border:1px solid #333; border-radius:8px; overflow:hidden;">
+        <div style="display:flex; padding:12px 16px; border-bottom:1px solid #333; align-items:center;">
+          <div style="width:8px; height:8px; background:#8f8; border-radius:50%; margin-right:12px;"></div>
+          <div style="flex:1; color:#fff; font-size:13px;">Family Chat</div>
+          <div style="color:#aaa; font-size:12px; margin-right:24px;">Last: 2m ago</div>
+          <div style="color:#aaa; font-size:12px; margin-right:24px;">1,247 msgs</div>
+          <div style="color:#7c7cff; font-size:12px; cursor:pointer;">Manage →</div>
+        </div>
+        <div style="display:flex; padding:12px 16px; border-bottom:1px solid #333; align-items:center;">
+          <div style="width:8px; height:8px; background:#8f8; border-radius:50%; margin-right:12px;"></div>
+          <div style="flex:1; color:#fff; font-size:13px;">Bot Test</div>
+          <div style="color:#aaa; font-size:12px; margin-right:24px;">Last: 1h ago</div>
+          <div style="color:#aaa; font-size:12px; margin-right:24px;">532 msgs</div>
+          <div style="color:#7c7cff; font-size:12px; cursor:pointer;">Manage →</div>
+        </div>
+        <div style="display:flex; padding:12px 16px; align-items:center;">
+          <div style="width:8px; height:8px; background:#666; border-radius:50%; margin-right:12px;"></div>
+          <div style="flex:1; color:#888; font-size:13px;">Old Group (disabled)</div>
+          <div style="color:#666; font-size:12px; margin-right:24px;">Last: 30d ago</div>
+          <div style="color:#666; font-size:12px; margin-right:24px;">89 msgs</div>
+          <div style="color:#7c7cff; font-size:12px; cursor:pointer;">Manage →</div>
+        </div>
+      </div>
+
+      <!-- Recurring Reminders -->
+      <h3 style="color:#fff; font-size:14px; margin:20px 0 12px;">Recurring Reminders</h3>
+      <div style="background:#1a1a2e; border:1px solid #333; border-radius:8px; overflow:hidden;">
+        <div style="display:flex; padding:12px 16px; border-bottom:1px solid #333; align-items:center;">
+          <div style="flex:1; color:#fff; font-size:13px;">Daily weather briefing</div>
+          <div style="color:#aaa; font-size:12px; margin-right:24px;">Every day 7:00 AM</div>
+          <div style="color:#8f8; font-size:12px;">Next: tomorrow</div>
+        </div>
+        <div style="display:flex; padding:12px 16px; align-items:center;">
+          <div style="flex:1; color:#fff; font-size:13px;">Weekly family check-in</div>
+          <div style="color:#aaa; font-size:12px; margin-right:24px;">Mon 9:00 AM</div>
+          <div style="color:#e74; font-size:12px;">2 consecutive failures</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div style="margin-top:24px;">
+  <h3>Group Detail Page (drill-in)</h3>
+  <p class="subtitle">Tabbed view when you click "Manage" on a group</p>
+</div>
+
+<div class="mockup">
+  <div class="mockup-header">Groups → Family Chat</div>
+  <div class="mockup-body" style="padding:0;">
+    <!-- Tabs -->
+    <div style="display:flex; border-bottom:1px solid #333; padding:0 16px;">
+      <div style="padding:12px 16px; color:#7c7cff; border-bottom:2px solid #7c7cff; font-size:13px;">Overview</div>
+      <div style="padding:12px 16px; color:#aaa; font-size:13px;">Reminders</div>
+      <div style="padding:12px 16px; color:#aaa; font-size:13px;">Dossiers</div>
+      <div style="padding:12px 16px; color:#aaa; font-size:13px;">Persona</div>
+      <div style="padding:12px 16px; color:#aaa; font-size:13px;">Memories</div>
+      <div style="padding:12px 16px; color:#aaa; font-size:13px;">Messages</div>
+      <div style="padding:12px 16px; color:#aaa; font-size:13px;">Settings</div>
+    </div>
+    <!-- Content -->
+    <div style="padding:20px;">
+      <div style="display:flex; gap:16px; margin-bottom:20px;">
+        <div style="flex:1; background:#1a1a2e; border:1px solid #333; border-radius:8px; padding:12px;">
+          <div style="color:#aaa; font-size:11px; text-transform:uppercase;">Status</div>
+          <div style="color:#8f8; font-size:16px; font-weight:bold; margin-top:4px;">Enabled</div>
+        </div>
+        <div style="flex:1; background:#1a1a2e; border:1px solid #333; border-radius:8px; padding:12px;">
+          <div style="color:#aaa; font-size:11px; text-transform:uppercase;">Active Persona</div>
+          <div style="color:#fff; font-size:16px; font-weight:bold; margin-top:4px;">Default</div>
+        </div>
+        <div style="flex:1; background:#1a1a2e; border:1px solid #333; border-radius:8px; padding:12px;">
+          <div style="color:#aaa; font-size:11px; text-transform:uppercase;">Members</div>
+          <div style="color:#fff; font-size:16px; font-weight:bold; margin-top:4px;">6</div>
+        </div>
+        <div style="flex:1; background:#1a1a2e; border:1px solid #333; border-radius:8px; padding:12px;">
+          <div style="color:#aaa; font-size:11px; text-transform:uppercase;">Tool Notifications</div>
+          <div style="color:#fff; font-size:16px; font-weight:bold; margin-top:4px;">On</div>
+        </div>
+      </div>
+      <div style="display:flex; gap:12px;">
+        <button style="background:#7c7cff; color:#fff; border:none; padding:8px 16px; border-radius:6px; font-size:13px; cursor:pointer;">Disable Bot</button>
+        <button style="background:#333; color:#fff; border:1px solid #555; padding:8px 16px; border-radius:6px; font-size:13px; cursor:pointer;">Change Persona</button>
+        <button style="background:#333; color:#fff; border:1px solid #555; padding:8px 16px; border-radius:6px; font-size:13px; cursor:pointer;">Leave Group</button>
+      </div>
+    </div>
+  </div>
+</div>

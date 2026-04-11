@@ -40,6 +40,7 @@ function createMockStore() {
     getDueByGroup: vi.fn().mockReturnValue([]),
     recordAttempt: vi.fn(),
     markSent: vi.fn().mockReturnValue(true),
+    completeReminder: vi.fn().mockReturnValue(true),
     markFailed: vi.fn().mockReturnValue(true),
     create: vi.fn(),
     cancel: vi.fn(),
@@ -113,20 +114,22 @@ describe('ReminderScheduler', () => {
       const count = await scheduler.processDueReminders();
 
       expect(count).toBe(1);
-      // Both groups were still processed
-      expect(mockStore.recordAttempt).toHaveBeenCalledTimes(2);
+      // Both groups were still processed: 1 failed (recordAttempt) + 1 succeeded (completeReminder)
+      expect(mockStore.recordAttempt).toHaveBeenCalledTimes(1);
+      expect(mockStore.completeReminder).toHaveBeenCalledTimes(1);
     });
   });
 
-  describe('claim-then-send pattern', () => {
-    it('should call recordAttempt before sendMessage', async () => {
+  describe('send-then-complete pattern', () => {
+    it('should call completeReminder after successful sendMessage', async () => {
       const reminder = makeReminder();
       mockStore.getGroupsWithDueReminders.mockReturnValue(['group1']);
       mockStore.getDueByGroup.mockReturnValue([reminder]);
 
       const callOrder: string[] = [];
-      mockStore.recordAttempt.mockImplementation(() => {
-        callOrder.push('recordAttempt');
+      mockStore.completeReminder.mockImplementation(() => {
+        callOrder.push('completeReminder');
+        return true;
       });
       mockSignalClient.sendMessage.mockImplementation(async () => {
         callOrder.push('sendMessage');
@@ -134,31 +137,31 @@ describe('ReminderScheduler', () => {
 
       await scheduler.processDueReminders();
 
-      expect(callOrder).toEqual(['recordAttempt', 'sendMessage']);
+      expect(callOrder).toEqual(['sendMessage', 'completeReminder']);
     });
 
-    it('should call markSent on successful send', async () => {
+    it('should call completeReminder on successful send', async () => {
       const reminder = makeReminder({ id: 42 });
       mockStore.getGroupsWithDueReminders.mockReturnValue(['group1']);
       mockStore.getDueByGroup.mockReturnValue([reminder]);
 
       await scheduler.processDueReminders();
 
-      expect(mockStore.markSent).toHaveBeenCalledWith(42);
+      expect(mockStore.completeReminder).toHaveBeenCalledWith(42);
     });
 
-    it('should not error when markSent returns false (already handled)', async () => {
+    it('should not error when completeReminder returns false (already handled)', async () => {
       const reminder = makeReminder({ id: 42 });
       mockStore.getGroupsWithDueReminders.mockReturnValue(['group1']);
       mockStore.getDueByGroup.mockReturnValue([reminder]);
-      mockStore.markSent.mockReturnValue(false);
+      mockStore.completeReminder.mockReturnValue(false);
 
       const count = await scheduler.processDueReminders();
 
       expect(count).toBe(1); // Still counts as sent from the scheduler's perspective
     });
 
-    it('should not call markFailed on send failure', async () => {
+    it('should call recordAttempt on send failure (not completeReminder)', async () => {
       const reminder = makeReminder();
       mockStore.getGroupsWithDueReminders.mockReturnValue(['group1']);
       mockStore.getDueByGroup.mockReturnValue([reminder]);
@@ -168,6 +171,7 @@ describe('ReminderScheduler', () => {
 
       expect(mockStore.markFailed).not.toHaveBeenCalled();
       expect(mockStore.recordAttempt).toHaveBeenCalledWith(1);
+      expect(mockStore.completeReminder).not.toHaveBeenCalled();
     });
   });
 
@@ -229,7 +233,7 @@ describe('ReminderScheduler', () => {
       const count = await scheduler.processDueReminders();
 
       expect(count).toBe(1);
-      expect(mockStore.recordAttempt).toHaveBeenCalled();
+      expect(mockStore.completeReminder).toHaveBeenCalled();
     });
 
     it('should always process first attempt (lastAttemptAt is null)', async () => {
@@ -243,7 +247,7 @@ describe('ReminderScheduler', () => {
       const count = await scheduler.processDueReminders();
 
       expect(count).toBe(1);
-      expect(mockStore.recordAttempt).toHaveBeenCalled();
+      expect(mockStore.completeReminder).toHaveBeenCalled();
     });
   });
 
@@ -437,7 +441,7 @@ describe('ReminderScheduler', () => {
       expect(mockSignalClient.sendMessage).not.toHaveBeenCalled();
     });
 
-    it('marks prompt mode reminder as sent after successful execution', async () => {
+    it('marks prompt mode reminder as completed after successful execution', async () => {
       const reminder = makeReminder({ mode: 'prompt' });
       mockStore.getGroupsWithDueReminders.mockReturnValue(['group1']);
       mockStore.getDueByGroup.mockReturnValue([reminder]);
@@ -448,7 +452,7 @@ describe('ReminderScheduler', () => {
         mockExecutor as any,
       );
       await promptScheduler.processDueReminders();
-      expect(mockStore.markSent).toHaveBeenCalledWith(reminder.id);
+      expect(mockStore.completeReminder).toHaveBeenCalledWith(reminder.id);
     });
 
     it('does not crash when executor throws for prompt mode (retry on next cycle)', async () => {
@@ -491,8 +495,9 @@ describe('ReminderScheduler', () => {
       const count = await scheduler.processDueReminders();
 
       expect(count).toBe(1);
-      expect(mockStore.recordAttempt).toHaveBeenCalledTimes(2);
-      expect(mockStore.markSent).toHaveBeenCalledWith(2);
+      // First reminder failed (recordAttempt), second succeeded (completeReminder)
+      expect(mockStore.recordAttempt).toHaveBeenCalledTimes(1);
+      expect(mockStore.completeReminder).toHaveBeenCalledWith(2);
     });
 
     it('should not propagate Signal API error on notification', async () => {

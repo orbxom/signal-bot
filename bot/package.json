@@ -6,7 +6,7 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsx watch src/index.ts",
-    "dev:test": "SIGNAL_CLI_URL=${SIGNAL_CLI_URL:-http://localhost:9090} tsx watch src/index.ts --test-channel-only",
+    "dev:test": "SIGNAL_CLI_URL=${SIGNAL_CLI_URL:-http://localhost:9090} tsx watch src/index.ts",
     "start": "node dist/index.js",
     "test": "vitest",
     "test:integration": "vitest run tests/integration.test.ts",
@@ -17,7 +17,7 @@
     "check": "biome check ./src ./tests",
     "check:fix": "biome check --write ./src ./tests",
     "mock-signal": "tsx src/mock/signalServer.ts",
-    "dev:mock": "DB_PATH=./data/mock-bot.db COLLABORATIVE_TESTING=true SIGNAL_CLI_URL=${SIGNAL_CLI_URL:-http://localhost:9090} tsx watch src/index.ts --test-channel-only"
+    "dev:mock": "DB_PATH=./data/mock-bot.db COLLABORATIVE_TESTING=true SIGNAL_CLI_URL=${SIGNAL_CLI_URL:-http://localhost:9090} tsx watch src/index.ts"
   },
   "keywords": [
     "signal",

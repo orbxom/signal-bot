@@ -21,9 +21,9 @@ export interface ConfigType {
   darkFactoryEnabled: string;
   darkFactoryProjectRoot: string;
   attachmentRetentionDays: number;
-  testChannelOnly: boolean;
   testGroupId: string;
   collaborativeTestingMode: boolean;
+  startupNotify: boolean;
 }
 
 const DEFAULT_SYSTEM_PROMPT =
@@ -75,7 +75,6 @@ export class Config {
       throw new Error('ATTACHMENT_RETENTION_DAYS must be a positive number');
     }
 
-    const testChannelOnly = process.argv.includes('--test-channel-only') || process.env.TEST_CHANNEL_ONLY === 'true';
     const testGroupId = process.env.TEST_GROUP_ID || 'kKWs+FQPBZKe7N7CdxMjNAAjE2uWEmtBij55MOfWFU4=';
     const collaborativeTestingMode = process.env.COLLABORATIVE_TESTING === 'true';
 
@@ -98,10 +97,13 @@ export class Config {
       whisperModelPath: process.env.WHISPER_MODEL_PATH || './models/ggml-base.en.bin',
       darkFactoryEnabled: process.env.DARK_FACTORY_ENABLED || '',
       darkFactoryProjectRoot: process.env.DARK_FACTORY_PROJECT_ROOT || '',
+      swaDeploymentToken: process.env.SWA_DEPLOYMENT_TOKEN || '',
+      swaHostname: process.env.SWA_HOSTNAME || '',
+      webAppsDir: process.env.WEB_APPS_DIR || '',
       attachmentRetentionDays,
-      testChannelOnly,
       testGroupId,
       collaborativeTestingMode,
+      startupNotify: process.env.STARTUP_NOTIFY === 'true',
     };
   }
 }

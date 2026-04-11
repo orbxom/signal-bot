@@ -1,0 +1,16 @@
+[Unit]
+Description=Signal Family Bot
+After=network.target signal-cli.service
+Requires=signal-cli.service
+
+[Service]
+Type=simple
+User=zknowles
+WorkingDirectory=/home/zknowles/signal-bot/bot
+ExecStart=/usr/bin/npx tsx src/index.ts
+Restart=always
+RestartSec=10
+EnvironmentFile=/home/zknowles/signal-bot/bot/.env
+
+[Install]
+WantedBy=multi-user.target

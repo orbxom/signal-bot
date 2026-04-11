@@ -64,6 +64,31 @@ describe('reminder routes', () => {
     expect(res.body).toEqual([{ id: 1 }]);
   });
 
+  it('GET /api/recurring-reminders returns promptText field (not prompt)', async () => {
+    mockStorage.recurringReminders.listAll.mockReturnValue([{
+      id: 1,
+      groupId: 'g1',
+      requester: '+61400111222',
+      promptText: 'Check the weather forecast',
+      cronExpression: '0 7 * * *',
+      timezone: 'Australia/Sydney',
+      nextDueAt: 1710900000000,
+      status: 'active',
+      consecutiveFailures: 0,
+      lastFiredAt: null,
+      lastInFlightAt: null,
+      createdAt: 1710800000000,
+      updatedAt: 1710800000000,
+    }]);
+
+    const res = await request(app).get('/api/recurring-reminders');
+
+    expect(res.status).toBe(200);
+    expect(res.body[0]).toHaveProperty('promptText', 'Check the weather forecast');
+    expect(res.body[0]).not.toHaveProperty('prompt');
+  });
+
+
   it('DELETE /api/recurring-reminders/:id cancels', async () => {
     const res = await request(app).delete('/api/recurring-reminders/3?groupId=g1');
 

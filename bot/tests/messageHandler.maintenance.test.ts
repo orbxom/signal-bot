@@ -52,7 +52,11 @@ describe('MessageHandler maintenance', () => {
       getMemoriesByGroup: vi.fn().mockReturnValue([]),
       getActivePersonaForGroup: vi.fn().mockReturnValue(null),
       saveAttachment: vi.fn(),
-      groupSettings: { getToolNotifications: vi.fn().mockReturnValue(false), isEnabled: vi.fn().mockReturnValue(true), getTriggers: vi.fn().mockReturnValue(null) },
+      groupSettings: {
+        getToolNotifications: vi.fn().mockReturnValue(false),
+        isEnabled: vi.fn().mockReturnValue(true),
+        getTriggers: vi.fn().mockReturnValue(null),
+      },
     } as any;
 
     mockLLM = {
@@ -68,6 +72,7 @@ describe('MessageHandler maintenance', () => {
       sendMessage: vi.fn().mockResolvedValue(undefined),
       sendTyping: vi.fn().mockResolvedValue(undefined),
       stopTyping: vi.fn().mockResolvedValue(undefined),
+      fetchAttachment: vi.fn().mockResolvedValue(null),
       readAttachmentFile: vi.fn().mockReturnValue(null),
     } as any;
   });
@@ -123,38 +128,10 @@ describe('MessageHandler maintenance', () => {
     });
   });
 
-  describe('store-only attachment ingestion', () => {
-    it('should NOT ingest attachments when handleMessageBatch is called with storeOnly: true', async () => {
+  describe('attachment ingestion', () => {
+    it('should ingest attachments when handleMessageBatch is called', async () => {
       const fakeBuffer = Buffer.from('fake image');
-      mockSignal.readAttachmentFile = vi.fn().mockReturnValue({ data: fakeBuffer });
-
-      const handler = new MessageHandler(['@bot'], {
-        storage: mockStorage,
-        llmClient: mockLLM,
-        signalClient: mockSignal,
-        appConfig: makeAppConfig({ attachmentsDir: '/data/attachments' }),
-      });
-
-      await handler.handleMessageBatch(
-        'g1',
-        [
-          {
-            sender: 'Alice',
-            content: '@bot check this',
-            timestamp: 1000,
-            attachments: [{ id: 'img-abc', contentType: 'image/jpeg', size: 50000, filename: 'photo.jpg' }],
-          },
-        ],
-        { storeOnly: true },
-      );
-
-      expect(mockSignal.readAttachmentFile).not.toHaveBeenCalled();
-      expect(mockStorage.saveAttachment).not.toHaveBeenCalled();
-    });
-
-    it('should ingest attachments when handleMessageBatch is called with storeOnly: false', async () => {
-      const fakeBuffer = Buffer.from('fake image');
-      mockSignal.readAttachmentFile = vi.fn().mockReturnValue({ data: fakeBuffer });
+      mockSignal.fetchAttachment = vi.fn().mockResolvedValue(fakeBuffer);
 
       const handler = new MessageHandler(['@bot'], {
         storage: mockStorage,
@@ -172,32 +149,8 @@ describe('MessageHandler maintenance', () => {
         },
       ]);
 
-      expect(mockSignal.readAttachmentFile).toHaveBeenCalledWith('/data/attachments', 'img-abc');
+      expect(mockSignal.fetchAttachment).toHaveBeenCalledWith('img-abc');
       expect(mockStorage.saveAttachment).toHaveBeenCalled();
-    });
-
-    it('should NOT ingest attachments when handleMessage is called with storeOnly: true', async () => {
-      const fakeBuffer = Buffer.from('fake image');
-      mockSignal.readAttachmentFile = vi.fn().mockReturnValue({ data: fakeBuffer });
-
-      const handler = new MessageHandler(['@bot'], {
-        storage: mockStorage,
-        llmClient: mockLLM,
-        signalClient: mockSignal,
-        appConfig: makeAppConfig({ attachmentsDir: '/data/attachments' }),
-      });
-
-      await handler.handleMessage(
-        'g1',
-        'Alice',
-        '@bot check this',
-        1000,
-        [{ id: 'img-abc', contentType: 'image/jpeg', size: 50000, filename: 'photo.jpg' }],
-        { storeOnly: true },
-      );
-
-      expect(mockSignal.readAttachmentFile).not.toHaveBeenCalled();
-      expect(mockStorage.saveAttachment).not.toHaveBeenCalled();
     });
   });
 });

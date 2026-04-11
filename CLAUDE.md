@@ -157,6 +157,55 @@ This is designed for the dark factory's integration test stage (Stage 6), where 
 - **Log files**: Written to `logs/` at the repo root. Old log files beyond 10 are cleaned up automatically on startup. Logs use async writes via WriteStream.
 - **Orphaned Claude processes on shutdown**: The bot tracks all spawned `claude -p` processes. On SIGINT/SIGTERM, it sends SIGTERM to all children, waits 2s, then exits. Timed-out children also get SIGKILL escalation after 5s.
 
+## Deployment (NUC Production Server)
+
+### Architecture
+- **Production (NUC at 192.168.0.239)**: Runs via systemd services. Responds to all groups including Bot Test.
+- Only one instance should listen to Signal at a time to avoid duplicate responses.
+
+### NUC Services
+- `signal-cli.service` — signal-cli native binary, JSON-RPC daemon on port 8080
+- `signal-bot.service` — The bot (`npx tsx src/index.ts`), auto-restarts on failure
+- `signal-bot-dashboard.service` — Dark Factory dashboard on port 3333
+
+Service templates are in `scripts/systemd/` for reference. To install/update on NUC:
+```bash
+scp scripts/systemd/*.service zknowles@192.168.0.239:/tmp/
+ssh zknowles@192.168.0.239 "sudo cp /tmp/*.service /etc/systemd/system/ && sudo systemctl daemon-reload"
+```
+
+### NUC .env Differences
+The NUC has its own `bot/.env` with:
+- `SIGNAL_CLI_URL=http://localhost:8080`
+- `ATTACHMENTS_DIR=/home/zknowles/signal-bot/data/signal-attachments`
+- `STARTUP_NOTIFY=true` (sends startup/error notifications to Bot Test channel)
+- No `DARK_FACTORY_ENABLED` (production bot only)
+
+### Deploying
+```bash
+./scripts/deploy-nuc.sh                          # deploy current source to NUC
+NUC_HOST=10.0.0.5 ./scripts/deploy-nuc.sh       # custom NUC IP
+```
+Runs 4 phases: pre-flight (checks SSH + signal-cli is running), sync & install (rsync, `npm install` for bot + dashboard, installs systemd service files), restart (enables all 3 services on boot + restarts `signal-bot` and `signal-bot-dashboard`), verify (checks services are active, scans logs for errors). Prints **DEPLOY OK** or **DEPLOY FAILED**.
+
+### Health Check
+```bash
+./scripts/nuc-health.sh        # default 20 log lines
+./scripts/nuc-health.sh 50     # more log lines
+```
+Checks system resources, service status, signal-cli API, and recent logs.
+
+### Dashboard
+Access at http://192.168.0.239:3333 from any device on the local network.
+
+### Manual Operations
+```bash
+ssh zknowles@192.168.0.239                                           # SSH into NUC
+ssh zknowles@192.168.0.239 "journalctl -u signal-bot -f"            # live logs
+ssh zknowles@192.168.0.239 "sudo systemctl restart signal-bot"      # restart bot
+ssh zknowles@192.168.0.239 "sudo systemctl restart signal-cli"      # restart signal-cli
+```
+
 ## Testing
 
 ```bash

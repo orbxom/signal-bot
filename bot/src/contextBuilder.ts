@@ -1,4 +1,3 @@
-import fs from 'node:fs';
 import path from 'node:path';
 import { estimateTokens } from './mcp/result';
 import type { ChatMessage, Message, SignalAttachment } from './types';
@@ -25,6 +24,16 @@ const VOICE_MESSAGE_INSTRUCTIONS =
 
 const IMAGE_INSTRUCTIONS =
   'When an image is referenced (shown as [Image: attachment://<id>] in the conversation), use the view_image tool with that attachment ID to view it. Then respond about the image content. Images may appear in the current message or in recent conversation history.';
+
+const CAPABILITIES_PROMPT = `## Your Capabilities
+- Dossier tools (update_dossier, get_dossier, list_dossiers) — store/retrieve info about people in this group
+- Persona tools (create_persona, list_personas, switch_persona) — create or switch bot personalities
+- Message history (search_messages, get_messages_by_date) — search past conversations
+- Feature requests (create_feature_request) — file ideas via GitHub
+- Reminders (set_reminder, list_reminders, cancel_reminder) — schedule one-time or recurring reminders
+- Weather (get_weather_observations, get_weather_forecast) — Australian weather via BOM
+- Web apps (write_web_app, read_web_app, list_sites, delete_site, preview_web_app, deploy_web_apps) — build single-file HTML/JS/CSS websites, preview locally, and deploy to Azure Static Web Apps. Use preview_web_app + Playwright to visually test before deploying. After deploy, share the live URL with the group.
+When someone shares personal info, you may update their dossier. When the group decides something worth remembering, save it as a memory.`;
 
 const COLLABORATIVE_TESTING_PROMPT = `## Collaborative Testing Mode
 
@@ -55,7 +64,6 @@ export class ContextBuilder {
   private collaborativeTestingMode: boolean;
   private timestampFormatter: Intl.DateTimeFormat;
   private isoFormatter: Intl.DateTimeFormat;
-  private cachedSkillContent: string | null = null;
 
   constructor(config: ContextBuilderConfig) {
     this.systemPrompt = config.systemPrompt;
@@ -154,23 +162,6 @@ export class ContextBuilder {
     return { messages: messages.slice(cutoffIndex), formatted: formattedStrings };
   }
 
-  loadSkillContent(): string {
-    if (this.cachedSkillContent !== null) return this.cachedSkillContent;
-    try {
-      const distPath = path.resolve(__dirname, 'skills');
-      const srcPath = path.resolve(__dirname, '..', 'src', 'skills');
-      const skillDir = fs.existsSync(distPath) ? distPath : srcPath;
-      const files = fs
-        .readdirSync(skillDir)
-        .filter(f => f.endsWith('.md'))
-        .sort();
-      this.cachedSkillContent = files.map(f => fs.readFileSync(path.join(skillDir, f), 'utf-8')).join('\n\n');
-    } catch {
-      this.cachedSkillContent = '';
-    }
-    return this.cachedSkillContent;
-  }
-
   buildContext(params: {
     history: Message[];
     query: string;
@@ -197,6 +188,7 @@ export class ContextBuilder {
         MEMORY_INSTRUCTIONS,
         VOICE_MESSAGE_INSTRUCTIONS,
         IMAGE_INSTRUCTIONS,
+        CAPABILITIES_PROMPT,
       ].join('\n');
 
       if (dossierContext) {

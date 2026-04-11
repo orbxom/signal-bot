@@ -1,7 +1,11 @@
+import path from 'node:path';
 import { ClaudeCLIClient, spawnLimiter } from './claudeClient';
 import { Config } from './config';
 import { logger } from './logger';
+import { MemoryConsolidator } from './memoryConsolidator';
+import { MemoryExtractor } from './memoryExtractor';
 import { MessageHandler } from './messageHandler';
+import { sendErrorNotification, sendStartupNotification } from './notifications';
 import { PollingBackoff } from './pollingBackoff';
 import { RecurringReminderExecutor } from './recurringReminderExecutor';
 import { ReminderScheduler } from './reminderScheduler';
@@ -34,6 +38,7 @@ async function main() {
     whisperModelPath: config.whisperModelPath,
     darkFactoryEnabled: config.darkFactoryEnabled,
     darkFactoryProjectRoot: config.darkFactoryProjectRoot,
+    logsDir: path.resolve(__dirname, '..', '..', 'logs'),
   };
 
   const recurringExecutor = new RecurringReminderExecutor(appConfig, signalClient, config.claude.maxTurns, groupId =>
@@ -49,6 +54,10 @@ async function main() {
   );
   logger.success('Reminder scheduler initialized');
 
+  const memoryExtractor = new MemoryExtractor(storage);
+  const memoryConsolidator = new MemoryConsolidator(storage, config.timezone);
+  logger.success('Memory extractor and consolidator initialized');
+
   const messageHandler = new MessageHandler(
     config.mentionTriggers,
     {
@@ -56,6 +65,7 @@ async function main() {
       llmClient,
       signalClient,
       appConfig,
+      memoryExtractor,
     },
     {
       systemPrompt: config.systemPrompt,
@@ -68,13 +78,12 @@ async function main() {
   );
   logger.success(`Message handler initialized (triggers: ${config.mentionTriggers.join(', ')})`);
 
-  if (config.testChannelOnly) {
-    logger.warn(`*** TEST CHANNEL ONLY MODE — only processing group ${config.testGroupId} ***`);
-  }
-
   // Graceful shutdown
   const shutdown = () => {
     logger.info('Shutting down gracefully...');
+    memoryExtractor.clearTimers();
+    memoryExtractor.killAll();
+    memoryConsolidator.killAll();
     spawnLimiter.killAll();
     logger.close();
     storage.close();
@@ -85,11 +94,16 @@ async function main() {
 
   process.on('unhandledRejection', reason => {
     logger.error('Unhandled rejection:', reason);
+    sendErrorNotification(signalClient, config, reason).finally(() => {
+      process.exit(1);
+    });
   });
 
   // Wait for signal-cli to be ready
   logger.info('Waiting for signal-cli...');
   await signalClient.waitForReady();
+
+  await sendStartupNotification(signalClient, config);
 
   // Start polling loop
   logger.success('Starting message polling...');
@@ -123,12 +137,7 @@ async function main() {
           continue;
         }
 
-        const storeOnly = config.testChannelOnly && data.groupId !== config.testGroupId;
-        if (storeOnly) {
-          logger.compact('STORED', `[${data.groupId}] ${data.sender}: ${data.content.substring(0, 80)}`);
-        } else {
-          logger.compact('RECV', `[${data.groupId}] ${data.sender}: ${data.content.substring(0, 80)}`);
-        }
+        logger.compact('RECV', `[${data.groupId}] ${data.sender}: ${data.content.substring(0, 80)}`);
 
         if (!byGroup.has(data.groupId)) {
           byGroup.set(data.groupId, []);
@@ -139,8 +148,7 @@ async function main() {
       // Process each group's messages as a batch
       for (const [groupId, batch] of byGroup) {
         try {
-          const storeOnly = config.testChannelOnly && groupId !== config.testGroupId;
-          await messageHandler.handleMessageBatch(groupId, batch, { storeOnly });
+          await messageHandler.handleMessageBatch(groupId, batch);
         } catch (error) {
           logger.error(`Error processing group ${groupId}:`, error);
         }
@@ -155,6 +163,11 @@ async function main() {
           messageHandler.runMaintenance();
         } catch (error) {
           logger.error('Error processing reminders:', error);
+        }
+        try {
+          await memoryConsolidator.runIfDue();
+        } catch (error) {
+          logger.error('Daily consolidation check failed:', error);
         }
       }
 
@@ -185,7 +198,21 @@ async function main() {
   }
 }
 
-main().catch(error => {
+main().catch(async error => {
   logger.error('Fatal error:', error);
+  // Best-effort: signalClient may not be initialized if error was during startup
+  // This catch can't access signalClient from main's scope, so create a temporary one
+  try {
+    const config = Config.load();
+    if (config.startupNotify) {
+      const tempClient = new SignalClient(config.signalCliUrl, config.botPhoneNumber);
+      await Promise.race([
+        sendErrorNotification(tempClient, config, error),
+        new Promise(resolve => setTimeout(resolve, 5000)),
+      ]);
+    }
+  } catch {
+    // Config or signal-cli not available — just exit
+  }
   process.exit(1);
 });
