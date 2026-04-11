@@ -49,10 +49,10 @@ export default function Messages() {
   const { data: groups } = useApi<Group[]>('/api/groups')
 
   const url = groupId
-    ? `/api/messages?groupId=${groupId}${searchQuery ? `&search=${encodeURIComponent(searchQuery)}` : ''}&limit=100`
+    ? `/api/messages?groupId=${encodeURIComponent(groupId)}${searchQuery ? `&search=${encodeURIComponent(searchQuery)}` : ''}&limit=100`
     : null
 
-  const { data: messages, loading } = useApi<Message[]>(url ?? '/api/messages?groupId=_none_', [groupId, searchQuery])
+  const { data: messages, loading } = useApi<Message[]>(url, [groupId, searchQuery])
 
   function handleSearch(e: React.FormEvent) {
     e.preventDefault()

@@ -388,6 +388,58 @@ describe('MessageStore', () => {
     });
   });
 
+  describe('getCount', () => {
+    it('should return 0 for unknown group', () => {
+      setup();
+      expect(store.getCount('nonexistent')).toBe(0);
+    });
+
+    it('should return count of messages for a group', () => {
+      setup();
+      seedMessages('group1', [
+        { sender: 'Alice', content: 'One', timestamp: 1000 },
+        { sender: 'Bob', content: 'Two', timestamp: 2000 },
+        { sender: 'Charlie', content: 'Three', timestamp: 3000 },
+      ]);
+      seedMessages('group2', [
+        { sender: 'Alice', content: 'Other', timestamp: 1000 },
+      ]);
+
+      expect(store.getCount('group1')).toBe(3);
+      expect(store.getCount('group2')).toBe(1);
+    });
+  });
+
+  describe('getLastTimestamp', () => {
+    it('should return null for unknown group', () => {
+      setup();
+      expect(store.getLastTimestamp('nonexistent')).toBeNull();
+    });
+
+    it('should return the max timestamp for a group', () => {
+      setup();
+      seedMessages('group1', [
+        { sender: 'Alice', content: 'First', timestamp: 1000 },
+        { sender: 'Bob', content: 'Last', timestamp: 3000 },
+        { sender: 'Charlie', content: 'Middle', timestamp: 2000 },
+      ]);
+
+      expect(store.getLastTimestamp('group1')).toBe(3000);
+    });
+
+    it('should only return timestamp for the specified group', () => {
+      setup();
+      seedMessages('group1', [
+        { sender: 'Alice', content: 'Old', timestamp: 1000 },
+      ]);
+      seedMessages('group2', [
+        { sender: 'Bob', content: 'New', timestamp: 5000 },
+      ]);
+
+      expect(store.getLastTimestamp('group1')).toBe(1000);
+    });
+  });
+
   describe('getDistinctGroupIds', () => {
     it('should return empty array when no messages exist', () => {
       setup();

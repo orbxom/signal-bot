@@ -62,6 +62,7 @@ app.get('*', (_req, res) => {
 // Start services and server
 dbPoller.start();
 factoryService.start();
+factoryService.on('update', (msg) => wsHub.broadcast({ type: 'factory:update', data: msg }));
 
 httpServer.listen(PORT, '0.0.0.0', () => {
   console.log(`Dashboard running at http://0.0.0.0:${PORT}`);

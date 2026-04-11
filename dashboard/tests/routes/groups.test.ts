@@ -20,6 +20,10 @@ describe('groups routes', () => {
       personas: {
         getActiveForGroup: vi.fn().mockReturnValue(null),
       },
+      messages: {
+        getCount: vi.fn().mockReturnValue(0),
+        getLastTimestamp: vi.fn().mockReturnValue(null),
+      },
     };
 
     mockSignalClient = {
@@ -46,6 +50,33 @@ describe('groups routes', () => {
     expect(res.body[0].name).toBe('Family');
     expect(res.body[0].enabled).toBe(true);
     expect(res.body[0].activePersona).toBe('Friendly Bot');
+  });
+
+  it('GET /api/groups enriches with messageCount and lastActivity', async () => {
+    mockSignalClient.listGroups.mockResolvedValue([
+      { id: 'g1', name: 'Family', members: ['+1', '+2'] },
+    ]);
+    mockStorage.messages.getCount.mockReturnValue(42);
+    mockStorage.messages.getLastTimestamp.mockReturnValue(1710000000000);
+
+    const res = await request(app).get('/api/groups');
+
+    expect(res.status).toBe(200);
+    expect(res.body[0].messageCount).toBe(42);
+    expect(res.body[0].lastActivity).toBe(1710000000000);
+  });
+
+  it('GET /api/groups returns null lastActivity when no messages', async () => {
+    mockSignalClient.listGroups.mockResolvedValue([
+      { id: 'g1', name: 'Family', members: ['+1'] },
+    ]);
+    mockStorage.messages.getCount.mockReturnValue(0);
+    mockStorage.messages.getLastTimestamp.mockReturnValue(null);
+
+    const res = await request(app).get('/api/groups');
+
+    expect(res.body[0].messageCount).toBe(0);
+    expect(res.body[0].lastActivity).toBeNull();
   });
 
   it('GET /api/groups returns 503 when signal-cli unreachable', async () => {

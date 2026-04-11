@@ -30,23 +30,37 @@ function formatTimestamp(ts: number): string {
 export default function Reminders() {
   const [groupFilter, setGroupFilter] = useState('')
   const { data: reminders, loading: loadingReminders, refetch: refetchReminders } =
-    useApi<Reminder[]>(`/api/reminders${groupFilter ? `?groupId=${groupFilter}` : ''}`, [groupFilter])
+    useApi<Reminder[]>(`/api/reminders${groupFilter ? `?groupId=${encodeURIComponent(groupFilter)}` : ''}`, [groupFilter])
   const { data: recurring, loading: loadingRecurring, refetch: refetchRecurring } =
-    useApi<RecurringReminder[]>(`/api/recurring-reminders${groupFilter ? `?groupId=${groupFilter}` : ''}`, [groupFilter])
+    useApi<RecurringReminder[]>(`/api/recurring-reminders${groupFilter ? `?groupId=${encodeURIComponent(groupFilter)}` : ''}`, [groupFilter])
 
   const cancelReminder = async (id: number, groupId: string) => {
-    await apiCall('DELETE', `/api/reminders/${id}?groupId=${encodeURIComponent(groupId)}`)
-    refetchReminders()
+    if (!confirm('Cancel this reminder?')) return
+    try {
+      await apiCall('DELETE', `/api/reminders/${id}?groupId=${encodeURIComponent(groupId)}`)
+      refetchReminders()
+    } catch (err) {
+      alert(`Failed to cancel reminder: ${(err as Error).message}`)
+    }
   }
 
   const cancelRecurring = async (id: number, groupId: string) => {
-    await apiCall('DELETE', `/api/recurring-reminders/${id}?groupId=${encodeURIComponent(groupId)}`)
-    refetchRecurring()
+    if (!confirm('Cancel this recurring reminder?')) return
+    try {
+      await apiCall('DELETE', `/api/recurring-reminders/${id}?groupId=${encodeURIComponent(groupId)}`)
+      refetchRecurring()
+    } catch (err) {
+      alert(`Failed to cancel recurring reminder: ${(err as Error).message}`)
+    }
   }
 
   const resetFailures = async (id: number) => {
-    await apiCall('POST', `/api/recurring-reminders/${id}/reset-failures`)
-    refetchRecurring()
+    try {
+      await apiCall('POST', `/api/recurring-reminders/${id}/reset-failures`)
+      refetchRecurring()
+    } catch (err) {
+      alert(`Failed to reset failures: ${(err as Error).message}`)
+    }
   }
 
   const reminderColumns = [

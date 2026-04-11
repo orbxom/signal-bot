@@ -1,11 +1,16 @@
 import { useState, useEffect, useCallback } from 'react'
 
-export function useApi<T>(url: string, deps: unknown[] = []) {
+export function useApi<T>(url: string | null, deps: unknown[] = []) {
   const [data, setData] = useState<T | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(url !== null)
   const [error, setError] = useState<string | null>(null)
 
   const refetch = useCallback(async () => {
+    if (!url) {
+      setData(null)
+      setLoading(false)
+      return
+    }
     setLoading(true)
     setError(null)
     try {

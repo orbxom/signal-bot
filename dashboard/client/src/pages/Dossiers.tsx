@@ -18,7 +18,7 @@ export default function Dossiers() {
   const [editDisplayName, setEditDisplayName] = useState('')
 
   const { data: dossiers, loading, refetch } =
-    useApi<Dossier[]>(`/api/dossiers${groupFilter ? `?groupId=${groupFilter}` : ''}`, [groupFilter])
+    useApi<Dossier[]>(`/api/dossiers${groupFilter ? `?groupId=${encodeURIComponent(groupFilter)}` : ''}`, [groupFilter])
 
   const startEdit = (d: Dossier) => {
     setEditing(d)
@@ -28,17 +28,26 @@ export default function Dossiers() {
 
   const saveEdit = async () => {
     if (!editing) return
-    await apiCall('PUT', `/api/dossiers/${encodeURIComponent(editing.groupId)}/${encodeURIComponent(editing.personId)}`, {
-      displayName: editDisplayName,
-      notes: editNotes,
-    })
-    setEditing(null)
-    refetch()
+    try {
+      await apiCall('PUT', `/api/dossiers/${encodeURIComponent(editing.groupId)}/${encodeURIComponent(editing.personId)}`, {
+        displayName: editDisplayName,
+        notes: editNotes,
+      })
+      setEditing(null)
+      refetch()
+    } catch (err) {
+      alert(`Failed to save dossier: ${(err as Error).message}`)
+    }
   }
 
   const deleteDossier = async (d: Dossier) => {
-    await apiCall('DELETE', `/api/dossiers/${encodeURIComponent(d.groupId)}/${encodeURIComponent(d.personId)}`)
-    refetch()
+    if (!confirm('Delete this dossier?')) return
+    try {
+      await apiCall('DELETE', `/api/dossiers/${encodeURIComponent(d.groupId)}/${encodeURIComponent(d.personId)}`)
+      refetch()
+    } catch (err) {
+      alert(`Failed to delete dossier: ${(err as Error).message}`)
+    }
   }
 
   const columns = [

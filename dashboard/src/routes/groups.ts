@@ -13,6 +13,8 @@ export function createGroupRoutes(storage: Storage, signalClient: SignalClient):
         enabled: settings ? settings.enabled : true,
         activePersona: storage.personas.getActiveForGroup(g.id)?.name ?? 'Default',
         settings,
+        messageCount: storage.messages.getCount(g.id),
+        lastActivity: storage.messages.getLastTimestamp(g.id),
       };
     });
   }

@@ -38,6 +38,8 @@ export class MessageStore {
     searchMessagesWithSender: Database.Statement;
     getMessagesByDateRange: Database.Statement;
     getDistinctGroupIds: Database.Statement;
+    countByGroup: Database.Statement;
+    lastTimestampByGroup: Database.Statement;
   };
 
   constructor(conn: DatabaseConnection) {
@@ -92,6 +94,12 @@ export class MessageStore {
       `),
       getDistinctGroupIds: conn.db.prepare(`
         SELECT DISTINCT groupId FROM messages
+      `),
+      countByGroup: conn.db.prepare(`
+        SELECT COUNT(*) as count FROM messages WHERE groupId = ?
+      `),
+      lastTimestampByGroup: conn.db.prepare(`
+        SELECT MAX(timestamp) as ts FROM messages WHERE groupId = ?
       `),
     };
   }
@@ -205,6 +213,20 @@ export class MessageStore {
     } catch (error) {
       wrapSqliteError(error, 'get messages by date range');
     }
+  }
+
+  getCount(groupId: string): number {
+    return this.conn.runOp('get message count', () => {
+      const row = this.stmts.countByGroup.get(groupId) as { count: number };
+      return row.count;
+    });
+  }
+
+  getLastTimestamp(groupId: string): number | null {
+    return this.conn.runOp('get last timestamp', () => {
+      const row = this.stmts.lastTimestampByGroup.get(groupId) as { ts: number | null };
+      return row.ts;
+    });
   }
 
   getDistinctGroupIds(): string[] {

@@ -74,43 +74,55 @@ const messageColumns = [
 export default function GroupDetail() {
   const { id } = useParams<{ id: string }>()
   const [activeTab, setActiveTab] = useState<Tab>('Overview')
-  const { data: group, loading, refetch } = useApi<GroupDetailData>(`/api/groups/${id}`)
-  const { data: reminders } = useApi<Reminder[]>(`/api/reminders?groupId=${id}`)
-  const { data: dossiers } = useApi<Dossier[]>(`/api/dossiers?groupId=${id}`)
-  const { data: messages } = useApi<Message[]>(`/api/messages?groupId=${id}`)
+  const encodedId = encodeURIComponent(id!)
+  const { data: group, loading, error, refetch } = useApi<GroupDetailData>(`/api/groups/${encodedId}`)
+  const { data: reminders } = useApi<Reminder[]>(`/api/reminders?groupId=${encodedId}`)
+  const { data: dossiers } = useApi<Dossier[]>(`/api/dossiers?groupId=${encodedId}`)
+  const { data: messages } = useApi<Message[]>(`/api/messages?groupId=${encodedId}`)
 
   const [settingsForm, setSettingsForm] = useState<Partial<GroupSettings>>({})
   const [saving, setSaving] = useState(false)
   const [leaveConfirm, setLeaveConfirm] = useState(false)
 
-  if (loading || !group) return <div className="loading">Loading...</div>
+  if (loading) return <div className="loading">Loading...</div>
+  if (error || !group) return <div className="error">{error || 'Group not found'}</div>
 
   const settings = group.settings ?? { enabled: true, customTriggers: null, contextWindowSize: null, toolNotifications: true }
 
   async function handleSaveSettings() {
     setSaving(true)
     try {
-      await apiCall('PATCH', `/api/groups/${id}/settings`, {
+      await apiCall('PATCH', `/api/groups/${encodedId}/settings`, {
         ...settings,
         ...settingsForm,
       })
       refetch()
+    } catch (err) {
+      alert(`Failed to save settings: ${(err as Error).message}`)
     } finally {
       setSaving(false)
     }
   }
 
   async function handleLeave() {
-    await apiCall('POST', `/api/groups/${id}/leave`)
-    refetch()
-    setLeaveConfirm(false)
+    try {
+      await apiCall('POST', `/api/groups/${encodedId}/leave`)
+      refetch()
+      setLeaveConfirm(false)
+    } catch (err) {
+      alert(`Failed to leave group: ${(err as Error).message}`)
+    }
   }
 
   async function handleToggleEnabled() {
-    await apiCall('PATCH', `/api/groups/${id}/settings`, {
-      enabled: !settings.enabled,
-    })
-    refetch()
+    try {
+      await apiCall('PATCH', `/api/groups/${encodedId}/settings`, {
+        enabled: !settings.enabled,
+      })
+      refetch()
+    } catch (err) {
+      alert(`Failed to update group: ${(err as Error).message}`)
+    }
   }
 
   return (
