@@ -383,7 +383,7 @@ describe('MemoryStore', () => {
   });
 
   describe('getByGroup', () => {
-    it('should return all memories for group (delegates to search with limit 100)', () => {
+    it('should return all memories for group (delegates to search with limit 1000)', () => {
       setup();
       store.save('group1', 'item1', 'note');
       store.save('group1', 'item2', 'task');

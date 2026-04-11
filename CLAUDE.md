@@ -49,7 +49,7 @@ Image attachments sent in Signal messages are stored as BLOBs in the `attachment
 - `reminders.ts` — set/list/cancel reminders + set/list/cancel recurring reminders (6 tools)
 - `weather.ts` — BOM weather: search, observations, forecast, warnings (4 tools)
 - `github.ts` — GitHub integration: feature request issues, PR list/view/diff/comment/review/merge (7 tools)
-- `memories.ts` — Versatile memory store: save/update/get/search/delete memories with types, tags, descriptions (8 tools). CLI scripts at `memory/cli.ts` for haiku subagent access.
+- `memories.ts` — Versatile memory store: save_memory/update_memory/get_memory/search_memories/delete_memory/list_types/list_tags/manage_tags (8 tools). CLI scripts at `memory/cli.ts` for haiku subagent access.
 - `dossiers.ts` — Person dossier CRUD (3 tools)
 - `sourceCode.ts` — List/read/search source files (3 tools). Paths are relative to `bot/`, not the repo root (e.g., use `src/index.ts` not `bot/src/index.ts`)
 - `messageHistory.ts` — Search and date-range message queries (2 tools)
