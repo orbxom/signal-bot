@@ -5,7 +5,7 @@ export function useApi<T>(url: string | null, deps: unknown[] = []) {
   const [loading, setLoading] = useState(url !== null)
   const [error, setError] = useState<string | null>(null)
 
-  const refetch = useCallback(async () => {
+  const refetch = useCallback(async (signal?: AbortSignal) => {
     if (!url) {
       setData(null)
       setLoading(false)
@@ -14,39 +14,21 @@ export function useApi<T>(url: string | null, deps: unknown[] = []) {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch(url)
+      const res = await fetch(url, signal ? { signal } : undefined)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       setData(await res.json())
     } catch (err) {
-      setError((err as Error).message)
+      if ((err as Error).name !== 'AbortError') setError((err as Error).message)
     } finally {
-      setLoading(false)
+      if (!signal?.aborted) setLoading(false)
     }
   }, [url])
 
   useEffect(() => {
-    if (!url) {
-      setData(null)
-      setLoading(false)
-      return
-    }
     const controller = new AbortController()
-    setLoading(true)
-    setError(null)
-    fetch(url, { signal: controller.signal })
-      .then(res => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        return res.json()
-      })
-      .then(json => setData(json))
-      .catch(err => {
-        if (err.name !== 'AbortError') setError((err as Error).message)
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setLoading(false)
-      })
+    refetch(controller.signal)
     return () => controller.abort()
-  }, [url, ...deps])
+  }, [refetch, ...deps])
 
   return { data, loading, error, refetch, setData }
 }

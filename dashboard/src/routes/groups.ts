@@ -21,7 +21,6 @@ export function createGroupRoutes(storage: Storage, signalClient: SignalClient |
     });
   }
 
-
   router.get('/groups', async (_req, res) => {
     if (!signalClient) return res.status(503).json(signalNotConfigured);
     try {
@@ -84,7 +83,6 @@ export function createGroupRoutes(storage: Storage, signalClient: SignalClient |
       res.status(500).json({ error: 'Failed to join group' });
     }
   });
-
 
   router.post('/groups/:id/leave', async (req, res) => {
     if (!signalClient) return res.status(503).json(signalNotConfigured);

@@ -84,7 +84,7 @@ export class GroupSettingsStore {
   }
 
   listAll(limit = 50, offset = 0): GroupSettings[] {
-    const rows = (this.listAll_ as any).all(limit, offset) as Record<string, unknown>[];
+    const rows = this.listAll_.all(limit, offset) as Record<string, unknown>[];
     return rows.map(r => this.mapRow(r));
   }
 
