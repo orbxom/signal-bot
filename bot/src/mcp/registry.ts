@@ -69,9 +69,20 @@ const EXTERNAL_SERVERS = {
       'mcp__playwright__browser_close',
       'mcp__playwright__browser_tabs',
       'mcp__playwright__browser_evaluate',
+      'mcp__playwright__browser_resize',
+      'mcp__playwright__browser_console_messages',
+      'mcp__playwright__browser_handle_dialog',
+      'mcp__playwright__browser_file_upload',
+      'mcp__playwright__browser_fill_form',
+      'mcp__playwright__browser_install',
+      'mcp__playwright__browser_network_requests',
+      'mcp__playwright__browser_run_code',
+      'mcp__playwright__browser_drag',
+      'mcp__playwright__browser_hover',
+      'mcp__playwright__browser_select_option',
     ],
     resolve() {
-      return { command: 'npx', args: ['@playwright/mcp', '--headless'] };
+      return { command: 'npx', args: ['@playwright/mcp', '--headless', '--browser', 'chromium'] };
     },
   },
 };
